@@ -34,12 +34,12 @@ This checklist is for publishing the current sizing-calculator version of `pools
 
 ## GitHub Actions Publish Workflow
 
-1. Open the `Publish` workflow in GitHub Actions.
-2. Run `workflow_dispatch`.
-3. Set `version` to the exact value in the root `VERSION` file.
-4. Run once with `dry_run = true`.
-5. If the dry run passes, run again with `dry_run = false`.
-6. Confirm the repository secret `CARGO_REGISTRY_TOKEN` is present before the non-dry run.
+1. Confirm the repository secret `CARGO_REGISTRY_TOKEN` is present.
+2. Commit the release changes.
+3. Create a tag matching the root `VERSION` file, for example `v0.1.0`.
+4. Push the tag.
+5. Confirm the `Publish` workflow starts automatically for that tag.
+6. Use `workflow_dispatch` only when you want a manual dry-run or a controlled fallback publish.
 
 ## Publish Order
 
@@ -56,4 +56,4 @@ This checklist is for publishing the current sizing-calculator version of `pools
 1. Verify docs.rs builds succeeded.
 2. Verify `cargo install poolsim-cli` works from crates.io.
 3. Verify crate pages show the correct README, license, repository, keywords, and categories.
-4. Tag the release in the repository after crates.io publication is confirmed.
+4. Create or update the GitHub Release notes for the pushed version tag after crates.io publication is confirmed.

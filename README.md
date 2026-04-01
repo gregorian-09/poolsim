@@ -242,10 +242,10 @@ Release process:
 
 GitHub Actions publish workflow usage:
 
-1. run `Publish` with `workflow_dispatch`
-2. set `version` to the value in `VERSION`
-3. run with `dry_run = true`
-4. rerun with `dry_run = false`
+1. update `VERSION`, sync metadata, and commit the release changes
+2. create and push a tag like `v0.1.0`
+3. the `Publish` workflow runs automatically on that tag
+4. use `workflow_dispatch` only when you want a manual dry-run or a controlled fallback publish
 
 ## Repository
 

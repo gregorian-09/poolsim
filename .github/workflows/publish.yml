@@ -1,6 +1,9 @@
 name: Publish
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       version:
@@ -36,12 +39,27 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Determine release parameters
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            requested_version="${GITHUB_REF_NAME#v}"
+            dry_run="false"
+          else
+            requested_version="${{ inputs.version }}"
+            dry_run="${{ inputs.dry_run }}"
+          fi
+          echo "version=$requested_version" >> "$GITHUB_OUTPUT"
+          echo "dry_run=$dry_run" >> "$GITHUB_OUTPUT"
+
       - name: Verify requested version matches VERSION
         shell: bash
         run: |
           set -euo pipefail
           expected_version="$(tr -d '[:space:]' < VERSION)"
-          requested_version="${{ inputs.version }}"
+          requested_version="${{ steps.release.outputs.version }}"
           if [[ "$requested_version" != "$expected_version" ]]; then
             echo "workflow input version '$requested_version' does not match VERSION '$expected_version'" >&2
             exit 1
@@ -59,14 +77,14 @@ jobs:
           cargo package -p poolsim-web --locked
 
       - name: Dry run publish order
-        if: ${{ inputs.dry_run }}
+        if: ${{ steps.release.outputs.dry_run == 'true' }}
         run: |
           cargo publish -p poolsim-core --locked --dry-run
           cargo publish -p poolsim-cli --locked --dry-run
           cargo publish -p poolsim-web --locked --dry-run
 
       - name: Verify publish token is configured
-        if: ${{ !inputs.dry_run }}
+        if: ${{ steps.release.outputs.dry_run != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -76,11 +94,11 @@ jobs:
           fi
 
       - name: Publish poolsim-core
-        if: ${{ !inputs.dry_run }}
+        if: ${{ steps.release.outputs.dry_run != 'true' }}
         run: cargo publish -p poolsim-core --locked
 
       - name: Wait for poolsim-core on crates.io
-        if: ${{ !inputs.dry_run }}
+        if: ${{ steps.release.outputs.dry_run != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -90,7 +108,7 @@ jobs:
           import urllib.request
 
           crate = "poolsim-core"
-          version = "${{ inputs.version }}"
+          version = "${{ steps.release.outputs.version }}"
           url = f"https://crates.io/api/v1/crates/{crate}"
 
           for attempt in range(30):
@@ -107,9 +125,9 @@ jobs:
           PY
 
       - name: Publish poolsim-cli
-        if: ${{ !inputs.dry_run }}
+        if: ${{ steps.release.outputs.dry_run != 'true' }}
         run: cargo publish -p poolsim-cli --locked
 
       - name: Publish poolsim-web
-        if: ${{ !inputs.dry_run }}
+        if: ${{ steps.release.outputs.dry_run != 'true' }}
         run: cargo publish -p poolsim-web --locked
