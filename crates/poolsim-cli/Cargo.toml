@@ -1,0 +1,31 @@
+[package]
+name = "poolsim-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "CLI for poolsim"
+readme = "README.md"
+keywords = ["connection-pool", "cli", "simulation", "capacity-planning", "queueing"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+csv.workspace = true
+poolsim-core = { path = "../poolsim-core", version = "0.1.0" }
+serde.workspace = true
+serde_json.workspace = true
+tabled.workspace = true
+toml.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+targets = ["x86_64-unknown-linux-gnu"]

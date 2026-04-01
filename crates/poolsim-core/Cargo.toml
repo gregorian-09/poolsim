@@ -1,0 +1,39 @@
+[package]
+name = "poolsim-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Core simulation engine for poolsim"
+readme = "README.md"
+keywords = ["connection-pool", "simulation", "capacity-planning", "queueing", "erlang-c"]
+categories = ["algorithms", "science"]
+
+[features]
+default = ["parallel"]
+parallel = ["dep:rayon"]
+
+[dependencies]
+rand.workspace = true
+rand_distr.workspace = true
+rayon = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+statrs.workspace = true
+thiserror.workspace = true
+
+[[bench]]
+name = "core_perf"
+harness = false
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+targets = ["x86_64-unknown-linux-gnu"]
