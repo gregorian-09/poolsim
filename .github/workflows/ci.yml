@@ -64,9 +64,6 @@ jobs:
       - name: Enforce Example Coverage (100%)
         run: python3 tools/check_examples_coverage.py --report coverage/examples/tarpaulin-report.json
 
-      - name: Spec Traceability
-        run: python3 tools/check_spec_traceability.py --spec poolsim_specification.md --map tools/spec_traceability.json
-
       - name: WASM Build Check (Core)
         run: |
           rustup target add wasm32-unknown-unknown

@@ -5,4 +5,5 @@
 /.tools
 /.venv
 /use-case.md
+/poolsim_specification.md
 __pycache__/
