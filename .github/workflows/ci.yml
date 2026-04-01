@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-and-verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Basic Checks
+        run: |
+          cargo check --workspace
+          cargo test --workspace
+
+      - name: Documentation Coverage (Public API)
+        run: |
+          RUSTFLAGS="-D missing_docs" cargo check -p poolsim-core --lib
+          RUSTFLAGS="-D missing_docs" cargo check -p poolsim-cli --bin poolsim-cli
+          RUSTFLAGS="-D missing_docs" cargo check -p poolsim-web --lib
+          RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+          cargo test --workspace --doc
+
+      - name: Docs Folder Validation
+        run: python3 tools/check_docs_folder.py --docs-dir docs
+
+      - name: Version Sync Check
+        run: python3 tools/sync_version.py --check
+
+      - name: Docs API Coverage
+        run: python3 tools/check_docs_api_coverage.py --docs-dir docs
+
+      - name: Executable Docs Fixtures
+        run: |
+          cargo test -p poolsim-core --test docs_fixtures
+          cargo test -p poolsim-cli --test docs_fixtures
+          cargo test -p poolsim-web --test docs_fixtures
+
+      - name: Example Targets
+        run: cargo test --workspace --examples
+
+      - name: Build Bench Harness
+        run: cargo bench -p poolsim-core --bench core_perf --no-run
+
+      - name: Install Tarpaulin
+        run: cargo install cargo-tarpaulin --version 0.27.3 --locked
+
+      - name: Coverage (Core)
+        run: cargo tarpaulin -p poolsim-core --out Json --output-dir coverage --timeout 180
+
+      - name: Enforce Coverage Thresholds
+        run: python3 tools/check_coverage_threshold.py --report coverage/tarpaulin-report.json --core-min 100 --overall-min 100
+
+      - name: Coverage (Examples)
+        run: cargo tarpaulin --workspace --examples --out Json --output-dir coverage/examples --target-dir target/tarpaulin-examples
+
+      - name: Enforce Example Coverage (100%)
+        run: python3 tools/check_examples_coverage.py --report coverage/examples/tarpaulin-report.json
+
+      - name: Spec Traceability
+        run: python3 tools/check_spec_traceability.py --spec poolsim_specification.md --map tools/spec_traceability.json
+
+      - name: WASM Build Check (Core)
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo check -p poolsim-core --target wasm32-unknown-unknown --no-default-features
