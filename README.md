@@ -67,7 +67,17 @@ Current surfaces:
 - `poolsim-cli`: command-line interface
 - `poolsim-web`: REST and WebSocket service
 
-![Poolsim sizing flow](docs/assets/poolsim-flow.svg)
+```mermaid
+flowchart LR
+    A[Inputs<br/>request rate<br/>latency percentiles<br/>pool and DB limits]
+    B[Poolsim sizing engine<br/>validate inputs<br/>fit latency model<br/>simulate and score sizes]
+    C[Outputs<br/>recommended size<br/>confidence band<br/>risk and queue wait]
+    D[Real runtime pool<br/>HikariCP<br/>sqlx<br/>bb8<br/>deadpool]
+
+    A --> B
+    B --> C
+    C --> D
+```
 
 ## What It Is Not
 
