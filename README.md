@@ -69,14 +69,19 @@ Current surfaces:
 
 ```mermaid
 flowchart LR
-    A[Inputs<br/>request rate<br/>latency percentiles<br/>pool and DB limits]
-    B[Poolsim sizing engine<br/>validate inputs<br/>fit latency model<br/>simulate and score sizes]
-    C[Outputs<br/>recommended size<br/>confidence band<br/>risk and queue wait]
-    D[Real runtime pool<br/>HikariCP<br/>sqlx<br/>bb8<br/>deadpool]
+    A["Inputs<br/>RPS<br/>p50 / p95 / p99<br/>pool + DB limits"]
+    B["Poolsim<br/>validate<br/>fit model<br/>simulate"]
+    C["Outputs<br/>recommended size<br/>confidence band<br/>queue / risk"]
+    D["Apply<br/>HikariCP / sqlx<br/>bb8 / deadpool"]
 
     A --> B
     B --> C
     C --> D
+
+    classDef io fill:#fbf2df,stroke:#c78c28,stroke-width:2px,color:#2d2417;
+    classDef engine fill:#173b30,stroke:#2f6953,stroke-width:2px,color:#f8f0dc;
+    class A,C,D io;
+    class B engine;
 ```
 
 ## What It Is Not
