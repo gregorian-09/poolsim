@@ -1,0 +1,14 @@
+{
+  "workload": {
+    "requests_per_second": 220.0,
+    "latency_p50_ms": 8.0,
+    "latency_p95_ms": 32.0,
+    "latency_p99_ms": 85.0
+  },
+  "pool_size": 10,
+  "options": {
+    "iterations": 10000,
+    "distribution": "LogNormal",
+    "queue_model": "MMC"
+  }
+}

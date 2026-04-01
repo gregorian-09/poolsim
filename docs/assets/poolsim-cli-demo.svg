@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Poolsim CLI demo</title>
+  <desc id="desc">A terminal-style SVG showing a poolsim CLI command and a shortened JSON result.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#efe3c6"/>
+      <stop offset="100%" stop-color="#d6e3d2"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#182313" flood-opacity="0.18"/>
+    </filter>
+    <style>
+      .title { font: 700 38px Georgia, "Times New Roman", serif; fill: #2b261d; }
+      .subtitle { font: 400 18px Georgia, "Times New Roman", serif; fill: #544b3c; }
+      .mono { font: 400 24px "Courier New", Courier, monospace; fill: #e9f4e6; }
+      .dim { font: 400 24px "Courier New", Courier, monospace; fill: #9fb39f; }
+      .accent { font: 700 24px "Courier New", Courier, monospace; fill: #f1cf77; }
+      .ok { font: 700 24px "Courier New", Courier, monospace; fill: #8bd3a8; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="760" fill="url(#bg)"/>
+  <text x="78" y="78" class="title">CLI Demo</text>
+  <text x="78" y="110" class="subtitle">A repo-ready terminal visual built from the checked-in example command and its actual result.</text>
+
+  <g filter="url(#shadow)">
+    <rect x="66" y="154" width="1068" height="548" rx="22" fill="#1d2b23"/>
+    <rect x="66" y="154" width="1068" height="52" rx="22" fill="#28392f"/>
+    <circle cx="104" cy="180" r="10" fill="#f08d78"/>
+    <circle cx="134" cy="180" r="10" fill="#f0c36a"/>
+    <circle cx="164" cy="180" r="10" fill="#85d6a5"/>
+  </g>
+
+  <text x="196" y="188" class="dim">gregorian-rayne@poolsim: ~/poolsim</text>
+
+  <text x="100" y="250" class="accent">$ cargo run -p poolsim-cli -- --format json simulate \</text>
+  <text x="100" y="286" class="mono">    --config docs/fixtures/cli-config.json</text>
+  <text x="100" y="346" class="mono">{</text>
+  <text x="100" y="382" class="mono">  "optimal_pool_size": 5,</text>
+  <text x="100" y="418" class="mono">  "confidence_interval": [4, 6],</text>
+  <text x="100" y="454" class="mono">  "cold_start_min_pool_size": 5,</text>
+  <text x="100" y="490" class="mono">  "utilisation_rho": 0.6301023458939307,</text>
+  <text x="100" y="526" class="mono">  "mean_queue_wait_ms": 1.7962344058972386,</text>
+  <text x="100" y="562" class="mono">  "p99_queue_wait_ms": 22.268469922355205,</text>
+  <text x="100" y="598" class="ok">  "saturation": "Ok"</text>
+  <text x="100" y="634" class="mono">}</text>
+</svg>

@@ -1,0 +1,27 @@
+{
+  "workload": {
+    "requests_per_second": 220.0,
+    "latency_p50_ms": 8.0,
+    "latency_p95_ms": 32.0,
+    "latency_p99_ms": 85.0,
+    "step_load_profile": [
+      { "time_s": 0, "requests_per_second": 180.0 },
+      { "time_s": 30, "requests_per_second": 260.0 }
+    ]
+  },
+  "pool": {
+    "max_server_connections": 120,
+    "connection_overhead_ms": 2.0,
+    "idle_timeout_ms": 120000,
+    "min_pool_size": 3,
+    "max_pool_size": 24
+  },
+  "options": {
+    "iterations": 12000,
+    "seed": 7,
+    "distribution": "LogNormal",
+    "queue_model": "MMC",
+    "target_wait_p99_ms": 45.0,
+    "max_acceptable_rho": 0.85
+  }
+}

@@ -1,0 +1,36 @@
+[
+  {
+    "workload": {
+      "requests_per_second": 180.0,
+      "latency_p50_ms": 7.0,
+      "latency_p95_ms": 25.0,
+      "latency_p99_ms": 60.0
+    },
+    "pool": {
+      "max_server_connections": 100,
+      "connection_overhead_ms": 2.0,
+      "min_pool_size": 2,
+      "max_pool_size": 20
+    },
+    "options": {
+      "iterations": 10000
+    }
+  },
+  {
+    "workload": {
+      "requests_per_second": 260.0,
+      "latency_p50_ms": 8.0,
+      "latency_p95_ms": 30.0,
+      "latency_p99_ms": 70.0
+    },
+    "pool": {
+      "max_server_connections": 120,
+      "connection_overhead_ms": 2.0,
+      "min_pool_size": 3,
+      "max_pool_size": 24
+    },
+    "options": {
+      "iterations": 10000
+    }
+  }
+]
