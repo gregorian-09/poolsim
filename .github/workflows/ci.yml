@@ -52,8 +52,8 @@ jobs:
       - name: Install Tarpaulin
         run: cargo install cargo-tarpaulin --version 0.27.3 --locked
 
-      - name: Coverage (Core)
-        run: cargo tarpaulin -p poolsim-core --out Json --output-dir coverage --timeout 180
+      - name: Coverage (Workspace)
+        run: cargo tarpaulin --workspace --out Json --output-dir coverage --timeout 180
 
       - name: Enforce Coverage Thresholds
         run: python3 tools/check_coverage_threshold.py --report coverage/tarpaulin-report.json --core-min 100 --overall-min 100
