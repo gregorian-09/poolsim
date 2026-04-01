@@ -73,15 +73,11 @@ jobs:
           cargo check --workspace
           cargo test --workspace
           cargo package -p poolsim-core --locked
-          cargo package -p poolsim-cli --locked
-          cargo package -p poolsim-web --locked
 
       - name: Dry run publish order
         if: ${{ steps.release.outputs.dry_run == 'true' }}
         run: |
           cargo publish -p poolsim-core --locked --dry-run
-          cargo publish -p poolsim-cli --locked --dry-run
-          cargo publish -p poolsim-web --locked --dry-run
 
       - name: Verify publish token is configured
         if: ${{ steps.release.outputs.dry_run != 'true' }}
@@ -124,9 +120,17 @@ jobs:
               raise SystemExit(f"{crate} {version} did not appear on crates.io in time")
           PY
 
+      - name: Package poolsim-cli
+        if: ${{ steps.release.outputs.dry_run != 'true' }}
+        run: cargo package -p poolsim-cli --locked
+
       - name: Publish poolsim-cli
         if: ${{ steps.release.outputs.dry_run != 'true' }}
         run: cargo publish -p poolsim-cli --locked
+
+      - name: Package poolsim-web
+        if: ${{ steps.release.outputs.dry_run != 'true' }}
+        run: cargo package -p poolsim-web --locked
 
       - name: Publish poolsim-web
         if: ${{ steps.release.outputs.dry_run != 'true' }}

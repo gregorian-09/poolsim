@@ -28,9 +28,9 @@ This checklist is for publishing the current sizing-calculator version of `pools
 ## Packaging
 
 1. Run `cargo package -p poolsim-core --allow-dirty`.
-2. Run `cargo package -p poolsim-cli --allow-dirty`.
-3. Run `cargo package -p poolsim-web --allow-dirty`.
-4. Confirm each package includes its `README.md` and expected source files.
+2. Confirm the `poolsim-core` package includes its `README.md` and expected source files.
+3. Package `poolsim-cli` only after the target `poolsim-core` version exists on crates.io.
+4. Package `poolsim-web` only after the target `poolsim-core` version exists on crates.io.
 
 ## GitHub Actions Publish Workflow
 
@@ -39,7 +39,7 @@ This checklist is for publishing the current sizing-calculator version of `pools
 3. Create a tag matching the root `VERSION` file, for example `v0.1.0`.
 4. Push the tag.
 5. Confirm the `Publish` workflow starts automatically for that tag.
-6. Use `workflow_dispatch` only when you want a manual dry-run or a controlled fallback publish.
+6. Use `workflow_dispatch` only when you want a manual dry-run of the core publish path or a controlled fallback publish.
 
 ## Publish Order
 
