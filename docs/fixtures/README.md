@@ -8,6 +8,7 @@ This directory contains checked-in sample inputs used by the documentation and v
 - `cli-config.toml`: primary TOML config for CLI examples
 - `batch.json`: JSON batch input for `poolsim batch`
 - `batch.toml`: TOML batch input for `poolsim batch`
+- `telemetry.json`: telemetry import body for `poolsim import telemetry` and `POST /v1/telemetry/recommend`
 - `latencies.txt`: empirical latency sample file for `--samples-file`
 - `web-simulate.json`: request body for `POST /v1/simulate`
 - `web-evaluate.json`: request body for `POST /v1/evaluate`

@@ -161,6 +161,17 @@ async fn docs_rest_fixtures_round_trip() {
     .await;
     assert_eq!(batch_status, StatusCode::OK);
     assert_eq!(batch_json.as_array().expect("batch output should be an array").len(), 2);
+
+    let (telemetry_status, telemetry_json) = json_request(
+        app.clone(),
+        "POST",
+        "/v1/telemetry/recommend",
+        fixture_json("docs/fixtures/telemetry.json"),
+    )
+    .await;
+    assert_eq!(telemetry_status, StatusCode::OK);
+    assert_eq!(telemetry_json["service_name"], "checkout-api");
+    assert!(telemetry_json["diff"]["recommended_pool_size"].is_number());
 }
 
 #[tokio::test]

@@ -63,6 +63,7 @@ pub enum Commands {
     Evaluate(EvaluateArgs),
     Sweep(CommonArgs),
     Batch(BatchArgs),
+    Import(ImportArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -131,6 +132,26 @@ pub struct EvaluateArgs {
 pub struct BatchArgs {
     #[arg(long)]
     pub config: PathBuf,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct ImportArgs {
+    #[command(subcommand)]
+    pub command: ImportCommands,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum ImportCommands {
+    Telemetry(TelemetryImportArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct TelemetryImportArgs {
+    #[arg(long)]
+    pub config: PathBuf,
+
+    #[arg(long)]
+    pub current_pool_size: Option<u32>,
 }
 
 #[cfg(test)]
@@ -208,6 +229,32 @@ mod tests {
                 assert_eq!(args.config, PathBuf::from("batch.json"));
             }
             _ => panic!("expected batch command"),
+        }
+    }
+
+    #[test]
+    fn parser_handles_import_telemetry_subcommand() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "--format",
+            "json",
+            "import",
+            "telemetry",
+            "--config",
+            "telemetry.json",
+            "--current-pool-size",
+            "12",
+        ])
+        .expect("import telemetry args should parse");
+
+        match cli.command {
+            Commands::Import(args) => match args.command {
+                ImportCommands::Telemetry(telemetry) => {
+                    assert_eq!(telemetry.config, PathBuf::from("telemetry.json"));
+                    assert_eq!(telemetry.current_pool_size, Some(12));
+                }
+            },
+            _ => panic!("expected import telemetry command"),
         }
     }
 }

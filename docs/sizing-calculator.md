@@ -141,14 +141,34 @@ Primary endpoints:
 - `POST /v1/evaluate`
 - `POST /v1/sensitivity`
 - `POST /v1/batch`
+- `POST /v1/telemetry/recommend`
 - `GET /v1/health`
 - `GET /v1/models`
 - `GET /v1/live` (WebSocket stream path)
 
+### Telemetry Import Usage
+
+Use telemetry import when an observability pipeline already exports request rate, latency percentiles, current pool size, and pool limits.
+
+CLI:
+
+```bash
+poolsim import telemetry --config docs/fixtures/telemetry.json --format json
+```
+
+REST:
+
+```bash
+curl -s \
+  -X POST http://127.0.0.1:8080/v1/telemetry/recommend \
+  -H 'content-type: application/json' \
+  --data @docs/fixtures/telemetry.json
+```
+
 ## Recommended Operating Workflow
 
 1. Collect real workload percentiles (or sample latencies).
-2. Run `simulate` to get baseline recommendation.
+2. Run `simulate` or `import telemetry` to get baseline recommendation.
 3. Review `sensitivity` to choose safety margin.
 4. Validate with step-load profile when available.
 5. Apply selected pool size in runtime configuration.

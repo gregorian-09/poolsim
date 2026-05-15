@@ -15,6 +15,7 @@ use args::{Cli, Commands, OutputFormat};
 use clap::Parser;
 use poolsim_core::{
     evaluate, simulate, sweep_with_options,
+    telemetry::{recommend_from_telemetry, TelemetryRecommendation},
     types::{EvaluationResult, RiskLevel, SaturationLevel, SensitivityRow, SimulationReport},
 };
 
@@ -111,6 +112,17 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
             };
             Ok(code)
         }
+        Commands::Import(args) => match args.command {
+            args::ImportCommands::Telemetry(args) => {
+                let input = config::resolve_telemetry_input(&args)?;
+                let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
+                render_telemetry(&recommendation, cli.format)?;
+                Ok(exit_code_for_saturation(
+                    recommendation.diff.worst_saturation(),
+                    cli.warn_exit,
+                ))
+            }
+        },
     }
 }
 
@@ -143,6 +155,14 @@ fn render_batch(reports: &[SimulationReport], format: OutputFormat) -> Result<()
         OutputFormat::Table => render::table::batch(reports),
         OutputFormat::Json => render::json::print(reports),
         OutputFormat::Csv => render::csv::batch(reports),
+    }
+}
+
+fn render_telemetry(recommendation: &TelemetryRecommendation, format: OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Table => render::table::telemetry(recommendation),
+        OutputFormat::Json => render::json::print(recommendation),
+        OutputFormat::Csv => render::csv::telemetry(recommendation),
     }
 }
 
@@ -194,10 +214,13 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    use poolsim_core::types::{RiskLevel, StepLoadResult};
+    use poolsim_core::{
+        telemetry::{PoolRecommendationDiff, PoolSizeChange, TelemetryRecommendation},
+        types::{RiskLevel, StepLoadResult},
+    };
 
     use super::*;
-    use crate::args::{BatchArgs, CommonArgs, EvaluateArgs, SimulateArgs};
+    use crate::args::{BatchArgs, CommonArgs, EvaluateArgs, ImportArgs, ImportCommands, SimulateArgs, TelemetryImportArgs};
 
     fn sample_config_json() -> String {
         r#"
@@ -256,6 +279,39 @@ mod tests {
   }}
 }}]"#
         )
+    }
+
+    fn telemetry_config_json() -> String {
+        r#"
+{
+  "telemetry": {
+    "service_name": "checkout-api",
+    "window": "1h",
+    "current_pool_size": 8,
+    "workload": {
+      "requests_per_second": 180.0,
+      "latency_p50_ms": 8.0,
+      "latency_p95_ms": 30.0,
+      "latency_p99_ms": 70.0
+    },
+    "pool": {
+      "max_server_connections": 100,
+      "connection_overhead_ms": 2.0,
+      "min_pool_size": 2,
+      "max_pool_size": 20
+    }
+  },
+  "options": {
+    "iterations": 1200,
+    "seed": 7,
+    "distribution": "LogNormal",
+    "queue_model": "MMC",
+    "target_wait_p99_ms": 45.0,
+    "max_acceptable_rho": 0.85
+  }
+}
+"#
+        .to_string()
     }
 
     fn unique_temp_path(name: &str, ext: &str) -> PathBuf {
@@ -345,6 +401,25 @@ mod tests {
         }
     }
 
+    fn sample_recommendation() -> TelemetryRecommendation {
+        TelemetryRecommendation {
+            service_name: Some("checkout-api".to_string()),
+            window: Some("1h".to_string()),
+            observed_at: None,
+            diff: PoolRecommendationDiff {
+                current_pool_size: 8,
+                recommended_pool_size: 6,
+                pool_size_delta: -2,
+                change: PoolSizeChange::Decrease,
+                additional_connections_required: 0,
+                removable_connections: 2,
+                connection_change_percent: -25.0,
+                current_evaluation: sample_evaluation(),
+                recommended_report: sample_report(),
+            },
+        }
+    }
+
     #[test]
     fn exit_code_helpers_map_expected_levels() {
         let _ = exit_code_for_saturation(SaturationLevel::Ok, false);
@@ -406,6 +481,11 @@ mod tests {
         render_batch(&reports, OutputFormat::Json).expect("json batch should render");
         render_batch(&reports, OutputFormat::Csv).expect("csv batch should render");
         render_batch(&reports, OutputFormat::Table).expect("table batch should render");
+
+        let recommendation = sample_recommendation();
+        render_telemetry(&recommendation, OutputFormat::Json).expect("json telemetry should render");
+        render_telemetry(&recommendation, OutputFormat::Csv).expect("csv telemetry should render");
+        render_telemetry(&recommendation, OutputFormat::Table).expect("table telemetry should render");
     }
 
     #[test]
@@ -470,8 +550,22 @@ mod tests {
         };
         let _ = run_with_cli(cli).expect("batch should execute");
 
+        let telemetry_cfg = write_temp_file("main_telemetry", "json", &telemetry_config_json());
+        let cli = Cli {
+            command: Commands::Import(ImportArgs {
+                command: ImportCommands::Telemetry(TelemetryImportArgs {
+                    config: telemetry_cfg.clone(),
+                    current_pool_size: Some(9),
+                }),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: true,
+        };
+        let _ = run_with_cli(cli).expect("telemetry import should execute");
+
         remove_if_exists(&cfg);
         remove_if_exists(&batch_cfg);
+        remove_if_exists(&telemetry_cfg);
     }
 
     #[test]

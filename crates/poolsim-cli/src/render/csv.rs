@@ -1,5 +1,6 @@
 use anyhow::Result;
 use csv::{Writer, WriterBuilder};
+use poolsim_core::telemetry::TelemetryRecommendation;
 use poolsim_core::types::{EvaluationResult, SensitivityRow, SimulationReport};
 
 pub fn simulation(report: &SimulationReport) -> Result<()> {
@@ -120,6 +121,47 @@ pub fn batch(reports: &[SimulationReport]) -> Result<()> {
     Ok(())
 }
 
+pub fn telemetry(recommendation: &TelemetryRecommendation) -> Result<()> {
+    let diff = &recommendation.diff;
+    let mut wtr = WriterBuilder::new().flexible(true).from_writer(std::io::stdout());
+    wtr.write_record(["field", "value"])?;
+    wtr.write_record([
+        "service_name",
+        recommendation.service_name.as_deref().unwrap_or("-"),
+    ])?;
+    wtr.write_record(["window", recommendation.window.as_deref().unwrap_or("-")])?;
+    wtr.write_record([
+        "observed_at",
+        recommendation.observed_at.as_deref().unwrap_or("-"),
+    ])?;
+    wtr.write_record(["current_pool_size", &diff.current_pool_size.to_string()])?;
+    wtr.write_record([
+        "recommended_pool_size",
+        &diff.recommended_pool_size.to_string(),
+    ])?;
+    wtr.write_record(["pool_size_delta", &diff.pool_size_delta.to_string()])?;
+    wtr.write_record(["change", &format!("{:?}", diff.change)])?;
+    wtr.write_record([
+        "additional_connections_required",
+        &diff.additional_connections_required.to_string(),
+    ])?;
+    wtr.write_record(["removable_connections", &diff.removable_connections.to_string()])?;
+    wtr.write_record([
+        "connection_change_percent",
+        &diff.connection_change_percent.to_string(),
+    ])?;
+    wtr.write_record([
+        "current_saturation",
+        &format!("{:?}", diff.current_evaluation.saturation),
+    ])?;
+    wtr.write_record([
+        "recommended_saturation",
+        &format!("{:?}", diff.recommended_report.saturation),
+    ])?;
+    wtr.flush()?;
+    Ok(())
+}
+
 fn write_sensitivity_row(wtr: &mut Writer<std::io::Stdout>, row: &SensitivityRow) -> Result<()> {
     wtr.write_record([
         row.pool_size.to_string(),
@@ -133,6 +175,7 @@ fn write_sensitivity_row(wtr: &mut Writer<std::io::Stdout>, row: &SensitivityRow
 
 #[cfg(test)]
 mod tests {
+    use poolsim_core::telemetry::{PoolRecommendationDiff, PoolSizeChange};
     use poolsim_core::types::{
         EvaluationResult, RiskLevel, SaturationLevel, SensitivityRow, SimulationReport, StepLoadResult,
     };
@@ -190,11 +233,31 @@ mod tests {
         }
     }
 
+    fn sample_recommendation() -> TelemetryRecommendation {
+        TelemetryRecommendation {
+            service_name: Some("checkout-api".to_string()),
+            window: Some("1h".to_string()),
+            observed_at: None,
+            diff: PoolRecommendationDiff {
+                current_pool_size: 6,
+                recommended_pool_size: 8,
+                pool_size_delta: 2,
+                change: PoolSizeChange::Increase,
+                additional_connections_required: 2,
+                removable_connections: 0,
+                connection_change_percent: 33.333,
+                current_evaluation: sample_evaluation(),
+                recommended_report: sample_report(),
+            },
+        }
+    }
+
     #[test]
     fn csv_renderers_execute_for_all_output_types() {
         simulation(&sample_report()).expect("simulation CSV render should succeed");
         evaluation(&sample_evaluation()).expect("evaluation CSV render should succeed");
         sweep(&sample_rows()).expect("sweep CSV render should succeed");
         batch(&[sample_report(), sample_report()]).expect("batch CSV render should succeed");
+        telemetry(&sample_recommendation()).expect("telemetry CSV render should succeed");
     }
 }

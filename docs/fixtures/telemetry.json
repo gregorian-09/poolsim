@@ -1,0 +1,39 @@
+{
+  "telemetry": {
+    "service_name": "checkout-api",
+    "window": "1h",
+    "observed_at": "2026-05-15T10:00:00Z",
+    "current_pool_size": 8,
+    "workload": {
+      "requests_per_second": 180.0,
+      "latency_p50_ms": 8.0,
+      "latency_p95_ms": 30.0,
+      "latency_p99_ms": 70.0,
+      "step_load_profile": [
+        {
+          "time_s": 0,
+          "requests_per_second": 150.0
+        },
+        {
+          "time_s": 60,
+          "requests_per_second": 220.0
+        }
+      ]
+    },
+    "pool": {
+      "max_server_connections": 100,
+      "connection_overhead_ms": 2.0,
+      "idle_timeout_ms": 120000,
+      "min_pool_size": 2,
+      "max_pool_size": 20
+    }
+  },
+  "options": {
+    "iterations": 1200,
+    "seed": 9,
+    "distribution": "LogNormal",
+    "queue_model": "MMC",
+    "target_wait_p99_ms": 40.0,
+    "max_acceptable_rho": 0.85
+  }
+}

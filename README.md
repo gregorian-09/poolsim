@@ -60,6 +60,7 @@ Given workload data, pool bounds, and simulation options, `poolsim` can:
 - generate sensitivity tables across candidate pool sizes
 - evaluate fixed pool sizes
 - analyze simple step-load scenarios
+- import telemetry snapshots and diff recommendations against current production settings
 
 Current surfaces:
 
@@ -121,6 +122,12 @@ curl -s \
   -X POST http://127.0.0.1:8080/v1/simulate \
   -H 'content-type: application/json' \
   --data @docs/fixtures/web-simulate.json
+```
+
+Import telemetry and compare the current production pool setting against the recommendation:
+
+```bash
+cargo run -p poolsim-cli -- --format json import telemetry --config docs/fixtures/telemetry.json
 ```
 
 ## Example CLI Output

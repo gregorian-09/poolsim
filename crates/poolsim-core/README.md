@@ -17,6 +17,7 @@ It provides:
 - pool-size optimization
 - sensitivity analysis
 - step-load analysis
+- telemetry import and recommendation diff
 
 ## Install
 
@@ -33,6 +34,7 @@ Use the crate-root APIs for the most common workflows:
 - `evaluate`: score a fixed pool size
 - `sweep`: generate sensitivity rows with default options
 - `sweep_with_options`: generate sensitivity rows with explicit options
+- `telemetry::recommend_from_telemetry`: compare imported telemetry against a computed recommendation
 
 Important public modules:
 
@@ -42,6 +44,7 @@ Important public modules:
 - `poolsim_core::monte_carlo`
 - `poolsim_core::optimizer`
 - `poolsim_core::sensitivity`
+- `poolsim_core::telemetry`
 - `poolsim_core::error`
 
 ## Example

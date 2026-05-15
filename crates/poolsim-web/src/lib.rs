@@ -32,6 +32,7 @@ pub fn build_app(state: AppState, rate_limit_state: RateLimitState, cors_origins
         .route("/v1/sensitivity", post(routes::sensitivity::handler))
         .route("/v1/evaluate", post(routes::evaluate::handler))
         .route("/v1/batch", post(routes::batch::handler))
+        .route("/v1/telemetry/recommend", post(routes::telemetry::handler))
         .route("/v1/live", get(routes::live::handler))
         .with_state(state)
         .layer(from_fn_with_state(

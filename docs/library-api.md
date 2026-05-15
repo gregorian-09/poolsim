@@ -49,10 +49,90 @@ use poolsim_core::types::{
 Module-oriented import:
 
 ```rust
-use poolsim_core::{distribution, erlang, error, monte_carlo, optimizer, sensitivity};
+use poolsim_core::{distribution, erlang, error, monte_carlo, optimizer, sensitivity, telemetry};
+```
+
+Telemetry import:
+
+```rust
+use poolsim_core::telemetry::{
+    recommend_from_telemetry,
+    PoolRecommendationDiff,
+    PoolSizeChange,
+    TelemetryRecommendation,
+    TelemetrySnapshot,
+};
 ```
 
 ## Top-Level API
+
+## Telemetry API
+
+Use `poolsim_core::telemetry` when production metrics have already been reduced to workload percentiles, request rate, current pool size, and pool bounds.
+
+The telemetry API is intentionally layered on top of the existing sizing functions:
+
+- `poolsim_core::telemetry::TelemetrySnapshot` stores imported production telemetry.
+- `poolsim_core::telemetry::TelemetrySnapshot::validate` validates the telemetry, workload, pool, and current setting.
+- `poolsim_core::telemetry::recommend_from_telemetry` calls the same `evaluate` and `simulate` paths used elsewhere.
+- `poolsim_core::telemetry::TelemetryRecommendation` is the top-level output.
+- `poolsim_core::telemetry::PoolRecommendationDiff` compares current production settings with the computed recommendation.
+- `poolsim_core::telemetry::PoolRecommendationDiff::worst_saturation` returns the worst saturation state across current and recommended results.
+- `poolsim_core::telemetry::PoolSizeChange` is the machine-readable change direction.
+
+```rust
+use poolsim_core::{
+    telemetry::{recommend_from_telemetry, PoolSizeChange, TelemetrySnapshot},
+    types::{PoolConfig, SimulationOptions, WorkloadConfig},
+};
+
+let snapshot = TelemetrySnapshot {
+    service_name: Some("checkout-api".to_string()),
+    window: Some("1h".to_string()),
+    observed_at: Some("2026-05-15T10:00:00Z".to_string()),
+    current_pool_size: 8,
+    workload: WorkloadConfig {
+        requests_per_second: 180.0,
+        latency_p50_ms: 8.0,
+        latency_p95_ms: 30.0,
+        latency_p99_ms: 70.0,
+        raw_samples_ms: None,
+        step_load_profile: None,
+    },
+    pool: PoolConfig {
+        max_server_connections: 100,
+        connection_overhead_ms: 2.0,
+        idle_timeout_ms: Some(120_000),
+        min_pool_size: 2,
+        max_pool_size: 20,
+    },
+};
+
+snapshot.validate()?;
+
+let recommendation = recommend_from_telemetry(&snapshot, &SimulationOptions::default())?;
+
+match recommendation.diff.change {
+    PoolSizeChange::Increase => {
+        assert!(recommendation.diff.additional_connections_required > 0);
+    }
+    PoolSizeChange::Decrease => {
+        assert!(recommendation.diff.removable_connections > 0);
+    }
+    PoolSizeChange::Keep => {
+        assert_eq!(recommendation.diff.pool_size_delta, 0);
+    }
+}
+
+let _worst = recommendation.diff.worst_saturation();
+# Ok::<(), poolsim_core::error::PoolsimError>(())
+```
+
+`PoolRecommendationDiff.connection_change_percent` is signed:
+
+- positive means the recommendation needs more connections
+- negative means the recommendation can use fewer connections
+- zero means the current and recommended settings match
 
 ### `simulate`
 

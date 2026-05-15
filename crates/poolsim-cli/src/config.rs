@@ -1,10 +1,13 @@
 use std::{fs, path::Path};
 
 use anyhow::{anyhow, Context, Result};
-use poolsim_core::types::{PoolConfig, SimulationOptions, WorkloadConfig};
+use poolsim_core::{
+    telemetry::TelemetrySnapshot,
+    types::{PoolConfig, SimulationOptions, WorkloadConfig},
+};
 use serde::Deserialize;
 
-use crate::args::{BatchArgs, CommonArgs, EvaluateArgs};
+use crate::args::{BatchArgs, CommonArgs, EvaluateArgs, TelemetryImportArgs};
 
 #[derive(Debug, Clone)]
 pub struct SimulationInput {
@@ -31,6 +34,12 @@ pub struct BatchSimulationInput {
     pub requests: Vec<SimulationInput>,
 }
 
+#[derive(Debug, Clone)]
+pub struct TelemetryInput {
+    pub snapshot: TelemetrySnapshot,
+    pub options: SimulationOptions,
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 struct FileConfig {
     workload: Option<WorkloadConfig>,
@@ -49,6 +58,32 @@ struct BatchRequest {
 #[derive(Debug, Clone, Deserialize)]
 struct BatchFile {
     requests: Vec<BatchRequest>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum TelemetryConfigFile {
+    Wrapped {
+        telemetry: TelemetrySnapshot,
+        #[serde(default)]
+        options: SimulationOptions,
+    },
+    Direct(TelemetrySnapshot),
+}
+
+impl TelemetryConfigFile {
+    fn into_input(self) -> TelemetryInput {
+        match self {
+            Self::Wrapped { telemetry, options } => TelemetryInput {
+                snapshot: telemetry,
+                options,
+            },
+            Self::Direct(snapshot) => TelemetryInput {
+                snapshot,
+                options: SimulationOptions::default(),
+            },
+        }
+    }
 }
 
 pub fn resolve_simulation_input(args: &CommonArgs) -> Result<SimulationInput> {
@@ -145,6 +180,34 @@ pub fn resolve_batch_input(args: &BatchArgs) -> Result<BatchSimulationInput> {
         .collect();
 
     Ok(BatchSimulationInput { requests: mapped })
+}
+
+pub fn resolve_telemetry_input(args: &TelemetryImportArgs) -> Result<TelemetryInput> {
+    let raw = fs::read_to_string(&args.config)
+        .with_context(|| format!("failed to read telemetry config file {}", args.config.display()))?;
+
+    let mut input = match args.config.extension().and_then(|e| e.to_str()) {
+        Some("json") => serde_json::from_str::<TelemetryConfigFile>(&raw)
+            .with_context(|| format!("invalid JSON telemetry config file {}", args.config.display()))?
+            .into_input(),
+        Some("toml") => toml::from_str::<TelemetryConfigFile>(&raw)
+            .with_context(|| format!("invalid TOML telemetry config file {}", args.config.display()))?
+            .into_input(),
+        _ => {
+            return Err(anyhow!(
+                "unsupported telemetry config extension for {} (use .json or .toml)",
+                args.config.display()
+            ))
+        }
+    };
+
+    if let Some(current_pool_size) = args.current_pool_size {
+        input.snapshot.current_pool_size = current_pool_size;
+    }
+
+    input.snapshot.validate()?;
+    input.options.validate()?;
+    Ok(input)
 }
 
 fn load_config(path: Option<&Path>) -> Result<FileConfig> {
@@ -375,6 +438,41 @@ mod tests {
     "idle_timeout_ms": 120000,
     "min_pool_size": 2,
     "max_pool_size": 20
+  },
+  "options": {
+    "iterations": 1200,
+    "seed": 9,
+    "distribution": "LogNormal",
+    "queue_model": "MMC",
+    "target_wait_p99_ms": 40.0,
+    "max_acceptable_rho": 0.85
+  }
+}
+"#
+        .to_string()
+    }
+
+    fn sample_telemetry_json() -> String {
+        r#"
+{
+  "telemetry": {
+    "service_name": "checkout-api",
+    "window": "1h",
+    "observed_at": "2026-05-15T10:00:00Z",
+    "current_pool_size": 8,
+    "workload": {
+      "requests_per_second": 180.0,
+      "latency_p50_ms": 8.0,
+      "latency_p95_ms": 30.0,
+      "latency_p99_ms": 70.0
+    },
+    "pool": {
+      "max_server_connections": 100,
+      "connection_overhead_ms": 2.0,
+      "idle_timeout_ms": 120000,
+      "min_pool_size": 2,
+      "max_pool_size": 20
+    }
   },
   "options": {
     "iterations": 1200,
@@ -621,6 +719,71 @@ max_pool_size = 16
 
         remove_if_exists(&empty);
         remove_if_exists(&unknown);
+    }
+
+    #[test]
+    fn resolve_telemetry_input_supports_wrapped_and_direct_files() {
+        let wrapped_path = write_temp_file("telemetry_wrapped", "json", &sample_telemetry_json());
+        let input = resolve_telemetry_input(&TelemetryImportArgs {
+            config: wrapped_path.clone(),
+            current_pool_size: Some(10),
+        })
+        .expect("wrapped telemetry config should parse");
+        assert_eq!(input.snapshot.service_name.as_deref(), Some("checkout-api"));
+        assert_eq!(input.snapshot.current_pool_size, 10);
+        assert_eq!(input.options.seed, Some(9));
+
+        let direct_toml = r#"
+service_name = "billing-api"
+window = "15m"
+current_pool_size = 5
+
+[workload]
+requests_per_second = 120.0
+latency_p50_ms = 5.0
+latency_p95_ms = 18.0
+latency_p99_ms = 45.0
+
+[pool]
+max_server_connections = 80
+connection_overhead_ms = 1.0
+min_pool_size = 2
+max_pool_size = 12
+"#;
+        let direct_path = write_temp_file("telemetry_direct", "toml", direct_toml);
+        let input = resolve_telemetry_input(&TelemetryImportArgs {
+            config: direct_path.clone(),
+            current_pool_size: None,
+        })
+        .expect("direct telemetry config should parse");
+        assert_eq!(input.snapshot.service_name.as_deref(), Some("billing-api"));
+        assert_eq!(input.snapshot.current_pool_size, 5);
+        assert_eq!(input.options, SimulationOptions::default());
+
+        remove_if_exists(&wrapped_path);
+        remove_if_exists(&direct_path);
+    }
+
+    #[test]
+    fn resolve_telemetry_input_rejects_bad_files() {
+        let unsupported = write_temp_file("telemetry_bad", "yaml", "telemetry: {}");
+        let err = resolve_telemetry_input(&TelemetryImportArgs {
+            config: unsupported.clone(),
+            current_pool_size: None,
+        })
+        .expect_err("unsupported telemetry extension should fail");
+        assert!(err.to_string().contains("unsupported telemetry config extension"));
+
+        let invalid = write_temp_file("telemetry_invalid", "json", "{}");
+        let err = resolve_telemetry_input(&TelemetryImportArgs {
+            config: invalid.clone(),
+            current_pool_size: None,
+        })
+        .expect_err("invalid telemetry config should fail");
+        assert!(err.to_string().contains("invalid JSON telemetry config file"));
+
+        remove_if_exists(&unsupported);
+        remove_if_exists(&invalid);
     }
 
     #[test]

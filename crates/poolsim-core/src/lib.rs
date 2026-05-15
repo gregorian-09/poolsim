@@ -16,6 +16,8 @@ pub mod monte_carlo;
 pub mod optimizer;
 /// Sensitivity analysis routines.
 pub mod sensitivity;
+/// Telemetry import and recommendation-diff routines.
+pub mod telemetry;
 /// Public input/output data models.
 pub mod types;
 

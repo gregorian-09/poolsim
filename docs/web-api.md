@@ -19,6 +19,7 @@ Checked-in request bodies for the documented HTTP and WebSocket examples live un
 - `docs/fixtures/web-evaluate.json`
 - `docs/fixtures/web-sensitivity.json`
 - `docs/fixtures/batch.json`
+- `docs/fixtures/telemetry.json`
 - `docs/fixtures/web-ws-request.json`
 
 ## Base Routes
@@ -31,6 +32,7 @@ Available routes:
 - `POST /v1/evaluate`
 - `POST /v1/sensitivity`
 - `POST /v1/batch`
+- `POST /v1/telemetry/recommend`
 - `GET /v1/live` (WebSocket upgrade)
 
 All REST request bodies are JSON.
@@ -211,9 +213,112 @@ Response:
 
 - JSON array of `SimulationReport`
 
+### `POST /v1/telemetry/recommend`
+
+Purpose:
+
+- import observed production telemetry
+- evaluate the current production pool size
+- compute a Poolsim recommendation from the same workload and pool bounds
+- return a recommendation diff for automation or review
+
+Request model:
+
+- `TelemetryRecommendationRequest.telemetry`
+- `TelemetryRecommendationRequest.options`
+
+Example:
+
+```bash
+curl -s \
+  -X POST http://127.0.0.1:8080/v1/telemetry/recommend \
+  -H 'content-type: application/json' \
+  --data @docs/fixtures/telemetry.json
+```
+
+Response model:
+
+- `TelemetryRecommendation.service_name`
+- `TelemetryRecommendation.window`
+- `TelemetryRecommendation.observed_at`
+- `TelemetryRecommendation.diff`
+
+Response shape:
+
+```json
+{
+  "service_name": "checkout-api",
+  "window": "1h",
+  "observed_at": "2026-05-15T10:00:00Z",
+  "diff": {
+    "current_pool_size": 8,
+    "recommended_pool_size": 6,
+    "pool_size_delta": -2,
+    "change": "Decrease",
+    "additional_connections_required": 0,
+    "removable_connections": 2,
+    "connection_change_percent": -25.0,
+    "current_evaluation": {
+      "pool_size": 8,
+      "utilisation_rho": 0.65,
+      "mean_queue_wait_ms": 2.0,
+      "p99_queue_wait_ms": 15.0,
+      "saturation": "Ok",
+      "warnings": []
+    },
+    "recommended_report": {
+      "optimal_pool_size": 6,
+      "confidence_interval": [5, 7],
+      "cold_start_min_pool_size": 4,
+      "utilisation_rho": 0.78,
+      "mean_queue_wait_ms": 4.0,
+      "p99_queue_wait_ms": 25.0,
+      "saturation": "Ok",
+      "sensitivity": [],
+      "step_load_analysis": [],
+      "warnings": []
+    }
+  }
+}
+```
+
 ## Shared Payload Types
 
 These are the request fields reused across endpoints.
+
+### Telemetry recommendation payload
+
+```json
+{
+  "telemetry": {
+    "service_name": "checkout-api",
+    "window": "1h",
+    "observed_at": "2026-05-15T10:00:00Z",
+    "current_pool_size": 8,
+    "workload": {
+      "requests_per_second": 180.0,
+      "latency_p50_ms": 8.0,
+      "latency_p95_ms": 30.0,
+      "latency_p99_ms": 70.0
+    },
+    "pool": {
+      "max_server_connections": 100,
+      "connection_overhead_ms": 2.0,
+      "idle_timeout_ms": 120000,
+      "min_pool_size": 2,
+      "max_pool_size": 20
+    }
+  },
+  "options": {
+    "iterations": 1200,
+    "seed": 9,
+    "distribution": "LogNormal",
+    "queue_model": "MMC",
+    "target_wait_p99_ms": 40.0,
+    "max_acceptable_rho": 0.85
+  }
+}
+```
 
 ### Workload payload
 

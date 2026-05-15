@@ -12,6 +12,7 @@ It supports:
 - fixed-size evaluation
 - sensitivity sweeps
 - batch execution
+- telemetry import and recommendation diff
 - table, JSON, and CSV output
 
 ## Install
@@ -26,6 +27,7 @@ cargo install poolsim-cli
 - `poolsim-cli evaluate`
 - `poolsim-cli sweep`
 - `poolsim-cli batch`
+- `poolsim-cli import telemetry`
 
 Supported output formats:
 
@@ -45,6 +47,12 @@ poolsim-cli --format json simulate \
   --connection-overhead-ms 2 \
   --min 3 \
   --max 24
+```
+
+Telemetry diff example:
+
+```bash
+poolsim-cli --format json import telemetry --config docs/fixtures/telemetry.json
 ```
 
 ## Exit Codes

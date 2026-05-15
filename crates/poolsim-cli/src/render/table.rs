@@ -1,6 +1,7 @@
 use std::io::IsTerminal;
 
 use anyhow::Result;
+use poolsim_core::telemetry::TelemetryRecommendation;
 use poolsim_core::types::{EvaluationResult, RiskLevel, SaturationLevel, SensitivityRow, SimulationReport};
 use tabled::{settings::Style, Table, Tabled};
 
@@ -194,6 +195,71 @@ pub fn batch(reports: &[SimulationReport]) -> Result<()> {
     Ok(())
 }
 
+pub fn telemetry(recommendation: &TelemetryRecommendation) -> Result<()> {
+    let diff = &recommendation.diff;
+    let summary = vec![
+        SummaryRow {
+            metric: "service_name".to_string(),
+            value: recommendation.service_name.as_deref().unwrap_or("-").to_string(),
+        },
+        SummaryRow {
+            metric: "window".to_string(),
+            value: recommendation.window.as_deref().unwrap_or("-").to_string(),
+        },
+        SummaryRow {
+            metric: "observed_at".to_string(),
+            value: recommendation.observed_at.as_deref().unwrap_or("-").to_string(),
+        },
+        SummaryRow {
+            metric: "current_pool_size".to_string(),
+            value: diff.current_pool_size.to_string(),
+        },
+        SummaryRow {
+            metric: "recommended_pool_size".to_string(),
+            value: diff.recommended_pool_size.to_string(),
+        },
+        SummaryRow {
+            metric: "pool_size_delta".to_string(),
+            value: format!("{:+}", diff.pool_size_delta),
+        },
+        SummaryRow {
+            metric: "change".to_string(),
+            value: format!("{:?}", diff.change),
+        },
+        SummaryRow {
+            metric: "connection_change_percent".to_string(),
+            value: format!("{:+.2}%", diff.connection_change_percent),
+        },
+        SummaryRow {
+            metric: "current_saturation".to_string(),
+            value: format!("{:?}", diff.current_evaluation.saturation),
+        },
+        SummaryRow {
+            metric: "recommended_saturation".to_string(),
+            value: format!("{:?}", diff.recommended_report.saturation),
+        },
+    ];
+
+    let mut table = Table::new(summary);
+    table.with(Style::rounded());
+    println!("{table}");
+
+    if !diff.current_evaluation.warnings.is_empty() {
+        eprintln!("current pool warnings:");
+        for warning in &diff.current_evaluation.warnings {
+            eprintln!("- {warning}");
+        }
+    }
+    if !diff.recommended_report.warnings.is_empty() {
+        eprintln!("recommended pool warnings:");
+        for warning in &diff.recommended_report.warnings {
+            eprintln!("- {warning}");
+        }
+    }
+
+    Ok(())
+}
+
 fn render_pool_size(pool_size: u32, recommended: Option<u32>, risk: RiskLevel, use_color: bool) -> String {
     let text = pool_size.to_string();
     if !use_color {
@@ -241,6 +307,7 @@ fn render_saturation(saturation: SaturationLevel, use_color: bool) -> String {
 
 #[cfg(test)]
 mod tests {
+    use poolsim_core::telemetry::{PoolRecommendationDiff, PoolSizeChange};
     use poolsim_core::types::{StepLoadResult, RiskLevel, SaturationLevel};
 
     use super::*;
@@ -296,6 +363,25 @@ mod tests {
         }
     }
 
+    fn sample_recommendation() -> TelemetryRecommendation {
+        TelemetryRecommendation {
+            service_name: Some("checkout-api".to_string()),
+            window: Some("1h".to_string()),
+            observed_at: Some("2026-05-15T10:00:00Z".to_string()),
+            diff: PoolRecommendationDiff {
+                current_pool_size: 6,
+                recommended_pool_size: 5,
+                pool_size_delta: -1,
+                change: PoolSizeChange::Decrease,
+                additional_connections_required: 0,
+                removable_connections: 1,
+                connection_change_percent: -16.666,
+                current_evaluation: sample_evaluation(),
+                recommended_report: sample_report(),
+            },
+        }
+    }
+
     #[test]
     fn private_render_helpers_cover_colored_and_plain_paths() {
         assert_eq!(render_pool_size(4, None, RiskLevel::Low, false), "4");
@@ -325,5 +411,6 @@ mod tests {
         evaluation(&sample_evaluation()).expect("evaluation table should render");
         sweep(&sample_rows()).expect("sweep table should render");
         batch(&[sample_report(), sample_report()]).expect("batch table should render");
+        telemetry(&sample_recommendation()).expect("telemetry table should render");
     }
 }

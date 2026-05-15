@@ -8,6 +8,7 @@
 //! - `/v1/evaluate`
 //! - `/v1/sensitivity`
 //! - `/v1/batch`
+//! - `/v1/telemetry/recommend`
 //! - `/v1/live`
 //!
 //! Request and response types live in the child modules, including:
@@ -15,6 +16,7 @@
 //! - [`crate::routes::simulate::SimulationRequest`]
 //! - [`crate::routes::evaluate::EvaluateRequest`]
 //! - [`crate::routes::sensitivity::SensitivityRequest`]
+//! - [`crate::routes::telemetry::TelemetryRecommendationRequest`]
 //! - [`crate::routes::health::HealthResponse`]
 //! - [`crate::routes::models::ModelsResponse`]
 
@@ -32,3 +34,5 @@ pub mod models;
 pub mod sensitivity;
 /// Single simulation endpoint.
 pub mod simulate;
+/// Telemetry recommendation endpoint.
+pub mod telemetry;

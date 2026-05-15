@@ -60,6 +60,20 @@ fn sample_request(iterations: u32) -> Value {
     })
 }
 
+fn sample_telemetry_request(iterations: u32) -> Value {
+    let request = sample_request(iterations);
+    json!({
+        "telemetry": {
+            "service_name": "checkout-api",
+            "window": "1h",
+            "current_pool_size": 8,
+            "workload": request["workload"].clone(),
+            "pool": request["pool"].clone(),
+        },
+        "options": request["options"].clone(),
+    })
+}
+
 async fn json_request(app: Router, method: &str, uri: &str, payload: Value) -> (StatusCode, Value) {
     let req = Request::builder()
         .uri(uri)
@@ -183,6 +197,17 @@ async fn rest_routes_work_and_return_structured_errors() {
     assert_eq!(batch_status, StatusCode::OK);
     assert_eq!(batch_json.as_array().expect("batch array").len(), 2);
 
+    let (telemetry_status, telemetry_json) = json_request(
+        app.clone(),
+        "POST",
+        "/v1/telemetry/recommend",
+        sample_telemetry_request(1200),
+    )
+    .await;
+    assert_eq!(telemetry_status, StatusCode::OK);
+    assert_eq!(telemetry_json["service_name"], "checkout-api");
+    assert!(telemetry_json["diff"]["recommended_pool_size"].is_number());
+
     let invalid = json!({
         "workload": {
             "requests_per_second": 300.0,
@@ -234,6 +259,61 @@ async fn rest_routes_return_408_when_simulation_deadline_is_zero() {
     let (batch_status, batch_json) = json_request(app.clone(), "POST", "/v1/batch", batch_payload).await;
     assert_eq!(batch_status, StatusCode::REQUEST_TIMEOUT);
     assert_eq!(batch_json["code"], "SIMULATION_TIMEOUT");
+
+    let (telemetry_status, telemetry_json) = json_request(
+        app.clone(),
+        "POST",
+        "/v1/telemetry/recommend",
+        sample_telemetry_request(1200),
+    )
+    .await;
+    assert_eq!(telemetry_status, StatusCode::REQUEST_TIMEOUT);
+    assert_eq!(telemetry_json["code"], "SIMULATION_TIMEOUT");
+}
+
+#[tokio::test]
+async fn rest_routes_return_408_when_simulation_deadline_expires() {
+    let app = app_with_rate_limit_and_timeout(100, Duration::from_nanos(1));
+
+    let (simulate_status, simulate_json) =
+        json_request(app.clone(), "POST", "/v1/simulate", sample_request(10_000)).await;
+    assert_eq!(simulate_status, StatusCode::REQUEST_TIMEOUT);
+    assert_eq!(simulate_json["code"], "SIMULATION_TIMEOUT");
+
+    let eval_payload = json!({
+        "workload": sample_request(10_000)["workload"],
+        "pool_size": 8,
+        "options": sample_request(10_000)["options"],
+    });
+    let (evaluate_status, evaluate_json) =
+        json_request(app.clone(), "POST", "/v1/evaluate", eval_payload).await;
+    assert_eq!(evaluate_status, StatusCode::REQUEST_TIMEOUT);
+    assert_eq!(evaluate_json["code"], "SIMULATION_TIMEOUT");
+
+    let sensitivity_payload = json!({
+        "workload": sample_request(10_000)["workload"],
+        "pool": sample_request(10_000)["pool"],
+        "options": sample_request(10_000)["options"],
+    });
+    let (sensitivity_status, sensitivity_json) =
+        json_request(app.clone(), "POST", "/v1/sensitivity", sensitivity_payload).await;
+    assert_eq!(sensitivity_status, StatusCode::REQUEST_TIMEOUT);
+    assert_eq!(sensitivity_json["code"], "SIMULATION_TIMEOUT");
+
+    let batch_payload = json!([sample_request(10_000), sample_request(10_000)]);
+    let (batch_status, batch_json) = json_request(app.clone(), "POST", "/v1/batch", batch_payload).await;
+    assert_eq!(batch_status, StatusCode::REQUEST_TIMEOUT);
+    assert_eq!(batch_json["code"], "SIMULATION_TIMEOUT");
+
+    let (telemetry_status, telemetry_json) = json_request(
+        app.clone(),
+        "POST",
+        "/v1/telemetry/recommend",
+        sample_telemetry_request(10_000),
+    )
+    .await;
+    assert_eq!(telemetry_status, StatusCode::REQUEST_TIMEOUT);
+    assert_eq!(telemetry_json["code"], "SIMULATION_TIMEOUT");
 }
 
 #[tokio::test]

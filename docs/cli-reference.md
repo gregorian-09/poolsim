@@ -11,6 +11,7 @@ It covers:
 - Every subcommand-specific flag
 - JSON and TOML config formats
 - Batch input formats
+- Telemetry import and recommendation diff
 - Sample-file input
 - Output formats
 - Exit-code behavior
@@ -23,6 +24,7 @@ Checked-in runnable fixture files live under `docs/fixtures/`:
 - `docs/fixtures/cli-config.toml`
 - `docs/fixtures/batch.json`
 - `docs/fixtures/batch.toml`
+- `docs/fixtures/telemetry.json`
 - `docs/fixtures/latencies.txt`
 
 ## Command Summary
@@ -33,6 +35,7 @@ Available subcommands:
 - `evaluate`
 - `sweep`
 - `batch`
+- `import telemetry`
 
 Global flags:
 
@@ -191,6 +194,99 @@ Runs multiple simulation requests from a single batch file.
 ```bash
 poolsim batch --config docs/fixtures/batch.json --format json
 ```
+
+## `import telemetry`
+
+### Purpose
+
+Imports observed production telemetry and computes a recommendation diff against the current pool size.
+
+Use this command when you already have telemetry from Prometheus, OpenTelemetry, logs, APM, or an internal metrics job and want Poolsim to answer:
+
+- what pool size it recommends
+- whether production should increase, decrease, or keep the current setting
+- how many connections are required or removable
+- how the current pool scores against the same workload model
+
+### Example
+
+```bash
+poolsim import telemetry --config docs/fixtures/telemetry.json --format table
+poolsim import telemetry --config docs/fixtures/telemetry.json --format json
+poolsim import telemetry --config docs/fixtures/telemetry.json --format csv
+```
+
+Override the current production pool size without editing the file:
+
+```bash
+poolsim import telemetry \
+  --config docs/fixtures/telemetry.json \
+  --current-pool-size 10 \
+  --format json
+```
+
+### `import telemetry` flags
+
+#### `--config <path>`
+
+Required path to a JSON or TOML telemetry file.
+
+The file can use a wrapped format:
+
+```json
+{
+  "telemetry": {
+    "service_name": "checkout-api",
+    "window": "1h",
+    "observed_at": "2026-05-15T10:00:00Z",
+    "current_pool_size": 8,
+    "workload": {
+      "requests_per_second": 180.0,
+      "latency_p50_ms": 8.0,
+      "latency_p95_ms": 30.0,
+      "latency_p99_ms": 70.0
+    },
+    "pool": {
+      "max_server_connections": 100,
+      "connection_overhead_ms": 2.0,
+      "idle_timeout_ms": 120000,
+      "min_pool_size": 2,
+      "max_pool_size": 20
+    }
+  },
+  "options": {
+    "iterations": 1200,
+    "seed": 9,
+    "distribution": "LogNormal",
+    "queue_model": "MMC",
+    "target_wait_p99_ms": 40.0,
+    "max_acceptable_rho": 0.85
+  }
+}
+```
+
+The file can also use a direct telemetry snapshot without `options`; Poolsim will use `SimulationOptions::default`.
+
+#### `--current-pool-size <n>`
+
+Optional override for `telemetry.current_pool_size`.
+
+This is useful when a metrics export is reused for what-if diffs against several production settings.
+
+### Output fields
+
+The JSON output is a `TelemetryRecommendation`:
+
+- `service_name`, `window`, and `observed_at`
+- `diff.current_pool_size`
+- `diff.recommended_pool_size`
+- `diff.pool_size_delta`
+- `diff.change`
+- `diff.additional_connections_required`
+- `diff.removable_connections`
+- `diff.connection_change_percent`
+- `diff.current_evaluation`
+- `diff.recommended_report`
 
 ## Common Input Flags
 

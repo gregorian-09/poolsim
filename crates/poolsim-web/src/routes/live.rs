@@ -343,6 +343,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn simulate_with_ticks_maps_elapsed_timeout() {
+        let req = sample_request(10_000);
+        let state = AppState {
+            simulation_timeout: Duration::from_nanos(1),
+            version: "test",
+        };
+        let (tx, _rx) = mpsc::channel(16);
+
+        let err = simulate_with_ticks(req, &state, &tx, None, 1)
+            .await
+            .expect_err("tiny timeout should expire");
+        assert_eq!(err.code, "SIMULATION_TIMEOUT");
+        assert_eq!(err.message, "simulation timed out");
+    }
+
+    #[tokio::test]
     async fn simulate_with_ticks_returns_report_and_emits_progress() {
         let req = sample_request(1_200);
         let state = AppState {

@@ -14,6 +14,7 @@ It exposes:
 - `POST /v1/evaluate`
 - `POST /v1/sensitivity`
 - `POST /v1/batch`
+- `POST /v1/telemetry/recommend`
 - `GET /v1/live`
 
 ## Run

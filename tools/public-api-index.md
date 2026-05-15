@@ -14,6 +14,7 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_core::monte_carlo`: public Monte Carlo module; detailed usage in `docs/library-api.md`.
 - `poolsim_core::optimizer`: public optimization module; detailed usage in `docs/library-api.md`.
 - `poolsim_core::sensitivity`: public sensitivity-analysis module; detailed usage in `docs/library-api.md`.
+- `poolsim_core::telemetry`: public telemetry import and recommendation-diff module; detailed usage in `docs/library-api.md`.
 - `poolsim_core::types`: public model/types module; detailed usage in `docs/library-api.md`.
 - `poolsim_core::DistributionModel`: crate-root reexport of `poolsim_core::types::DistributionModel`.
 - `poolsim_core::QueueModel`: crate-root reexport of `poolsim_core::types::QueueModel`.
@@ -68,6 +69,16 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_core::sensitivity::sweep_with_target`: sensitivity sweep with an explicit wait target.
 - `poolsim_core::sensitivity::sweep_with_target_and_model`: sensitivity sweep with explicit wait target and queue model.
 - `poolsim_core::sensitivity::sweep_with_options`: full sensitivity sweep with explicit `SimulationOptions`.
+
+### `poolsim_core::telemetry`
+
+- `poolsim_core::telemetry::TelemetrySnapshot`: imported production telemetry for recommendation diffing.
+- `poolsim_core::telemetry::TelemetrySnapshot::validate`: validates imported telemetry before recommendation.
+- `poolsim_core::telemetry::PoolSizeChange`: direction enum for recommendation changes.
+- `poolsim_core::telemetry::PoolRecommendationDiff`: current-vs-recommended pool-size diff.
+- `poolsim_core::telemetry::PoolRecommendationDiff::worst_saturation`: returns the worst current/recommended saturation level.
+- `poolsim_core::telemetry::TelemetryRecommendation`: top-level telemetry recommendation output.
+- `poolsim_core::telemetry::recommend_from_telemetry`: computes a recommendation and diff from imported telemetry.
 
 ### `poolsim_core::types`
 
@@ -134,6 +145,9 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_web::routes::simulate::handler`: handler for `POST /v1/simulate`.
 - `poolsim_web::routes::sensitivity`: module for `POST /v1/sensitivity`.
 - `poolsim_web::routes::sensitivity::handler`: handler for `POST /v1/sensitivity`.
+- `poolsim_web::routes::telemetry`: module for `POST /v1/telemetry/recommend`.
+- `poolsim_web::routes::telemetry::TelemetryRecommendationRequest`: request body for telemetry recommendation.
+- `poolsim_web::routes::telemetry::handler`: handler for `POST /v1/telemetry/recommend`.
 
 ### `poolsim_web::state`
 
@@ -157,11 +171,14 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_cli::args::CliDistributionModel`: CLI-facing distribution-model enum.
 - `poolsim_cli::args::CliQueueModel`: CLI-facing queue-model enum.
 - `poolsim_cli::args::Cli`: top-level clap parser type defined in the `args` module.
-- `poolsim_cli::args::Commands`: subcommand enum for `simulate`, `evaluate`, `sweep`, and `batch`.
+- `poolsim_cli::args::Commands`: subcommand enum for `simulate`, `evaluate`, `sweep`, `batch`, and `import`.
 - `poolsim_cli::args::SimulateArgs`: argument model for the `simulate` subcommand.
 - `poolsim_cli::args::CommonArgs`: shared argument model for simulation-style commands.
 - `poolsim_cli::args::EvaluateArgs`: argument model for the `evaluate` subcommand.
 - `poolsim_cli::args::BatchArgs`: argument model for the `batch` subcommand.
+- `poolsim_cli::args::ImportArgs`: argument model for the `import` subcommand.
+- `poolsim_cli::args::ImportCommands`: nested import subcommand enum.
+- `poolsim_cli::args::TelemetryImportArgs`: argument model for `import telemetry`.
 
 ### `poolsim_cli::config`
 
@@ -169,10 +186,12 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_cli::config::EvaluateInput`: resolved input bundle for fixed-pool evaluation execution.
 - `poolsim_cli::config::SweepInput`: resolved input bundle for sensitivity sweep execution.
 - `poolsim_cli::config::BatchSimulationInput`: resolved batch input bundle.
+- `poolsim_cli::config::TelemetryInput`: resolved telemetry import input bundle.
 - `poolsim_cli::config::resolve_simulation_input`: builds a simulation input from config files and CLI overrides.
 - `poolsim_cli::config::resolve_evaluate_input`: builds an evaluation input from config files and CLI overrides.
 - `poolsim_cli::config::resolve_sweep_input`: builds a sweep input from config files and CLI overrides.
 - `poolsim_cli::config::resolve_batch_input`: builds a batch input from JSON or TOML batch files.
+- `poolsim_cli::config::resolve_telemetry_input`: builds a telemetry input from JSON or TOML telemetry files.
 
 ### `poolsim_cli::render`
 
@@ -181,6 +200,7 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_cli::render::csv::evaluation`: renders an evaluation result as CSV.
 - `poolsim_cli::render::csv::sweep`: renders a sensitivity sweep as CSV.
 - `poolsim_cli::render::csv::batch`: renders a batch result as CSV.
+- `poolsim_cli::render::csv::telemetry`: renders telemetry recommendation diff as CSV.
 - `poolsim_cli::render::json`: JSON rendering module.
 - `poolsim_cli::render::json::print`: renders a serializable value as JSON.
 - `poolsim_cli::render::table`: table rendering module.
@@ -188,6 +208,7 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_cli::render::table::evaluation`: renders an evaluation result as a table.
 - `poolsim_cli::render::table::sweep`: renders a sensitivity sweep as a table.
 - `poolsim_cli::render::table::batch`: renders a batch result as a table.
+- `poolsim_cli::render::table::telemetry`: renders telemetry recommendation diff as a table.
 
 ### Route-Local Web Models
 
@@ -196,3 +217,4 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_web::routes::models::handler`: handler for `GET /v1/models`.
 - `poolsim_web::routes::sensitivity::SensitivityRequest`: request body local to the sensitivity route.
 - `poolsim_web::routes::simulate::SimulationRequest`: request body local to the simulation route.
+- `poolsim_web::routes::telemetry::TelemetryRecommendationRequest`: request body local to the telemetry recommendation route.

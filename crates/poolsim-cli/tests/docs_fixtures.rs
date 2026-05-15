@@ -1,7 +1,10 @@
 use std::{
     path::PathBuf,
-    process::Command,
+    process::{Command, Output},
 };
+
+#[cfg(unix)]
+use std::os::unix::process::ExitStatusExt;
 
 use serde_json::Value;
 
@@ -36,6 +39,19 @@ fn assert_success(output: &std::process::Output, context: &str) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
     );
+}
+
+#[cfg(unix)]
+#[test]
+#[should_panic(expected = "intentional failure")]
+fn assert_success_failure_message_is_covered() {
+    let output = Output {
+        status: std::process::ExitStatus::from_raw(1 << 8),
+        stdout: b"stdout body".to_vec(),
+        stderr: b"stderr body".to_vec(),
+    };
+
+    assert_success(&output, "intentional failure");
 }
 
 fn stdout_utf8(output: &std::process::Output) -> String {
@@ -147,6 +163,39 @@ fn docs_batch_examples_work_for_json_and_toml_inputs() {
     let table = stdout_utf8(&batch_toml_output);
     assert!(table.contains("request_index"));
     assert!(table.contains("optimal_pool_size"));
+}
+
+#[test]
+fn docs_import_telemetry_example_works() {
+    let json_output = run_cli(&[
+        "--format",
+        "json",
+        "import",
+        "telemetry",
+        "--config",
+        &fixture("docs/fixtures/telemetry.json"),
+    ]);
+    assert_success(&json_output, "telemetry import docs example");
+    let recommendation: Value = serde_json::from_str(&stdout_utf8(&json_output))
+        .expect("telemetry recommendation output should deserialize");
+    assert_eq!(recommendation["service_name"], "checkout-api");
+    assert!(recommendation["diff"]["current_pool_size"].is_number());
+    assert!(recommendation["diff"]["recommended_pool_size"].is_number());
+
+    let csv_output = run_cli(&[
+        "--format",
+        "csv",
+        "import",
+        "telemetry",
+        "--config",
+        &fixture("docs/fixtures/telemetry.json"),
+        "--current-pool-size",
+        "10",
+    ]);
+    assert_success(&csv_output, "telemetry import CSV docs example");
+    let csv = stdout_utf8(&csv_output);
+    assert!(csv.contains("recommended_pool_size"));
+    assert!(csv.contains("pool_size_delta"));
 }
 
 #[test]
