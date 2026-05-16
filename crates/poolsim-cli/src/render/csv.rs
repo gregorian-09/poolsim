@@ -1,4 +1,5 @@
 use anyhow::Result;
+use crate::config_gen::ConfigSnippetReport;
 use crate::doctor::DoctorReport;
 use crate::gate::GateReport;
 use csv::{Writer, WriterBuilder};
@@ -247,6 +248,53 @@ pub fn doctor(report: &DoctorReport) -> Result<()> {
     Ok(())
 }
 
+pub fn config_snippet(report: &ConfigSnippetReport) -> Result<()> {
+    let mut wtr = WriterBuilder::new().flexible(true).from_writer(std::io::stdout());
+    wtr.write_record(["field", "value"])?;
+    wtr.write_record(["framework", report.framework.as_str()])?;
+    wtr.write_record(["source", report.source.as_str()])?;
+    wtr.write_record([
+        "service_name",
+        report.service_name.as_deref().unwrap_or("-"),
+    ])?;
+    wtr.write_record(["window", report.window.as_deref().unwrap_or("-")])?;
+    wtr.write_record([
+        "observed_at",
+        report.observed_at.as_deref().unwrap_or("-"),
+    ])?;
+    wtr.write_record([
+        "recommended_pool_size",
+        &report.recommended_pool_size.to_string(),
+    ])?;
+    wtr.write_record(["min_idle", &report.min_idle.to_string()])?;
+    wtr.write_record([
+        "connection_timeout_ms",
+        &report.connection_timeout_ms.to_string(),
+    ])?;
+    wtr.write_record(["idle_timeout_ms", &report.idle_timeout_ms.to_string()])?;
+    wtr.write_record(["database_url_env", &report.database_url_env])?;
+    wtr.write_record(["pool_name", &report.pool_name])?;
+    wtr.write_record([
+        "max_server_connections",
+        &report.max_server_connections.to_string(),
+    ])?;
+    wtr.write_record(["utilisation_rho", &report.utilisation_rho.to_string()])?;
+    wtr.write_record([
+        "mean_queue_wait_ms",
+        &report.mean_queue_wait_ms.to_string(),
+    ])?;
+    wtr.write_record(["p99_queue_wait_ms", &report.p99_queue_wait_ms.to_string()])?;
+    wtr.write_record(["snippet", &report.snippet])?;
+    for note in &report.notes {
+        wtr.write_record(["note", note])?;
+    }
+    for reference in &report.references {
+        wtr.write_record(["reference", &format!("{}: {}", reference.title, reference.url)])?;
+    }
+    wtr.flush()?;
+    Ok(())
+}
+
 fn write_sensitivity_row(wtr: &mut Writer<std::io::Stdout>, row: &SensitivityRow) -> Result<()> {
     wtr.write_record([
         row.pool_size.to_string(),
@@ -351,5 +399,48 @@ mod tests {
         .expect("gate CSV render should succeed");
         doctor(&crate::doctor::build_doctor_report(sample_recommendation()))
             .expect("doctor CSV render should succeed");
+
+        let config_report = crate::config_gen::build_config_snippet(
+            &crate::args::GenerateConfigArgs {
+                framework: crate::args::CliConfigFramework::NodePg,
+                min_idle: Some(3),
+                connection_timeout_ms: 30_000,
+                idle_timeout_ms: 600_000,
+                database_url_env: "DATABASE_URL".to_string(),
+                pool_name: "checkout-pool".to_string(),
+                source: crate::args::GenerateConfigSourceCommands::Simulate(crate::args::CommonArgs {
+                    config: None,
+                    rps: None,
+                    p50: None,
+                    p95: None,
+                    p99: None,
+                    samples_file: None,
+                    max_server_connections: None,
+                    connection_overhead_ms: None,
+                    idle_timeout_ms: None,
+                    min: None,
+                    max: None,
+                    iterations: None,
+                    seed: None,
+                    distribution: None,
+                    queue_model: None,
+                    target_wait_p99_ms: None,
+                    max_acceptable_rho: None,
+                }),
+            },
+            crate::config_gen::ConfigRecommendation {
+                source: crate::config_gen::ConfigSourceKind::Simulate,
+                service_name: Some("checkout-api".to_string()),
+                window: Some("1h".to_string()),
+                observed_at: None,
+                recommended_pool_size: 8,
+                cold_start_min_pool_size: 4,
+                max_server_connections: 100,
+                utilisation_rho: 0.72,
+                mean_queue_wait_ms: 3.0,
+                p99_queue_wait_ms: 12.0,
+            },
+        );
+        config_snippet(&config_report).expect("config snippet CSV render should succeed");
     }
 }

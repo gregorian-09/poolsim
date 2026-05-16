@@ -66,6 +66,18 @@ pub enum Commands {
     Import(ImportArgs),
     Gate(GateArgs),
     Doctor(DoctorArgs),
+    GenerateConfig(GenerateConfigArgs),
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliConfigFramework {
+    Hikaricp,
+    SpringBoot,
+    Sqlalchemy,
+    Prisma,
+    NodePg,
+    Sqlx,
+    Deadpool,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -184,6 +196,37 @@ pub struct DoctorArgs {
 pub enum DoctorSourceCommands {
     Telemetry(TelemetryImportArgs),
     Prometheus(PrometheusImportArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct GenerateConfigArgs {
+    #[arg(long, value_enum)]
+    pub framework: CliConfigFramework,
+
+    #[arg(long)]
+    pub min_idle: Option<u32>,
+
+    #[arg(long, default_value_t = 30_000)]
+    pub connection_timeout_ms: u64,
+
+    #[arg(long, default_value_t = 600_000)]
+    pub idle_timeout_ms: u64,
+
+    #[arg(long, default_value = "DATABASE_URL")]
+    pub database_url_env: String,
+
+    #[arg(long, default_value = "poolsim-recommended-pool")]
+    pub pool_name: String,
+
+    #[command(subcommand)]
+    pub source: GenerateConfigSourceCommands,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum GenerateConfigSourceCommands {
+    Telemetry(TelemetryImportArgs),
+    Prometheus(PrometheusImportArgs),
+    Simulate(CommonArgs),
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -316,6 +359,93 @@ mod tests {
             SaturationLevel::from(CliSaturationLevel::Critical),
             SaturationLevel::Critical
         );
+    }
+
+    #[test]
+    fn parser_handles_generate_config_sources() {
+        let telemetry_cli = Cli::try_parse_from([
+            "poolsim",
+            "--format",
+            "json",
+            "generate-config",
+            "--framework",
+            "sqlx",
+            "--min-idle",
+            "3",
+            "--connection-timeout-ms",
+            "4000",
+            "--idle-timeout-ms",
+            "120000",
+            "--database-url-env",
+            "APP_DATABASE_URL",
+            "--pool-name",
+            "checkout-pool",
+            "telemetry",
+            "--config",
+            "telemetry.json",
+        ])
+        .expect("generate-config telemetry args should parse");
+        match telemetry_cli.command {
+            Commands::GenerateConfig(args) => {
+                assert!(matches!(args.framework, CliConfigFramework::Sqlx));
+                assert_eq!(args.min_idle, Some(3));
+                assert_eq!(args.connection_timeout_ms, 4_000);
+                assert_eq!(args.idle_timeout_ms, 120_000);
+                assert_eq!(args.database_url_env, "APP_DATABASE_URL");
+                assert_eq!(args.pool_name, "checkout-pool");
+                match args.source {
+                    GenerateConfigSourceCommands::Telemetry(telemetry) => {
+                        assert_eq!(telemetry.config, PathBuf::from("telemetry.json"));
+                    }
+                    _ => panic!("expected telemetry source"),
+                }
+            }
+            _ => panic!("expected generate-config command"),
+        }
+
+        let prometheus_cli = Cli::try_parse_from([
+            "poolsim",
+            "generate-config",
+            "--framework",
+            "spring-boot",
+            "prometheus",
+            "--response-file",
+            "prometheus.json",
+            "--current-pool-size",
+            "8",
+            "--max-server-connections",
+            "100",
+            "--min",
+            "2",
+            "--max",
+            "20",
+        ])
+        .expect("generate-config prometheus args should parse");
+        assert!(matches!(
+            prometheus_cli.command,
+            Commands::GenerateConfig(GenerateConfigArgs {
+                source: GenerateConfigSourceCommands::Prometheus(_),
+                ..
+            })
+        ));
+
+        let simulate_cli = Cli::try_parse_from([
+            "poolsim",
+            "generate-config",
+            "--framework",
+            "node-pg",
+            "simulate",
+            "--config",
+            "cli-config.json",
+        ])
+        .expect("generate-config simulate args should parse");
+        assert!(matches!(
+            simulate_cli.command,
+            Commands::GenerateConfig(GenerateConfigArgs {
+                source: GenerateConfigSourceCommands::Simulate(_),
+                ..
+            })
+        ));
     }
 
     #[test]

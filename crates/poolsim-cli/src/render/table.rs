@@ -1,6 +1,7 @@
 use std::io::IsTerminal;
 
 use anyhow::Result;
+use crate::config_gen::ConfigSnippetReport;
 use crate::doctor::DoctorReport;
 use crate::gate::GateReport;
 use poolsim_core::telemetry::TelemetryRecommendation;
@@ -392,6 +393,72 @@ pub fn doctor(report: &DoctorReport) -> Result<()> {
     Ok(())
 }
 
+pub fn config_snippet(report: &ConfigSnippetReport) -> Result<()> {
+    let summary = vec![
+        SummaryRow {
+            metric: "framework".to_string(),
+            value: report.framework.as_str().to_string(),
+        },
+        SummaryRow {
+            metric: "source".to_string(),
+            value: report.source.as_str().to_string(),
+        },
+        SummaryRow {
+            metric: "service_name".to_string(),
+            value: report.service_name.as_deref().unwrap_or("-").to_string(),
+        },
+        SummaryRow {
+            metric: "recommended_pool_size".to_string(),
+            value: report.recommended_pool_size.to_string(),
+        },
+        SummaryRow {
+            metric: "min_idle".to_string(),
+            value: report.min_idle.to_string(),
+        },
+        SummaryRow {
+            metric: "connection_timeout_ms".to_string(),
+            value: report.connection_timeout_ms.to_string(),
+        },
+        SummaryRow {
+            metric: "idle_timeout_ms".to_string(),
+            value: report.idle_timeout_ms.to_string(),
+        },
+        SummaryRow {
+            metric: "max_server_connections".to_string(),
+            value: report.max_server_connections.to_string(),
+        },
+        SummaryRow {
+            metric: "utilisation_rho".to_string(),
+            value: format!("{:.4}", report.utilisation_rho),
+        },
+        SummaryRow {
+            metric: "p99_queue_wait_ms".to_string(),
+            value: format!("{:.3}", report.p99_queue_wait_ms),
+        },
+    ];
+    let mut summary_table = Table::new(summary);
+    summary_table.with(Style::rounded());
+    println!("{summary_table}");
+
+    println!("\n{}", report.snippet);
+
+    if !report.notes.is_empty() {
+        println!("\nnotes:");
+        for note in &report.notes {
+            println!("- {note}");
+        }
+    }
+
+    if !report.references.is_empty() {
+        println!("\nreferences:");
+        for reference in &report.references {
+            println!("- {}: {}", reference.title, reference.url);
+        }
+    }
+
+    Ok(())
+}
+
 fn render_pool_size(pool_size: u32, recommended: Option<u32>, risk: RiskLevel, use_color: bool) -> String {
     let text = pool_size.to_string();
     if !use_color {
@@ -551,5 +618,48 @@ mod tests {
         .expect("gate table should render");
         doctor(&crate::doctor::build_doctor_report(sample_recommendation()))
             .expect("doctor table should render");
+
+        let config_report = crate::config_gen::build_config_snippet(
+            &crate::args::GenerateConfigArgs {
+                framework: crate::args::CliConfigFramework::Sqlx,
+                min_idle: Some(3),
+                connection_timeout_ms: 30_000,
+                idle_timeout_ms: 600_000,
+                database_url_env: "DATABASE_URL".to_string(),
+                pool_name: "checkout-pool".to_string(),
+                source: crate::args::GenerateConfigSourceCommands::Simulate(crate::args::CommonArgs {
+                    config: None,
+                    rps: None,
+                    p50: None,
+                    p95: None,
+                    p99: None,
+                    samples_file: None,
+                    max_server_connections: None,
+                    connection_overhead_ms: None,
+                    idle_timeout_ms: None,
+                    min: None,
+                    max: None,
+                    iterations: None,
+                    seed: None,
+                    distribution: None,
+                    queue_model: None,
+                    target_wait_p99_ms: None,
+                    max_acceptable_rho: None,
+                }),
+            },
+            crate::config_gen::ConfigRecommendation {
+                source: crate::config_gen::ConfigSourceKind::Simulate,
+                service_name: Some("checkout-api".to_string()),
+                window: Some("1h".to_string()),
+                observed_at: None,
+                recommended_pool_size: 8,
+                cold_start_min_pool_size: 4,
+                max_server_connections: 100,
+                utilisation_rho: 0.72,
+                mean_queue_wait_ms: 3.0,
+                p99_queue_wait_ms: 12.0,
+            },
+        );
+        config_snippet(&config_report).expect("config snippet table should render");
     }
 }

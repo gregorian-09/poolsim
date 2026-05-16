@@ -6,6 +6,7 @@
 
 mod args;
 mod config;
+mod config_gen;
 mod doctor;
 mod gate;
 mod prometheus;
@@ -156,6 +157,38 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
             render_doctor(&report, cli.format)?;
             Ok(report.status.exit_code(cli.warn_exit))
         }
+        Commands::GenerateConfig(args) => {
+            let recommendation = match &args.source {
+                args::GenerateConfigSourceCommands::Telemetry(source) => {
+                    let input = config::resolve_telemetry_input(source)?;
+                    let max_server_connections = input.snapshot.pool.max_server_connections;
+                    let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
+                    config_gen::recommendation_from_telemetry(
+                        config_gen::ConfigSourceKind::Telemetry,
+                        &recommendation,
+                        max_server_connections,
+                    )
+                }
+                args::GenerateConfigSourceCommands::Prometheus(source) => {
+                    let input = prometheus::resolve_prometheus_input(source)?;
+                    let max_server_connections = input.snapshot.pool.max_server_connections;
+                    let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
+                    config_gen::recommendation_from_telemetry(
+                        config_gen::ConfigSourceKind::Prometheus,
+                        &recommendation,
+                        max_server_connections,
+                    )
+                }
+                args::GenerateConfigSourceCommands::Simulate(source) => {
+                    let input = config::resolve_simulation_input(source)?;
+                    let report = simulate(&input.workload, &input.pool, &input.options)?;
+                    config_gen::recommendation_from_simulation(&report, &input.pool)
+                }
+            };
+            let report = config_gen::build_config_snippet(&args, recommendation);
+            render_config_snippet(&report, cli.format)?;
+            Ok(ExitCode::from(0))
+        }
     }
 }
 
@@ -215,6 +248,14 @@ fn render_doctor(report: &doctor::DoctorReport, format: OutputFormat) -> Result<
     }
 }
 
+fn render_config_snippet(report: &config_gen::ConfigSnippetReport, format: OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Table => render::table::config_snippet(report),
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => render::csv::config_snippet(report),
+    }
+}
+
 fn exit_code_for_saturation(saturation: SaturationLevel, warn_exit: bool) -> ExitCode {
     match saturation {
         SaturationLevel::Critical => ExitCode::from(2),
@@ -270,9 +311,9 @@ mod tests {
 
     use super::*;
     use crate::args::{
-        BatchArgs, CommonArgs, DoctorArgs, DoctorSourceCommands, EvaluateArgs, GateArgs,
-        GateSourceCommands, ImportArgs, ImportCommands, PrometheusImportArgs, SimulateArgs,
-        TelemetryImportArgs,
+        BatchArgs, CliConfigFramework, CommonArgs, DoctorArgs, DoctorSourceCommands, EvaluateArgs,
+        GateArgs, GateSourceCommands, GenerateConfigArgs, GenerateConfigSourceCommands, ImportArgs,
+        ImportCommands, PrometheusImportArgs, SimulateArgs, TelemetryImportArgs,
     };
 
     fn sample_config_json() -> String {
@@ -570,6 +611,33 @@ mod tests {
         render_doctor(&doctor_report, OutputFormat::Json).expect("json doctor should render");
         render_doctor(&doctor_report, OutputFormat::Csv).expect("csv doctor should render");
         render_doctor(&doctor_report, OutputFormat::Table).expect("table doctor should render");
+
+        let config_report = config_gen::build_config_snippet(
+            &GenerateConfigArgs {
+                framework: CliConfigFramework::Sqlalchemy,
+                min_idle: Some(2),
+                connection_timeout_ms: 30_000,
+                idle_timeout_ms: 600_000,
+                database_url_env: "DATABASE_URL".to_string(),
+                pool_name: "checkout-pool".to_string(),
+                source: GenerateConfigSourceCommands::Simulate(common_with_config(Path::new("unused.json"))),
+            },
+            config_gen::ConfigRecommendation {
+                source: config_gen::ConfigSourceKind::Simulate,
+                service_name: Some("checkout-api".to_string()),
+                window: Some("1h".to_string()),
+                observed_at: None,
+                recommended_pool_size: 8,
+                cold_start_min_pool_size: 3,
+                max_server_connections: 100,
+                utilisation_rho: 0.72,
+                mean_queue_wait_ms: 3.0,
+                p99_queue_wait_ms: 12.0,
+            },
+        );
+        render_config_snippet(&config_report, OutputFormat::Json).expect("json config snippet should render");
+        render_config_snippet(&config_report, OutputFormat::Csv).expect("csv config snippet should render");
+        render_config_snippet(&config_report, OutputFormat::Table).expect("table config snippet should render");
     }
 
     #[test]
@@ -785,6 +853,77 @@ mod tests {
             warn_exit: false,
         };
         let _ = run_with_cli(cli).expect("doctor prometheus should execute");
+
+        let cli = Cli {
+            command: Commands::GenerateConfig(GenerateConfigArgs {
+                framework: CliConfigFramework::Sqlx,
+                min_idle: Some(3),
+                connection_timeout_ms: 30_000,
+                idle_timeout_ms: 600_000,
+                database_url_env: "DATABASE_URL".to_string(),
+                pool_name: "checkout-pool".to_string(),
+                source: GenerateConfigSourceCommands::Telemetry(TelemetryImportArgs {
+                    config: telemetry_cfg.clone(),
+                    current_pool_size: Some(9),
+                }),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: true,
+        };
+        let _ = run_with_cli(cli).expect("generate-config telemetry should execute");
+
+        let cli = Cli {
+            command: Commands::GenerateConfig(GenerateConfigArgs {
+                framework: CliConfigFramework::SpringBoot,
+                min_idle: None,
+                connection_timeout_ms: 30_000,
+                idle_timeout_ms: 600_000,
+                database_url_env: "DATABASE_URL".to_string(),
+                pool_name: "checkout-pool".to_string(),
+                source: GenerateConfigSourceCommands::Prometheus(PrometheusImportArgs {
+                    endpoint: None,
+                    response_file: Some(prometheus_cfg.clone()),
+                    rps_query: None,
+                    p50_query: None,
+                    p95_query: None,
+                    p99_query: None,
+                    header: Vec::new(),
+                    service_name: Some("checkout-api".to_string()),
+                    window: Some("5m".to_string()),
+                    observed_at: None,
+                    current_pool_size: 9,
+                    max_server_connections: 100,
+                    connection_overhead_ms: 2.0,
+                    idle_timeout_ms: None,
+                    min: 2,
+                    max: 20,
+                    iterations: Some(1_200),
+                    seed: Some(7),
+                    distribution: None,
+                    queue_model: None,
+                    target_wait_p99_ms: None,
+                    max_acceptable_rho: None,
+                }),
+            }),
+            format: OutputFormat::Csv,
+            warn_exit: true,
+        };
+        let _ = run_with_cli(cli).expect("generate-config prometheus should execute");
+
+        let cli = Cli {
+            command: Commands::GenerateConfig(GenerateConfigArgs {
+                framework: CliConfigFramework::NodePg,
+                min_idle: None,
+                connection_timeout_ms: 30_000,
+                idle_timeout_ms: 600_000,
+                database_url_env: "DATABASE_URL".to_string(),
+                pool_name: "checkout-pool".to_string(),
+                source: GenerateConfigSourceCommands::Simulate(common_with_config(&cfg)),
+            }),
+            format: OutputFormat::Table,
+            warn_exit: true,
+        };
+        let _ = run_with_cli(cli).expect("generate-config simulate should execute");
 
         remove_if_exists(&cfg);
         remove_if_exists(&batch_cfg);
