@@ -153,6 +153,13 @@ cargo run -p poolsim-cli -- --format json gate \
   --config docs/fixtures/telemetry.json
 ```
 
+Diagnose whether the configured production pool is healthy, too small, too large, or close to saturation:
+
+```bash
+cargo run -p poolsim-cli -- --format json doctor telemetry \
+  --config docs/fixtures/telemetry.json
+```
+
 ## Example CLI Output
 
 Real output from the checked-in CLI fixture:
