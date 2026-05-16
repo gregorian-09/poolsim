@@ -15,6 +15,7 @@ It supports:
 - telemetry import and recommendation diff
 - Prometheus-compatible telemetry import
 - CI capacity gates for telemetry-backed release checks
+- pool diagnosis for configured production settings
 - table, JSON, and CSV output
 
 ## Install
@@ -33,6 +34,8 @@ cargo install poolsim-cli
 - `poolsim-cli import prometheus`
 - `poolsim-cli gate telemetry`
 - `poolsim-cli gate prometheus`
+- `poolsim-cli doctor telemetry`
+- `poolsim-cli doctor prometheus`
 
 Supported output formats:
 
@@ -78,6 +81,12 @@ poolsim-cli --format json gate \
   --policy docs/fixtures/gate-policy.toml \
   telemetry \
   --config docs/fixtures/telemetry.json
+```
+
+Doctor example:
+
+```bash
+poolsim-cli --format json doctor telemetry --config docs/fixtures/telemetry.json
 ```
 
 ## Exit Codes
