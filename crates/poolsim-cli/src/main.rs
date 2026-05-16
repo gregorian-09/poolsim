@@ -6,6 +6,7 @@
 
 mod args;
 mod config;
+mod gate;
 mod prometheus;
 mod render;
 
@@ -133,6 +134,17 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
                 ))
             }
         },
+        Commands::Gate(args) => {
+            let policy = gate::policy_from_args(&args)?;
+            let input = match args.source {
+                args::GateSourceCommands::Telemetry(source) => config::resolve_telemetry_input(&source)?,
+                args::GateSourceCommands::Prometheus(source) => prometheus::resolve_prometheus_input(&source)?,
+            };
+            let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
+            let report = gate::build_gate_report(recommendation, &policy);
+            render_gate(&report, cli.format)?;
+            Ok(report.status.exit_code())
+        }
     }
 }
 
@@ -173,6 +185,14 @@ fn render_telemetry(recommendation: &TelemetryRecommendation, format: OutputForm
         OutputFormat::Table => render::table::telemetry(recommendation),
         OutputFormat::Json => render::json::print(recommendation),
         OutputFormat::Csv => render::csv::telemetry(recommendation),
+    }
+}
+
+fn render_gate(report: &gate::GateReport, format: OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Table => render::table::gate(report),
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => render::csv::gate(report),
     }
 }
 
@@ -231,8 +251,8 @@ mod tests {
 
     use super::*;
     use crate::args::{
-        BatchArgs, CommonArgs, EvaluateArgs, ImportArgs, ImportCommands, PrometheusImportArgs,
-        SimulateArgs, TelemetryImportArgs,
+        BatchArgs, CommonArgs, EvaluateArgs, GateArgs, GateSourceCommands, ImportArgs,
+        ImportCommands, PrometheusImportArgs, SimulateArgs, TelemetryImportArgs,
     };
 
     fn sample_config_json() -> String {
@@ -629,6 +649,68 @@ mod tests {
             warn_exit: true,
         };
         let _ = run_with_cli(cli).expect("prometheus import should execute");
+
+        let cli = Cli {
+            command: Commands::Gate(GateArgs {
+                policy: None,
+                max_saturation: None,
+                max_pool_increase_percent: Some(100.0),
+                max_additional_connections: Some(10),
+                max_recommended_pool_size: Some(20),
+                max_recommended_p99_queue_wait_ms: Some(100.0),
+                max_recommended_mean_queue_wait_ms: Some(20.0),
+                max_recommended_rho: Some(1.0),
+                expected_pool_size: None,
+                source: GateSourceCommands::Telemetry(TelemetryImportArgs {
+                    config: telemetry_cfg.clone(),
+                    current_pool_size: Some(9),
+                }),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: false,
+        };
+        let _ = run_with_cli(cli).expect("gate telemetry should execute");
+
+        let cli = Cli {
+            command: Commands::Gate(GateArgs {
+                policy: None,
+                max_saturation: None,
+                max_pool_increase_percent: Some(100.0),
+                max_additional_connections: Some(10),
+                max_recommended_pool_size: Some(20),
+                max_recommended_p99_queue_wait_ms: Some(100.0),
+                max_recommended_mean_queue_wait_ms: Some(20.0),
+                max_recommended_rho: Some(1.0),
+                expected_pool_size: None,
+                source: GateSourceCommands::Prometheus(PrometheusImportArgs {
+                    endpoint: None,
+                    response_file: Some(prometheus_cfg.clone()),
+                    rps_query: None,
+                    p50_query: None,
+                    p95_query: None,
+                    p99_query: None,
+                    header: Vec::new(),
+                    service_name: Some("checkout-api".to_string()),
+                    window: Some("5m".to_string()),
+                    observed_at: None,
+                    current_pool_size: 9,
+                    max_server_connections: 100,
+                    connection_overhead_ms: 2.0,
+                    idle_timeout_ms: None,
+                    min: 2,
+                    max: 20,
+                    iterations: Some(1_200),
+                    seed: Some(7),
+                    distribution: None,
+                    queue_model: None,
+                    target_wait_p99_ms: None,
+                    max_acceptable_rho: None,
+                }),
+            }),
+            format: OutputFormat::Csv,
+            warn_exit: false,
+        };
+        let _ = run_with_cli(cli).expect("gate prometheus should execute");
 
         remove_if_exists(&cfg);
         remove_if_exists(&batch_cfg);

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use csv::{Writer, WriterBuilder};
+use crate::gate::GateReport;
 use poolsim_core::telemetry::TelemetryRecommendation;
 use poolsim_core::types::{EvaluationResult, SensitivityRow, SimulationReport};
 
@@ -162,6 +163,43 @@ pub fn telemetry(recommendation: &TelemetryRecommendation) -> Result<()> {
     Ok(())
 }
 
+pub fn gate(report: &GateReport) -> Result<()> {
+    let mut wtr = WriterBuilder::new().flexible(true).from_writer(std::io::stdout());
+    wtr.write_record(["field", "value"])?;
+    wtr.write_record(["status", &format!("{:?}", report.status)])?;
+    wtr.write_record([
+        "service_name",
+        report.service_name.as_deref().unwrap_or("-"),
+    ])?;
+    wtr.write_record(["window", report.window.as_deref().unwrap_or("-")])?;
+    wtr.write_record([
+        "observed_at",
+        report.observed_at.as_deref().unwrap_or("-"),
+    ])?;
+    wtr.write_record(["worst_saturation", &format!("{:?}", report.worst_saturation)])?;
+    wtr.write_record(["", ""])?;
+    wtr.write_record([
+        "check",
+        "passed",
+        "severity",
+        "observed",
+        "threshold",
+        "message",
+    ])?;
+    for check in &report.checks {
+        wtr.write_record([
+            check.name.clone(),
+            check.passed.to_string(),
+            format!("{:?}", check.severity),
+            check.observed.clone(),
+            check.threshold.clone(),
+            check.message.clone(),
+        ])?;
+    }
+    wtr.flush()?;
+    Ok(())
+}
+
 fn write_sensitivity_row(wtr: &mut Writer<std::io::Stdout>, row: &SensitivityRow) -> Result<()> {
     wtr.write_record([
         row.pool_size.to_string(),
@@ -259,5 +297,10 @@ mod tests {
         sweep(&sample_rows()).expect("sweep CSV render should succeed");
         batch(&[sample_report(), sample_report()]).expect("batch CSV render should succeed");
         telemetry(&sample_recommendation()).expect("telemetry CSV render should succeed");
+        gate(&crate::gate::build_gate_report(
+            sample_recommendation(),
+            &crate::gate::GatePolicy::default(),
+        ))
+        .expect("gate CSV render should succeed");
     }
 }

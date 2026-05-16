@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use poolsim_core::types::{DistributionModel, QueueModel};
+use poolsim_core::types::{DistributionModel, QueueModel, SaturationLevel};
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum OutputFormat {
@@ -64,6 +64,7 @@ pub enum Commands {
     Sweep(CommonArgs),
     Batch(BatchArgs),
     Import(ImportArgs),
+    Gate(GateArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -138,6 +139,55 @@ pub struct BatchArgs {
 pub struct ImportArgs {
     #[command(subcommand)]
     pub command: ImportCommands,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct GateArgs {
+    #[arg(long)]
+    pub policy: Option<PathBuf>,
+
+    #[arg(long, value_enum)]
+    pub max_saturation: Option<CliSaturationLevel>,
+    #[arg(long)]
+    pub max_pool_increase_percent: Option<f64>,
+    #[arg(long)]
+    pub max_additional_connections: Option<u32>,
+    #[arg(long)]
+    pub max_recommended_pool_size: Option<u32>,
+    #[arg(long)]
+    pub max_recommended_p99_queue_wait_ms: Option<f64>,
+    #[arg(long)]
+    pub max_recommended_mean_queue_wait_ms: Option<f64>,
+    #[arg(long)]
+    pub max_recommended_rho: Option<f64>,
+    #[arg(long)]
+    pub expected_pool_size: Option<u32>,
+
+    #[command(subcommand)]
+    pub source: GateSourceCommands,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum GateSourceCommands {
+    Telemetry(TelemetryImportArgs),
+    Prometheus(PrometheusImportArgs),
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliSaturationLevel {
+    Ok,
+    Warning,
+    Critical,
+}
+
+impl From<CliSaturationLevel> for SaturationLevel {
+    fn from(value: CliSaturationLevel) -> Self {
+        match value {
+            CliSaturationLevel::Ok => SaturationLevel::Ok,
+            CliSaturationLevel::Warning => SaturationLevel::Warning,
+            CliSaturationLevel::Critical => SaturationLevel::Critical,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -237,6 +287,22 @@ mod tests {
     fn cli_queue_model_maps_to_core_enum() {
         assert_eq!(QueueModel::from(CliQueueModel::Mmc), QueueModel::MMC);
         assert_eq!(QueueModel::from(CliQueueModel::Mdc), QueueModel::MDC);
+    }
+
+    #[test]
+    fn cli_saturation_model_maps_to_core_enum() {
+        assert_eq!(
+            SaturationLevel::from(CliSaturationLevel::Ok),
+            SaturationLevel::Ok
+        );
+        assert_eq!(
+            SaturationLevel::from(CliSaturationLevel::Warning),
+            SaturationLevel::Warning
+        );
+        assert_eq!(
+            SaturationLevel::from(CliSaturationLevel::Critical),
+            SaturationLevel::Critical
+        );
     }
 
     #[test]
@@ -356,6 +422,59 @@ mod tests {
                 ImportCommands::Telemetry(_) => panic!("expected prometheus import"),
             },
             _ => panic!("expected import prometheus command"),
+        }
+    }
+
+    #[test]
+    fn parser_handles_gate_telemetry_subcommand() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "--format",
+            "json",
+            "gate",
+            "--policy",
+            "gate.toml",
+            "--max-saturation",
+            "warning",
+            "--max-pool-increase-percent",
+            "25",
+            "--max-additional-connections",
+            "4",
+            "--max-recommended-pool-size",
+            "16",
+            "--max-recommended-p99-queue-wait-ms",
+            "50",
+            "--max-recommended-mean-queue-wait-ms",
+            "10",
+            "--max-recommended-rho",
+            "0.85",
+            "--expected-pool-size",
+            "8",
+            "telemetry",
+            "--config",
+            "telemetry.json",
+        ])
+        .expect("gate telemetry args should parse");
+
+        match cli.command {
+            Commands::Gate(args) => {
+                assert_eq!(args.policy, Some(PathBuf::from("gate.toml")));
+                assert!(matches!(args.max_saturation, Some(CliSaturationLevel::Warning)));
+                assert_eq!(args.max_pool_increase_percent, Some(25.0));
+                assert_eq!(args.max_additional_connections, Some(4));
+                assert_eq!(args.max_recommended_pool_size, Some(16));
+                assert_eq!(args.max_recommended_p99_queue_wait_ms, Some(50.0));
+                assert_eq!(args.max_recommended_mean_queue_wait_ms, Some(10.0));
+                assert_eq!(args.max_recommended_rho, Some(0.85));
+                assert_eq!(args.expected_pool_size, Some(8));
+                match args.source {
+                    GateSourceCommands::Telemetry(telemetry) => {
+                        assert_eq!(telemetry.config, PathBuf::from("telemetry.json"));
+                    }
+                    GateSourceCommands::Prometheus(_) => panic!("expected telemetry source"),
+                }
+            }
+            _ => panic!("expected gate command"),
         }
     }
 }

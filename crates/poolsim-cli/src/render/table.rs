@@ -1,6 +1,7 @@
 use std::io::IsTerminal;
 
 use anyhow::Result;
+use crate::gate::GateReport;
 use poolsim_core::telemetry::TelemetryRecommendation;
 use poolsim_core::types::{EvaluationResult, RiskLevel, SaturationLevel, SensitivityRow, SimulationReport};
 use tabled::{settings::Style, Table, Tabled};
@@ -36,6 +37,16 @@ struct StepLoadTableRow {
     utilisation_rho: String,
     p99_queue_wait_ms: String,
     saturation: String,
+}
+
+#[derive(Tabled)]
+struct GateCheckTableRow {
+    check: String,
+    passed: String,
+    severity: String,
+    observed: String,
+    threshold: String,
+    message: String,
 }
 
 pub fn simulation(report: &SimulationReport) -> Result<()> {
@@ -260,6 +271,51 @@ pub fn telemetry(recommendation: &TelemetryRecommendation) -> Result<()> {
     Ok(())
 }
 
+pub fn gate(report: &GateReport) -> Result<()> {
+    let summary = vec![
+        SummaryRow {
+            metric: "status".to_string(),
+            value: format!("{:?}", report.status),
+        },
+        SummaryRow {
+            metric: "service_name".to_string(),
+            value: report.service_name.as_deref().unwrap_or("-").to_string(),
+        },
+        SummaryRow {
+            metric: "window".to_string(),
+            value: report.window.as_deref().unwrap_or("-").to_string(),
+        },
+        SummaryRow {
+            metric: "observed_at".to_string(),
+            value: report.observed_at.as_deref().unwrap_or("-").to_string(),
+        },
+        SummaryRow {
+            metric: "worst_saturation".to_string(),
+            value: format!("{:?}", report.worst_saturation),
+        },
+    ];
+    let mut summary_table = Table::new(summary);
+    summary_table.with(Style::rounded());
+    println!("{summary_table}");
+
+    let rows: Vec<GateCheckTableRow> = report
+        .checks
+        .iter()
+        .map(|check| GateCheckTableRow {
+            check: check.name.clone(),
+            passed: check.passed.to_string(),
+            severity: format!("{:?}", check.severity),
+            observed: check.observed.clone(),
+            threshold: check.threshold.clone(),
+            message: check.message.clone(),
+        })
+        .collect();
+    let mut checks_table = Table::new(rows);
+    checks_table.with(Style::psql());
+    println!("{checks_table}");
+    Ok(())
+}
+
 fn render_pool_size(pool_size: u32, recommended: Option<u32>, risk: RiskLevel, use_color: bool) -> String {
     let text = pool_size.to_string();
     if !use_color {
@@ -412,5 +468,10 @@ mod tests {
         sweep(&sample_rows()).expect("sweep table should render");
         batch(&[sample_report(), sample_report()]).expect("batch table should render");
         telemetry(&sample_recommendation()).expect("telemetry table should render");
+        gate(&crate::gate::build_gate_report(
+            sample_recommendation(),
+            &crate::gate::GatePolicy::default(),
+        ))
+        .expect("gate table should render");
     }
 }
