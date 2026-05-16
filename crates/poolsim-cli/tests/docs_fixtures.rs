@@ -343,6 +343,78 @@ fn docs_doctor_examples_work() {
 }
 
 #[test]
+fn docs_generate_config_examples_work() {
+    let telemetry_output = run_cli(&[
+        "--format",
+        "json",
+        "generate-config",
+        "--framework",
+        "sqlx",
+        "--pool-name",
+        "checkout-pool",
+        "telemetry",
+        "--config",
+        &fixture("docs/fixtures/telemetry.json"),
+    ]);
+    assert_success(&telemetry_output, "generate-config telemetry docs example");
+    let telemetry_report: Value = serde_json::from_str(&stdout_utf8(&telemetry_output))
+        .expect("generate-config telemetry output should deserialize");
+    assert_eq!(telemetry_report["framework"], "sqlx");
+    assert_eq!(telemetry_report["source"], "telemetry");
+    assert!(telemetry_report["recommended_pool_size"].is_number());
+    assert!(telemetry_report["snippet"].as_str().unwrap_or_default().contains(".max_connections("));
+
+    let prometheus_output = run_cli(&[
+        "--format",
+        "json",
+        "generate-config",
+        "--framework",
+        "spring-boot",
+        "prometheus",
+        "--response-file",
+        &fixture("docs/fixtures/prometheus-responses.json"),
+        "--service-name",
+        "checkout-api",
+        "--window",
+        "5m",
+        "--current-pool-size",
+        "8",
+        "--max-server-connections",
+        "100",
+        "--connection-overhead-ms",
+        "2",
+        "--min",
+        "2",
+        "--max",
+        "20",
+    ]);
+    assert_success(&prometheus_output, "generate-config prometheus docs example");
+    let prometheus_report: Value = serde_json::from_str(&stdout_utf8(&prometheus_output))
+        .expect("generate-config prometheus output should deserialize");
+    assert_eq!(prometheus_report["framework"], "spring-boot");
+    assert_eq!(prometheus_report["source"], "prometheus");
+    assert!(prometheus_report["snippet"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("maximum-pool-size"));
+
+    let simulate_output = run_cli(&[
+        "--format",
+        "csv",
+        "generate-config",
+        "--framework",
+        "node-pg",
+        "simulate",
+        "--config",
+        &fixture("docs/fixtures/cli-config.json"),
+    ]);
+    assert_success(&simulate_output, "generate-config simulate docs example");
+    let csv = stdout_utf8(&simulate_output);
+    assert!(csv.contains("framework,node-pg"));
+    assert!(csv.contains("new Pool"));
+}
+
+#[test]
 fn docs_warn_exit_example_is_stable() {
     let output = run_cli(&[
         "--warn-exit",
