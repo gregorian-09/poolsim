@@ -1,10 +1,7 @@
 use std::{fs, path::Path, process::ExitCode};
 
 use anyhow::{anyhow, bail, Context, Result};
-use poolsim_core::{
-    telemetry::TelemetryRecommendation,
-    types::SaturationLevel,
-};
+use poolsim_core::{telemetry::TelemetryRecommendation, types::SaturationLevel};
 use serde::{Deserialize, Serialize};
 
 use crate::args::{GateArgs, GuardArgs};
@@ -195,10 +192,7 @@ pub(crate) fn build_gate_report(
     let worst_saturation = diff.worst_saturation();
     let mut checks = Vec::new();
 
-    checks.push(check_saturation(
-        worst_saturation,
-        policy.max_saturation,
-    ));
+    checks.push(check_saturation(worst_saturation, policy.max_saturation));
 
     if let Some(threshold) = policy.max_pool_increase_percent {
         let observed = diff.connection_change_percent.max(0.0);
@@ -327,7 +321,10 @@ fn load_policy(path: &Path) -> Result<GatePolicy> {
 }
 
 fn validate_policy(policy: &GatePolicy) -> Result<()> {
-    validate_non_negative("max_pool_increase_percent", policy.max_pool_increase_percent)?;
+    validate_non_negative(
+        "max_pool_increase_percent",
+        policy.max_pool_increase_percent,
+    )?;
     validate_non_negative(
         "max_recommended_p99_queue_wait_ms",
         policy.max_recommended_p99_queue_wait_ms,
@@ -380,12 +377,7 @@ fn check_saturation(observed: SaturationLevel, threshold: SaturationLevel) -> Ga
     }
 }
 
-fn check_u32_max(
-    name: &str,
-    observed: u32,
-    threshold: u32,
-    severity: GateDecision,
-) -> GateCheck {
+fn check_u32_max(name: &str, observed: u32, threshold: u32, severity: GateDecision) -> GateCheck {
     let passed = observed <= threshold;
     GateCheck {
         name: name.to_string(),
@@ -631,8 +623,7 @@ mod tests {
             "poolsim_gate_args_policy_{}.toml",
             std::process::id()
         ));
-        fs::write(&path, "max_saturation = \"Critical\"\n")
-            .expect("gate policy file should write");
+        fs::write(&path, "max_saturation = \"Critical\"\n").expect("gate policy file should write");
 
         let policy = policy_from_args(&gate_args(Some(path.clone()))).expect("policy should load");
         assert_eq!(policy.max_saturation, SaturationLevel::Critical);

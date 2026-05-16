@@ -49,7 +49,9 @@ impl DoctorStatus {
         match self {
             Self::Saturated => ExitCode::from(2),
             Self::TooSmall | Self::CloseToSaturation if warn_exit => ExitCode::from(3),
-            Self::Healthy | Self::TooLarge | Self::TooSmall | Self::CloseToSaturation => ExitCode::from(0),
+            Self::Healthy | Self::TooLarge | Self::TooSmall | Self::CloseToSaturation => {
+                ExitCode::from(0)
+            }
         }
     }
 }
@@ -100,7 +102,10 @@ fn diagnose_status(recommendation: &TelemetryRecommendation) -> DoctorStatus {
     DoctorStatus::Healthy
 }
 
-fn build_findings(recommendation: &TelemetryRecommendation, status: DoctorStatus) -> Vec<DoctorFinding> {
+fn build_findings(
+    recommendation: &TelemetryRecommendation,
+    status: DoctorStatus,
+) -> Vec<DoctorFinding> {
     let diff = &recommendation.diff;
     let mut findings = Vec::new();
 
@@ -139,7 +144,8 @@ fn build_findings(recommendation: &TelemetryRecommendation, status: DoctorStatus
             severity: DoctorSeverity::Info,
             message: format!(
                 "recommended pool lowers p99 queue wait from {:.3}ms to {:.3}ms",
-                diff.current_evaluation.p99_queue_wait_ms, diff.recommended_report.p99_queue_wait_ms
+                diff.current_evaluation.p99_queue_wait_ms,
+                diff.recommended_report.p99_queue_wait_ms
             ),
             action: "review the recommendation before applying it to production".to_string(),
         });
@@ -160,7 +166,9 @@ fn diff_severity(status: DoctorStatus) -> DoctorSeverity {
     match status {
         DoctorStatus::Saturated => DoctorSeverity::Critical,
         DoctorStatus::TooSmall => DoctorSeverity::Warning,
-        DoctorStatus::Healthy | DoctorStatus::TooLarge | DoctorStatus::CloseToSaturation => DoctorSeverity::Info,
+        DoctorStatus::Healthy | DoctorStatus::TooLarge | DoctorStatus::CloseToSaturation => {
+            DoctorSeverity::Info
+        }
     }
 }
 
@@ -193,7 +201,9 @@ fn status_message(status: DoctorStatus, recommendation: &TelemetryRecommendation
 fn status_action(status: DoctorStatus, recommendation: &TelemetryRecommendation) -> String {
     let diff = &recommendation.diff;
     match status {
-        DoctorStatus::Healthy => "keep the current pool setting and continue monitoring".to_string(),
+        DoctorStatus::Healthy => {
+            "keep the current pool setting and continue monitoring".to_string()
+        }
         DoctorStatus::TooSmall => format!(
             "raise the pool toward {} and verify the database connection budget first",
             diff.recommended_pool_size
@@ -203,7 +213,8 @@ fn status_action(status: DoctorStatus, recommendation: &TelemetryRecommendation)
             diff.recommended_pool_size
         ),
         DoctorStatus::CloseToSaturation => {
-            "treat the pool as fragile; compare peak and incident scenarios before deployment".to_string()
+            "treat the pool as fragile; compare peak and incident scenarios before deployment"
+                .to_string()
         }
         DoctorStatus::Saturated => {
             "increase capacity or reduce concurrency before deploying this workload".to_string()
@@ -220,7 +231,12 @@ mod tests {
 
     use super::*;
 
-    fn evaluation(pool_size: u32, rho: f64, p99: f64, saturation: SaturationLevel) -> EvaluationResult {
+    fn evaluation(
+        pool_size: u32,
+        rho: f64,
+        p99: f64,
+        saturation: SaturationLevel,
+    ) -> EvaluationResult {
         EvaluationResult {
             pool_size,
             utilisation_rho: rho,
@@ -270,7 +286,8 @@ mod tests {
                 change,
                 additional_connections_required: recommended.saturating_sub(current),
                 removable_connections: current.saturating_sub(recommended),
-                connection_change_percent: ((recommended as f64 - current as f64) / current as f64) * 100.0,
+                connection_change_percent: ((recommended as f64 - current as f64) / current as f64)
+                    * 100.0,
                 current_evaluation: evaluation(current, 0.88, 40.0, current_saturation),
                 recommended_report: report(recommended, 0.72, 20.0, recommended_saturation),
             },
@@ -279,21 +296,44 @@ mod tests {
 
     #[test]
     fn doctor_classifies_healthy_too_small_too_large_and_close_to_saturation() {
-        let healthy = build_doctor_report(recommendation(8, 8, SaturationLevel::Ok, SaturationLevel::Ok));
+        let healthy = build_doctor_report(recommendation(
+            8,
+            8,
+            SaturationLevel::Ok,
+            SaturationLevel::Ok,
+        ));
         assert_eq!(healthy.status, DoctorStatus::Healthy);
         assert_eq!(healthy.findings[0].severity, DoctorSeverity::Info);
         let _ = healthy.status.exit_code(false);
 
-        let too_small = build_doctor_report(recommendation(8, 10, SaturationLevel::Ok, SaturationLevel::Ok));
+        let too_small = build_doctor_report(recommendation(
+            8,
+            10,
+            SaturationLevel::Ok,
+            SaturationLevel::Ok,
+        ));
         assert_eq!(too_small.status, DoctorStatus::TooSmall);
-        assert!(too_small.findings.iter().any(|finding| finding.name == "recommendation_diff"));
+        assert!(too_small
+            .findings
+            .iter()
+            .any(|finding| finding.name == "recommendation_diff"));
         let _ = too_small.status.exit_code(true);
 
-        let too_large = build_doctor_report(recommendation(10, 8, SaturationLevel::Ok, SaturationLevel::Ok));
+        let too_large = build_doctor_report(recommendation(
+            10,
+            8,
+            SaturationLevel::Ok,
+            SaturationLevel::Ok,
+        ));
         assert_eq!(too_large.status, DoctorStatus::TooLarge);
         assert!(too_large.findings[0].action.contains("lower"));
 
-        let close = build_doctor_report(recommendation(8, 8, SaturationLevel::Warning, SaturationLevel::Ok));
+        let close = build_doctor_report(recommendation(
+            8,
+            8,
+            SaturationLevel::Warning,
+            SaturationLevel::Ok,
+        ));
         assert_eq!(close.status, DoctorStatus::CloseToSaturation);
         assert!(close.findings[0].message.contains("close to saturation"));
     }
@@ -308,7 +348,10 @@ mod tests {
         ));
         assert_eq!(saturated.status, DoctorStatus::Saturated);
         assert_eq!(saturated.findings[0].severity, DoctorSeverity::Critical);
-        assert!(saturated.findings.iter().any(|finding| finding.name == "queue_wait"));
+        assert!(saturated
+            .findings
+            .iter()
+            .any(|finding| finding.name == "queue_wait"));
         let _ = saturated.status.exit_code(true);
     }
 }

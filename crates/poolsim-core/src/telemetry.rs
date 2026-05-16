@@ -8,7 +8,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     error::PoolsimError,
     evaluate, simulate,
-    types::{EvaluationResult, PoolConfig, SaturationLevel, SimulationOptions, SimulationReport, WorkloadConfig},
+    types::{
+        EvaluationResult, PoolConfig, SaturationLevel, SimulationOptions, SimulationReport,
+        WorkloadConfig,
+    },
 };
 
 /// Imported production telemetry for a single pool sizing decision.
@@ -110,7 +113,11 @@ pub struct PoolRecommendationDiff {
 }
 
 impl PoolRecommendationDiff {
-    fn new(current_pool_size: u32, current_evaluation: EvaluationResult, recommended_report: SimulationReport) -> Self {
+    fn new(
+        current_pool_size: u32,
+        current_evaluation: EvaluationResult,
+        recommended_report: SimulationReport,
+    ) -> Self {
         let recommended_pool_size = recommended_report.optimal_pool_size;
         let pool_size_delta = i64::from(recommended_pool_size) - i64::from(current_pool_size);
         let change = PoolSizeChange::from_delta(pool_size_delta);
@@ -178,7 +185,11 @@ pub fn recommend_from_telemetry(
 
     let current_evaluation = evaluate(&snapshot.workload, snapshot.current_pool_size, opts)?;
     let recommended_report = simulate(&snapshot.workload, &snapshot.pool, opts)?;
-    let diff = PoolRecommendationDiff::new(snapshot.current_pool_size, current_evaluation, recommended_report);
+    let diff = PoolRecommendationDiff::new(
+        snapshot.current_pool_size,
+        current_evaluation,
+        recommended_report,
+    );
 
     Ok(TelemetryRecommendation {
         service_name: snapshot.service_name.clone(),
@@ -231,11 +242,15 @@ mod tests {
     #[test]
     fn validates_current_pool_size_bounds() {
         let zero = snapshot(0);
-        let err = zero.validate().expect_err("zero current pool size should fail");
+        let err = zero
+            .validate()
+            .expect_err("zero current pool size should fail");
         assert_eq!(err.code(), "INVALID_CURRENT_POOL_SIZE");
 
         let too_large = snapshot(101);
-        let err = too_large.validate().expect_err("current pool above backend limit should fail");
+        let err = too_large
+            .validate()
+            .expect_err("current pool above backend limit should fail");
         assert_eq!(err.code(), "INVALID_CURRENT_POOL_SIZE");
     }
 

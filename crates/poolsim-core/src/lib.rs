@@ -1,7 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![doc(html_root_url = "https://docs.rs/poolsim-core/0.1.0")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-
 #![deny(missing_docs)]
 
 /// Distribution fitting and sampling utilities.
@@ -25,8 +24,8 @@ use distribution::LatencyDistribution;
 use error::PoolsimError;
 use optimizer::find_optimal;
 use types::{
-    EvaluationResult, PoolConfig, SaturationLevel, SensitivityRow, SimulationOptions, SimulationReport,
-    StepLoadResult, WorkloadConfig,
+    EvaluationResult, PoolConfig, SaturationLevel, SensitivityRow, SimulationOptions,
+    SimulationReport, StepLoadResult, WorkloadConfig,
 };
 
 /// Re-exported distribution model enum.
@@ -215,11 +214,9 @@ fn recommend_cold_start_pool_size(
         return pool.min_pool_size.min(recommended_pool_size);
     }
 
-    let warm_rho_target = opts.max_acceptable_rho.min(0.70).max(0.35);
+    let warm_rho_target = opts.max_acceptable_rho.clamp(0.35, 0.70);
     let required = (peak_rps / (mu * warm_rho_target)).ceil().max(1.0) as u32;
-    required
-        .max(pool.min_pool_size)
-        .min(recommended_pool_size)
+    required.max(pool.min_pool_size).min(recommended_pool_size)
 }
 
 fn build_step_load_analysis(

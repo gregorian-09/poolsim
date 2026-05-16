@@ -39,23 +39,22 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
             Ok(text) => text,
             Err(_) => {
                 let _ = sender
-                    .send(Message::Text(
-                        ws_error("INVALID_UTF8", "initial websocket frame must be valid UTF-8", None).into(),
-                    ))
+                    .send(Message::Text(ws_error(
+                        "INVALID_UTF8",
+                        "initial websocket frame must be valid UTF-8",
+                        None,
+                    )))
                     .await;
                 return;
             }
         },
         Some(Ok(_)) => {
             let _ = sender
-                .send(Message::Text(
-                    ws_error(
-                        "INVALID_FRAME",
-                        "initial websocket frame must be text or binary JSON",
-                        None,
-                    )
-                    .into(),
-                ))
+                .send(Message::Text(ws_error(
+                    "INVALID_FRAME",
+                    "initial websocket frame must be text or binary JSON",
+                    None,
+                )))
                 .await;
             return;
         }
@@ -66,9 +65,11 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         Ok(reqs) => reqs,
         Err(error) => {
             let _ = sender
-                .send(Message::Text(
-                    ws_error("INVALID_JSON", &format!("invalid request JSON: {error}"), None).into(),
-                ))
+                .send(Message::Text(ws_error(
+                    "INVALID_JSON",
+                    &format!("invalid request JSON: {error}"),
+                    None,
+                )))
                 .await;
             return;
         }
@@ -81,7 +82,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
             if !payload.ends_with('\n') {
                 payload.push('\n');
             }
-            if sender.send(Message::Text(payload.into())).await.is_err() {
+            if sender.send(Message::Text(payload)).await.is_err() {
                 break;
             }
         }

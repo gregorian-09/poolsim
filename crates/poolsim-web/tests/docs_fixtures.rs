@@ -1,9 +1,4 @@
-use std::{
-    fs,
-    net::SocketAddr,
-    path::PathBuf,
-    time::Duration,
-};
+use std::{fs, net::SocketAddr, path::PathBuf, time::Duration};
 
 use axum::{
     body::{to_bytes, Body},
@@ -58,11 +53,15 @@ async fn json_request(app: Router, method: &str, uri: &str, payload: Value) -> (
     (status, json)
 }
 
-async fn start_ws_server(app: Router) -> (String, oneshot::Sender<()>, tokio::task::JoinHandle<()>) {
+async fn start_ws_server(
+    app: Router,
+) -> (String, oneshot::Sender<()>, tokio::task::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .expect("listener should bind");
-    let addr = listener.local_addr().expect("listener should expose local addr");
+    let addr = listener
+        .local_addr()
+        .expect("listener should expose local addr");
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
     let server = tokio::spawn(async move {
@@ -150,7 +149,10 @@ async fn docs_rest_fixtures_round_trip() {
     .await;
     assert_eq!(sensitivity_status, StatusCode::OK);
     assert!(sensitivity_json.is_array());
-    assert!(!sensitivity_json.as_array().expect("sensitivity output").is_empty());
+    assert!(!sensitivity_json
+        .as_array()
+        .expect("sensitivity output")
+        .is_empty());
 
     let (batch_status, batch_json) = json_request(
         app.clone(),
@@ -160,7 +162,13 @@ async fn docs_rest_fixtures_round_trip() {
     )
     .await;
     assert_eq!(batch_status, StatusCode::OK);
-    assert_eq!(batch_json.as_array().expect("batch output should be an array").len(), 2);
+    assert_eq!(
+        batch_json
+            .as_array()
+            .expect("batch output should be an array")
+            .len(),
+        2
+    );
 
     let (telemetry_status, telemetry_json) = json_request(
         app.clone(),
@@ -183,9 +191,9 @@ async fn docs_websocket_fixture_round_trip() {
         .await
         .expect("websocket connection should succeed");
     socket
-        .send(Message::Text(
-            fixture_text("docs/fixtures/web-ws-request.json").into(),
-        ))
+        .send(Message::Text(fixture_text(
+            "docs/fixtures/web-ws-request.json",
+        )))
         .await
         .expect("docs websocket fixture should send");
 
@@ -203,7 +211,10 @@ async fn docs_websocket_fixture_round_trip() {
             Message::Text(text) => text.to_string(),
             other => panic!("unexpected websocket frame: {other:?}"),
         };
-        assert!(text.ends_with('\n'), "websocket frame should be newline-delimited");
+        assert!(
+            text.ends_with('\n'),
+            "websocket frame should be newline-delimited"
+        );
 
         let payload: Value = serde_json::from_str(text.trim_end())
             .expect("websocket frame payload should be valid JSON");
@@ -211,7 +222,10 @@ async fn docs_websocket_fixture_round_trip() {
         saw_done |= payload.get("done") == Some(&Value::Bool(true));
     }
 
-    assert!(saw_tick, "docs websocket example should emit at least one progress tick");
+    assert!(
+        saw_tick,
+        "docs websocket example should emit at least one progress tick"
+    );
 
     let _ = shutdown_tx.send(());
     server.await.expect("server task should shut down cleanly");

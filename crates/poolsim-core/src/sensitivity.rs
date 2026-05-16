@@ -13,7 +13,8 @@ use crate::{
     error::PoolsimError,
     monte_carlo,
     types::{
-        DistributionModel, PoolConfig, QueueModel, RiskLevel, SensitivityRow, SimulationOptions, WorkloadConfig,
+        DistributionModel, PoolConfig, QueueModel, RiskLevel, SensitivityRow, SimulationOptions,
+        WorkloadConfig,
     },
 };
 
@@ -22,7 +23,10 @@ use crate::{
 /// # Errors
 ///
 /// Returns distribution/simulation errors for invalid inputs or unstable queue states.
-pub fn sweep(workload: &WorkloadConfig, pool: &PoolConfig) -> Result<Vec<SensitivityRow>, PoolsimError> {
+pub fn sweep(
+    workload: &WorkloadConfig,
+    pool: &PoolConfig,
+) -> Result<Vec<SensitivityRow>, PoolsimError> {
     sweep_with_options(workload, pool, &SimulationOptions::default())
 }
 

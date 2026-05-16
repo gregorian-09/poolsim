@@ -95,7 +95,12 @@ pub fn mean_queue_wait_ms(lambda: f64, mu: f64, c: u32) -> Result<f64, PoolsimEr
 ///
 /// Returns the same errors as [`erlang_c`] and saturated errors when the
 /// tail rate becomes non-positive.
-pub fn queue_wait_percentile_ms(lambda: f64, mu: f64, c: u32, quantile: f64) -> Result<f64, PoolsimError> {
+pub fn queue_wait_percentile_ms(
+    lambda: f64,
+    mu: f64,
+    c: u32,
+    quantile: f64,
+) -> Result<f64, PoolsimError> {
     if lambda <= 0.0 {
         return Ok(0.0);
     }
@@ -174,8 +179,10 @@ mod tests {
     fn mean_queue_wait_increases_as_utilisation_rises() {
         let c = 8;
         let mu = 1.0;
-        let low = mean_queue_wait_ms(0.5 * c as f64 * mu, mu, c).expect("low utilisation should work");
-        let high = mean_queue_wait_ms(0.9 * c as f64 * mu, mu, c).expect("high utilisation should work");
+        let low =
+            mean_queue_wait_ms(0.5 * c as f64 * mu, mu, c).expect("low utilisation should work");
+        let high =
+            mean_queue_wait_ms(0.9 * c as f64 * mu, mu, c).expect("high utilisation should work");
         assert!(high > low);
     }
 
@@ -196,7 +203,8 @@ mod tests {
         let err = mean_queue_wait_ms(1.0, f64::NAN, 2).expect_err("nan service rate should fail");
         assert_eq!(err.code(), "SATURATED");
 
-        let err = queue_wait_percentile_ms(1.0, f64::NAN, 2, 0.99).expect_err("nan service rate should fail");
+        let err = queue_wait_percentile_ms(1.0, f64::NAN, 2, 0.99)
+            .expect_err("nan service rate should fail");
         assert_eq!(err.code(), "SATURATED");
     }
 }

@@ -18,7 +18,9 @@
 //! - fitted distributions are reused by Monte Carlo and queueing helpers
 
 use rand::Rng;
-use rand_distr::{Distribution as RandDistribution, Exp, Gamma as RandGamma, LogNormal as RandLogNormal};
+use rand_distr::{
+    Distribution as RandDistribution, Exp, Gamma as RandGamma, LogNormal as RandLogNormal,
+};
 use statrs::distribution::{ContinuousCDF, Gamma as StatGamma, LogNormal as StatLogNormal, Normal};
 
 use crate::{
@@ -150,15 +152,15 @@ impl LatencyDistribution {
         let p = p.clamp(0.0, 1.0);
         match self {
             Self::LogNormal { mu, sigma } => {
-                let dist =
-                    StatLogNormal::new(*mu, *sigma).map_err(|e| PoolsimError::Distribution(e.to_string()))?;
+                let dist = StatLogNormal::new(*mu, *sigma)
+                    .map_err(|e| PoolsimError::Distribution(e.to_string()))?;
                 Ok(dist.inverse_cdf(p))
             }
             Self::Exponential { mean_ms } => Ok(-mean_ms * (1.0 - p).ln()),
             Self::Empirical(empirical) => Ok(empirical.percentile(p)),
             Self::Gamma { shape, scale } => {
-                let dist =
-                    StatGamma::new(*shape, *scale).map_err(|e| PoolsimError::Distribution(e.to_string()))?;
+                let dist = StatGamma::new(*shape, *scale)
+                    .map_err(|e| PoolsimError::Distribution(e.to_string()))?;
                 Ok(dist.inverse_cdf(p))
             }
         }
@@ -200,7 +202,11 @@ fn fit_lognormal(workload: &WorkloadConfig) -> Result<(f64, f64), PoolsimError> 
         ));
     }
 
-    let count = if workload.latency_p99_ms > workload.latency_p50_ms { 2.0 } else { 1.0 };
+    let count = if workload.latency_p99_ms > workload.latency_p50_ms {
+        2.0
+    } else {
+        1.0
+    };
     Ok((mu, sigma / count))
 }
 
@@ -220,7 +226,9 @@ mod tests {
 
     #[test]
     fn empirical_percentile_returns_zero_for_empty_internal_samples() {
-        let empirical = EmpiricalCdf { samples: Vec::new() };
+        let empirical = EmpiricalCdf {
+            samples: Vec::new(),
+        };
         assert_eq!(empirical.percentile(0.5), 0.0);
     }
 
@@ -239,5 +247,22 @@ mod tests {
             fit_gamma(&workload).expect("non-finite intermediates should clamp to safe values");
         assert_eq!(shape, 1e-6);
         assert_eq!(scale, 1e-6);
+    }
+
+    #[test]
+    fn fit_lognormal_uses_single_tail_when_p99_is_not_above_p50() {
+        let workload = WorkloadConfig {
+            requests_per_second: 100.0,
+            latency_p50_ms: 10.0,
+            latency_p95_ms: 20.0,
+            latency_p99_ms: 10.0,
+            raw_samples_ms: None,
+            step_load_profile: None,
+        };
+
+        let (mu, sigma) =
+            fit_lognormal(&workload).expect("positive p95 spread should fit lognormal");
+        assert!(mu.is_finite());
+        assert!(sigma > 0.0);
     }
 }

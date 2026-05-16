@@ -117,7 +117,10 @@ pub(crate) fn recommendation_from_telemetry(
         window: recommendation.window.clone(),
         observed_at: recommendation.observed_at.clone(),
         recommended_pool_size: recommendation.diff.recommended_pool_size,
-        cold_start_min_pool_size: recommendation.diff.recommended_report.cold_start_min_pool_size,
+        cold_start_min_pool_size: recommendation
+            .diff
+            .recommended_report
+            .cold_start_min_pool_size,
         max_server_connections,
         utilisation_rho: recommendation.diff.recommended_report.utilisation_rho,
         mean_queue_wait_ms: recommendation.diff.recommended_report.mean_queue_wait_ms,
@@ -185,8 +188,14 @@ pub(crate) fn build_config_snippet(
     }
 }
 
-fn effective_min_idle(explicit: Option<u32>, cold_start_min_pool_size: u32, recommended: u32) -> u32 {
-    explicit.unwrap_or(cold_start_min_pool_size).clamp(1, recommended)
+fn effective_min_idle(
+    explicit: Option<u32>,
+    cold_start_min_pool_size: u32,
+    recommended: u32,
+) -> u32 {
+    explicit
+        .unwrap_or(cold_start_min_pool_size)
+        .clamp(1, recommended)
 }
 
 struct SnippetInput<'a> {
@@ -618,7 +627,10 @@ mod tests {
         assert_eq!(millis_to_seconds_ceil(1), 1);
         assert_eq!(millis_to_seconds_ceil(1_001), 2);
         assert_eq!(js_env_access("DATABASE_URL"), "process.env.DATABASE_URL");
-        assert_eq!(js_env_access("DATABASE-URL"), "process.env[\"DATABASE-URL\"]");
+        assert_eq!(
+            js_env_access("DATABASE-URL"),
+            "process.env[\"DATABASE-URL\"]"
+        );
         assert!(!is_js_identifier(""));
         assert!(!is_js_identifier("1DATABASE_URL"));
         assert_eq!(yaml_double_quoted("pool"), "\"pool\"");

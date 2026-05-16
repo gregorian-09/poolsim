@@ -76,7 +76,15 @@ pub(crate) fn run_with_overhead(
 
         let workers = rayon::current_num_threads().max(1);
         let chunk_count = workers.min(iterations.max(1));
-        let chunk_size = iterations.div_ceil(chunk_count);
+        let chunk_size = (iterations + chunk_count - 1) / chunk_count;
+        let chunk_config = SimChunkConfig {
+            lambda,
+            pool_size,
+            connection_overhead_ms,
+            deterministic_service_ms,
+            queue_model: opts.queue_model,
+            dist,
+        };
 
         (0..chunk_count)
             .into_par_iter()
@@ -89,16 +97,7 @@ pub(crate) fn run_with_overhead(
 
                 let seed = base_seed ^ ((chunk_id as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15));
                 let mut rng = StdRng::seed_from_u64(seed);
-                simulate_chunk(
-                    &mut rng,
-                    end - start,
-                    lambda,
-                    pool_size,
-                    connection_overhead_ms,
-                    deterministic_service_ms,
-                    opts.queue_model,
-                    dist,
-                )
+                simulate_chunk(&mut rng, end - start, &chunk_config)
             })
             .reduce(Vec::new, |mut left, mut right| {
                 left.append(&mut right);
@@ -109,36 +108,39 @@ pub(crate) fn run_with_overhead(
     #[cfg(not(feature = "parallel"))]
     let waits = {
         let mut rng = StdRng::seed_from_u64(base_seed);
-        simulate_chunk(
-            &mut rng,
-            iterations,
+        let chunk_config = SimChunkConfig {
             lambda,
             pool_size,
             connection_overhead_ms,
             deterministic_service_ms,
-            opts.queue_model,
+            queue_model: opts.queue_model,
             dist,
-        )
+        };
+        simulate_chunk(&mut rng, iterations, &chunk_config)
     };
 
     build_result(waits)
 }
 
-fn simulate_chunk<R: Rng + ?Sized>(
-    rng: &mut R,
-    iterations: usize,
+struct SimChunkConfig<'a> {
     lambda: f64,
     pool_size: u32,
     connection_overhead_ms: f64,
     deterministic_service_ms: f64,
     queue_model: QueueModel,
-    dist: &LatencyDistribution,
+    dist: &'a LatencyDistribution,
+}
+
+fn simulate_chunk<R: Rng + ?Sized>(
+    rng: &mut R,
+    iterations: usize,
+    config: &SimChunkConfig<'_>,
 ) -> Vec<f64> {
     let mut waits = Vec::with_capacity(iterations);
     let mut arrival_time_s = 0.0;
-    let mut server_free_at = vec![0.0f64; pool_size as usize];
+    let mut server_free_at = vec![0.0f64; config.pool_size as usize];
 
-    let inter_arrival = Exp::new(lambda).expect("lambda > 0 for exponential inter-arrival");
+    let inter_arrival = Exp::new(config.lambda).expect("lambda > 0 for exponential inter-arrival");
 
     for _ in 0..iterations {
         arrival_time_s += inter_arrival.sample(rng);
@@ -153,9 +155,9 @@ fn simulate_chunk<R: Rng + ?Sized>(
         }
 
         let wait_s = (min_free - arrival_time_s).max(0.0);
-        let service_ms = match queue_model {
-            QueueModel::MMC => dist.sample_ms(rng) + connection_overhead_ms,
-            QueueModel::MDC => deterministic_service_ms,
+        let service_ms = match config.queue_model {
+            QueueModel::MMC => config.dist.sample_ms(rng) + config.connection_overhead_ms,
+            QueueModel::MDC => config.deterministic_service_ms,
         };
         let service_s = service_ms / 1_000.0;
 

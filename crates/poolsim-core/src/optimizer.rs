@@ -55,9 +55,7 @@ pub fn find_optimal(
     let mut candidate = None;
     let mut warnings = Vec::new();
     if opts.queue_model == QueueModel::MDC {
-        warnings.push(
-            "MDC mode uses Monte Carlo probe estimates for candidate search".to_string(),
-        );
+        warnings.push("MDC mode uses Monte Carlo probe estimates for candidate search".to_string());
     }
 
     for size in pool.min_pool_size..=pool.max_pool_size {
@@ -79,11 +77,13 @@ pub fn find_optimal(
     let chosen = candidate.unwrap_or(pool.max_pool_size);
     if candidate.is_none() {
         warnings.push(
-            "No candidate pool size met target constraints; using max_pool_size fallback".to_string(),
+            "No candidate pool size met target constraints; using max_pool_size fallback"
+                .to_string(),
         );
     }
 
-    let mc = monte_carlo::run_with_overhead(workload, chosen, pool.connection_overhead_ms, dist, opts)?;
+    let mc =
+        monte_carlo::run_with_overhead(workload, chosen, pool.connection_overhead_ms, dist, opts)?;
 
     let rho = erlang::utilisation(lambda, mu, chosen);
     let ci = bootstrap_ci(chosen, pool, &mc.wait_times_ms, opts.target_wait_p99_ms);
@@ -106,8 +106,13 @@ fn mdc_probe_p99(
     size: u32,
 ) -> Result<f64, PoolsimError> {
     let probe_opts = mdc_probe_options(opts, size);
-    let probe =
-        monte_carlo::run_with_overhead(workload, size, pool.connection_overhead_ms, dist, &probe_opts)?;
+    let probe = monte_carlo::run_with_overhead(
+        workload,
+        size,
+        pool.connection_overhead_ms,
+        dist,
+        &probe_opts,
+    )?;
     Ok(probe.p99)
 }
 
@@ -120,7 +125,12 @@ fn mdc_probe_options(opts: &SimulationOptions, size: u32) -> SimulationOptions {
     probe_opts
 }
 
-fn bootstrap_ci(chosen: u32, pool: &PoolConfig, wait_times: &[f64], target_wait_p99_ms: f64) -> (u32, u32) {
+fn bootstrap_ci(
+    chosen: u32,
+    pool: &PoolConfig,
+    wait_times: &[f64],
+    target_wait_p99_ms: f64,
+) -> (u32, u32) {
     if wait_times.is_empty() {
         return (chosen, chosen);
     }

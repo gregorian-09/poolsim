@@ -45,7 +45,11 @@ pub enum PoolsimError {
 
 impl PoolsimError {
     /// Creates a standardized invalid-input error.
-    pub fn invalid_input(code: &'static str, message: impl Into<String>, details: Option<Value>) -> Self {
+    pub fn invalid_input(
+        code: &'static str,
+        message: impl Into<String>,
+        details: Option<Value>,
+    ) -> Self {
         Self::InvalidInput {
             code,
             message: message.into(),

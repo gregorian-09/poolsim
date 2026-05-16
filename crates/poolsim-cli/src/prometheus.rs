@@ -14,10 +14,7 @@ use poolsim_core::{
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::{
-    args::PrometheusImportArgs,
-    config::TelemetryInput,
-};
+use crate::{args::PrometheusImportArgs, config::TelemetryInput};
 
 const DEFAULT_HTTP_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -146,10 +143,14 @@ fn required_query(name: &str, value: Option<&str>) -> Result<String> {
 
 fn query_values(client: &impl PrometheusClient, queries: &QuerySet) -> Result<PrometheusValues> {
     Ok(PrometheusValues {
-        rps: parse_prometheus_value(&client.query(&queries.rps)?).context("invalid rps query response")?,
-        p50_ms: parse_prometheus_value(&client.query(&queries.p50)?).context("invalid p50 query response")?,
-        p95_ms: parse_prometheus_value(&client.query(&queries.p95)?).context("invalid p95 query response")?,
-        p99_ms: parse_prometheus_value(&client.query(&queries.p99)?).context("invalid p99 query response")?,
+        rps: parse_prometheus_value(&client.query(&queries.rps)?)
+            .context("invalid rps query response")?,
+        p50_ms: parse_prometheus_value(&client.query(&queries.p50)?)
+            .context("invalid p50 query response")?,
+        p95_ms: parse_prometheus_value(&client.query(&queries.p95)?)
+            .context("invalid p95 query response")?,
+        p99_ms: parse_prometheus_value(&client.query(&queries.p99)?)
+            .context("invalid p99 query response")?,
     })
 }
 
@@ -224,9 +225,7 @@ fn value_from_pair(value: &Value) -> Result<f64> {
         Value::String(text) => text
             .parse::<f64>()
             .with_context(|| format!("Prometheus sample value '{text}' is not numeric"))?,
-        Value::Number(number) => number
-            .as_f64()
-            .ok_or_else(|| anyhow!("Prometheus numeric sample value is not representable as f64"))?,
+        Value::Number(number) => number.as_f64().unwrap_or(f64::NAN),
         _ => bail!("Prometheus sample value must be a string or number"),
     };
 
@@ -328,12 +327,13 @@ fn validate_header(raw: &str) -> Result<String> {
 }
 
 fn http_get(endpoint: &HttpEndpoint, path: &str, headers: &[String]) -> Result<String> {
-    let mut stream = TcpStream::connect((endpoint.host.as_str(), endpoint.port)).with_context(|| {
-        format!(
-            "failed to connect to Prometheus endpoint {}:{}",
-            endpoint.host, endpoint.port
-        )
-    })?;
+    let mut stream =
+        TcpStream::connect((endpoint.host.as_str(), endpoint.port)).with_context(|| {
+            format!(
+                "failed to connect to Prometheus endpoint {}:{}",
+                endpoint.host, endpoint.port
+            )
+        })?;
     stream.set_read_timeout(Some(DEFAULT_HTTP_TIMEOUT)).ok();
     stream.set_write_timeout(Some(DEFAULT_HTTP_TIMEOUT)).ok();
 
@@ -485,21 +485,29 @@ mod tests {
 
     #[test]
     fn parses_vector_and_scalar_prometheus_values() {
-        assert_eq!(parse_prometheus_value_from_json(&vector_response("123.5")).unwrap(), 123.5);
-        assert_eq!(parse_prometheus_value_from_json(&scalar_response("42")).unwrap(), 42.0);
+        assert_eq!(
+            parse_prometheus_value_from_json(&vector_response("123.5"))
+                .expect("vector response should parse"),
+            123.5
+        );
+        assert_eq!(
+            parse_prometheus_value_from_json(&scalar_response("42"))
+                .expect("scalar response should parse"),
+            42.0
+        );
     }
 
     #[test]
     fn rejects_invalid_prometheus_values() {
         let failed = serde_json::json!({"status": "error", "error": "bad query"});
         assert!(parse_prometheus_value_from_json(&failed)
-            .unwrap_err()
+            .expect_err("error status should fail")
             .to_string()
             .contains("bad query"));
 
         let empty = serde_json::json!({"status": "success", "data": {"resultType": "vector", "result": []}});
         assert!(parse_prometheus_value_from_json(&empty)
-            .unwrap_err()
+            .expect_err("empty vector should fail")
             .to_string()
             .contains("no series"));
 
@@ -514,13 +522,13 @@ mod tests {
             }
         });
         assert!(parse_prometheus_value_from_json(&multiple)
-            .unwrap_err()
+            .expect_err("multiple series should fail")
             .to_string()
             .contains("multiple series"));
 
         let unsupported = serde_json::json!({"status": "success", "data": {"resultType": "matrix", "result": []}});
         assert!(parse_prometheus_value_from_json(&unsupported)
-            .unwrap_err()
+            .expect_err("unsupported result type should fail")
             .to_string()
             .contains("unsupported"));
     }
@@ -569,17 +577,17 @@ mod tests {
         for (payload, expected) in cases {
             assert!(
                 parse_prometheus_value_from_json(&payload)
-                    .unwrap_err()
+                    .expect_err("malformed payload should fail")
                     .to_string()
                     .contains(expected),
                 "expected error containing {expected}"
             );
         }
 
-        let number_payload =
-            serde_json::json!({"status": "success", "data": {"resultType": "scalar", "result": [1, 7.5]}});
+        let number_payload = serde_json::json!({"status": "success", "data": {"resultType": "scalar", "result": [1, 7.5]}});
         assert_eq!(
-            parse_prometheus_value_from_json(&number_payload).expect("numeric samples should parse"),
+            parse_prometheus_value_from_json(&number_payload)
+                .expect("numeric samples should parse"),
             7.5
         );
     }
@@ -647,13 +655,17 @@ mod tests {
             .expect("endpoint should parse");
         assert_eq!(endpoint.host, "localhost");
         assert_eq!(endpoint.port, 9090);
-        assert_eq!(endpoint.query_path("sum(rate(x[5m]))"), "/prometheus/api/v1/query?query=sum%28rate%28x%5B5m%5D%29%29");
+        assert_eq!(
+            endpoint.query_path("sum(rate(x[5m]))"),
+            "/prometheus/api/v1/query?query=sum%28rate%28x%5B5m%5D%29%29"
+        );
 
-        let default_port = HttpEndpoint::parse("http://localhost").expect("default port should parse");
+        let default_port =
+            HttpEndpoint::parse("http://localhost").expect("default port should parse");
         assert_eq!(default_port.port, 80);
 
         assert_eq!(
-            validate_header("Authorization: Bearer token").unwrap(),
+            validate_header("Authorization: Bearer token").expect("valid header should pass"),
             "Authorization: Bearer token"
         );
         assert!(validate_header("bad").is_err());
@@ -669,14 +681,23 @@ mod tests {
     #[test]
     fn parses_plain_and_chunked_http_responses() {
         let body = vector_response("1").to_string();
-        let response = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{body}", body.len());
-        assert_eq!(parse_http_response(&response).unwrap(), body);
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{body}",
+            body.len()
+        );
+        assert_eq!(
+            parse_http_response(&response).expect("plain response should parse"),
+            body
+        );
 
         let chunked = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nrust\r\n0\r\n\r\n";
-        assert_eq!(parse_http_response(chunked).unwrap(), "rust");
+        assert_eq!(
+            parse_http_response(chunked).expect("chunked response should parse"),
+            "rust"
+        );
 
         assert!(parse_http_response("HTTP/1.1 500 nope\r\n\r\nbad")
-            .unwrap_err()
+            .expect_err("HTTP 500 should fail")
             .to_string()
             .contains("HTTP 500"));
         assert!(parse_http_response("not an http response").is_err());
@@ -693,7 +714,9 @@ mod tests {
             Err(error) if error.kind() == ErrorKind::PermissionDenied => return,
             Err(error) => panic!("listener should bind: {error}"),
         };
-        let addr = listener.local_addr().expect("listener addr should be available");
+        let addr = listener
+            .local_addr()
+            .expect("listener addr should be available");
         let body = vector_response("12.5").to_string();
 
         let server = thread::spawn(move || {
@@ -707,13 +730,18 @@ mod tests {
                 body.len(),
                 body
             );
-            stream.write_all(response.as_bytes()).expect("response should write");
+            stream
+                .write_all(response.as_bytes())
+                .expect("response should write");
         });
 
         let client = HttpPrometheusClient::new(&format!("http://{}", addr), &[])
             .expect("client should build");
         let raw = client.query("up").expect("query should succeed");
-        assert_eq!(parse_prometheus_value(&raw).unwrap(), 12.5);
+        assert_eq!(
+            parse_prometheus_value(&raw).expect("raw Prometheus value should parse"),
+            12.5
+        );
         server.join().expect("server should finish");
     }
 
@@ -725,7 +753,7 @@ mod tests {
             base_path: String::new(),
         };
         assert!(http_get(&endpoint, "/api/v1/query?query=up", &[])
-            .unwrap_err()
+            .expect_err("port 0 connection should fail")
             .to_string()
             .contains("failed to connect to Prometheus endpoint 127.0.0.1:0"));
     }
@@ -737,7 +765,9 @@ mod tests {
             Err(error) if error.kind() == ErrorKind::PermissionDenied => return,
             Err(error) => panic!("listener should bind: {error}"),
         };
-        let addr = listener.local_addr().expect("listener addr should be available");
+        let addr = listener
+            .local_addr()
+            .expect("listener addr should be available");
 
         let server = thread::spawn(move || {
             for _ in 0..4 {
@@ -764,7 +794,9 @@ mod tests {
                     body.len(),
                     body
                 );
-                stream.write_all(response.as_bytes()).expect("response should write");
+                stream
+                    .write_all(response.as_bytes())
+                    .expect("response should write");
             }
         });
 
@@ -789,7 +821,7 @@ mod tests {
         let args = sample_args(None);
         assert!(query_set_from_args(&args).is_err());
         assert!(resolve_prometheus_input(&args)
-            .unwrap_err()
+            .expect_err("missing endpoint should fail")
             .to_string()
             .contains("missing --endpoint"));
 

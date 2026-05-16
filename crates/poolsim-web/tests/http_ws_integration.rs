@@ -1,8 +1,4 @@
-use std::{
-    net::SocketAddr,
-    sync::OnceLock,
-    time::Duration,
-};
+use std::{net::SocketAddr, sync::OnceLock, time::Duration};
 
 use axum::{
     body::{to_bytes, Body},
@@ -91,11 +87,15 @@ async fn json_request(app: Router, method: &str, uri: &str, payload: Value) -> (
     (status, json)
 }
 
-async fn start_ws_server(app: Router) -> (String, oneshot::Sender<()>, tokio::task::JoinHandle<()>) {
+async fn start_ws_server(
+    app: Router,
+) -> (String, oneshot::Sender<()>, tokio::task::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .expect("listener should bind");
-    let addr = listener.local_addr().expect("listener should expose local addr");
+    let addr = listener
+        .local_addr()
+        .expect("listener should expose local addr");
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
     let server = tokio::spawn(async move {
@@ -190,10 +190,14 @@ async fn rest_routes_work_and_return_structured_errors() {
         json_request(app.clone(), "POST", "/v1/sensitivity", sensitivity_payload).await;
     assert_eq!(sensitivity_status, StatusCode::OK);
     assert!(sensitivity_json.is_array());
-    assert!(!sensitivity_json.as_array().expect("sensitivity array").is_empty());
+    assert!(!sensitivity_json
+        .as_array()
+        .expect("sensitivity array")
+        .is_empty());
 
     let batch_payload = json!([sample_request(1200), sample_request(1300)]);
-    let (batch_status, batch_json) = json_request(app.clone(), "POST", "/v1/batch", batch_payload).await;
+    let (batch_status, batch_json) =
+        json_request(app.clone(), "POST", "/v1/batch", batch_payload).await;
     assert_eq!(batch_status, StatusCode::OK);
     assert_eq!(batch_json.as_array().expect("batch array").len(), 2);
 
@@ -256,7 +260,8 @@ async fn rest_routes_return_408_when_simulation_deadline_is_zero() {
     assert_eq!(sensitivity_json["code"], "SIMULATION_TIMEOUT");
 
     let batch_payload = json!([sample_request(1200), sample_request(1300)]);
-    let (batch_status, batch_json) = json_request(app.clone(), "POST", "/v1/batch", batch_payload).await;
+    let (batch_status, batch_json) =
+        json_request(app.clone(), "POST", "/v1/batch", batch_payload).await;
     assert_eq!(batch_status, StatusCode::REQUEST_TIMEOUT);
     assert_eq!(batch_json["code"], "SIMULATION_TIMEOUT");
 
@@ -290,10 +295,13 @@ async fn rest_routes_return_408_when_simulation_deadline_expires() {
     assert_eq!(evaluate_status, StatusCode::REQUEST_TIMEOUT);
     assert_eq!(evaluate_json["code"], "SIMULATION_TIMEOUT");
 
+    let mut sensitivity_source = sample_request(10_000);
+    sensitivity_source["pool"]["max_server_connections"] = json!(10_000);
+    sensitivity_source["pool"]["max_pool_size"] = json!(10_000);
     let sensitivity_payload = json!({
-        "workload": sample_request(10_000)["workload"],
-        "pool": sample_request(10_000)["pool"],
-        "options": sample_request(10_000)["options"],
+        "workload": sensitivity_source["workload"].clone(),
+        "pool": sensitivity_source["pool"].clone(),
+        "options": sensitivity_source["options"].clone(),
     });
     let (sensitivity_status, sensitivity_json) =
         json_request(app.clone(), "POST", "/v1/sensitivity", sensitivity_payload).await;
@@ -301,7 +309,8 @@ async fn rest_routes_return_408_when_simulation_deadline_expires() {
     assert_eq!(sensitivity_json["code"], "SIMULATION_TIMEOUT");
 
     let batch_payload = json!([sample_request(10_000), sample_request(10_000)]);
-    let (batch_status, batch_json) = json_request(app.clone(), "POST", "/v1/batch", batch_payload).await;
+    let (batch_status, batch_json) =
+        json_request(app.clone(), "POST", "/v1/batch", batch_payload).await;
     assert_eq!(batch_status, StatusCode::REQUEST_TIMEOUT);
     assert_eq!(batch_json["code"], "SIMULATION_TIMEOUT");
 
@@ -360,7 +369,7 @@ async fn websocket_batch_stream_emits_ndjson_ticks_and_batch_done() {
 
     let payload = json!([sample_request(2200), sample_request(2200)]).to_string();
     socket
-        .send(Message::Text(payload.into()))
+        .send(Message::Text(payload))
         .await
         .expect("batch payload should be sent");
 
@@ -382,7 +391,10 @@ async fn websocket_batch_stream_emits_ndjson_ticks_and_batch_done() {
             _ => continue,
         };
 
-        assert!(text.ends_with('\n'), "websocket frame should be newline terminated NDJSON");
+        assert!(
+            text.ends_with('\n'),
+            "websocket frame should be newline terminated NDJSON"
+        );
         let frame: Value =
             serde_json::from_str(text.trim_end()).expect("frame should be valid JSON object");
         if frame.get("tick").is_some() {
@@ -411,7 +423,11 @@ async fn websocket_batch_stream_emits_ndjson_ticks_and_batch_done() {
 
     done_indices.sort_unstable();
     assert!(saw_tick, "expected at least one tick frame");
-    assert_eq!(done_indices, vec![0, 1], "expected done frames for both batch items");
+    assert_eq!(
+        done_indices,
+        vec![0, 1],
+        "expected done frames for both batch items"
+    );
     assert!(saw_batch_done, "expected final batch_done frame");
 }
 
@@ -429,7 +445,7 @@ async fn websocket_accepts_binary_json_initial_frame() {
 
     let payload = sample_request(1800).to_string().into_bytes();
     socket
-        .send(Message::Binary(payload.into()))
+        .send(Message::Binary(payload))
         .await
         .expect("binary json payload should be sent");
 
@@ -476,7 +492,7 @@ async fn websocket_reports_invalid_utf8_and_invalid_json_and_invalid_frame() {
         .await
         .expect("websocket connection should succeed");
     socket
-        .send(Message::Binary(vec![0xff, 0xfe, 0xfd].into()))
+        .send(Message::Binary(vec![0xff, 0xfe, 0xfd]))
         .await
         .expect("invalid utf8 payload should be sent");
     let msg = tokio::time::timeout(Duration::from_secs(10), socket.next())
@@ -496,7 +512,7 @@ async fn websocket_reports_invalid_utf8_and_invalid_json_and_invalid_frame() {
         .await
         .expect("second websocket connection should succeed");
     socket
-        .send(Message::Ping(vec![1, 2].into()))
+        .send(Message::Ping(vec![1, 2]))
         .await
         .expect("ping frame should be sent");
     let msg = tokio::time::timeout(Duration::from_secs(10), socket.next())
@@ -553,7 +569,7 @@ async fn websocket_batch_emits_error_frame_for_invalid_item() {
 
     let payload = json!([sample_request(1500), invalid]).to_string();
     socket
-        .send(Message::Text(payload.into()))
+        .send(Message::Text(payload))
         .await
         .expect("batch payload should be sent");
 
@@ -586,7 +602,10 @@ async fn websocket_batch_emits_error_frame_for_invalid_item() {
 
     let _ = shutdown_tx.send(());
     let _ = server.await;
-    assert!(saw_error, "expected per-item error frame for invalid batch item");
+    assert!(
+        saw_error,
+        "expected per-item error frame for invalid batch item"
+    );
     assert!(saw_batch_done, "expected final batch_done frame");
 }
 
@@ -609,7 +628,7 @@ async fn websocket_can_recover_when_client_disconnects_before_first_frame() {
         .await
         .expect("second websocket connection should succeed");
     socket
-        .send(Message::Text(sample_request(1500).to_string().into()))
+        .send(Message::Text(sample_request(1500).to_string()))
         .await
         .expect("payload should be sent");
 
@@ -623,7 +642,9 @@ async fn websocket_can_recover_when_client_disconnects_before_first_frame() {
         other => panic!("expected text frame, got {other:?}"),
     };
     let frame: Value = serde_json::from_str(text.trim_end()).expect("frame should be valid JSON");
-    assert!(frame.get("tick").is_some() || frame.get("done").and_then(Value::as_bool) == Some(true));
+    assert!(
+        frame.get("tick").is_some() || frame.get("done").and_then(Value::as_bool) == Some(true)
+    );
 
     let _ = shutdown_tx.send(());
     let _ = server.await;

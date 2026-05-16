@@ -117,7 +117,8 @@ impl WorkloadConfig {
             ));
         }
 
-        if !(self.latency_p50_ms < self.latency_p95_ms && self.latency_p95_ms < self.latency_p99_ms) {
+        if !(self.latency_p50_ms < self.latency_p95_ms && self.latency_p95_ms < self.latency_p99_ms)
+        {
             return Err(PoolsimError::invalid_input(
                 "INVALID_LATENCY_ORDER",
                 "latency percentiles must be ordered: p50 < p95 < p99",
