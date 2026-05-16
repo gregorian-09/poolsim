@@ -63,6 +63,7 @@ Given workload data, pool bounds, and simulation options, `poolsim` can:
 - import telemetry snapshots and diff recommendations against current production settings
 - query Prometheus-compatible telemetry and diff recommendations against current production settings
 - run CI capacity gates that fail deployments when telemetry violates pool policy
+- generate framework-specific pool configuration snippets from the recommendation
 
 Current surfaces:
 
@@ -157,6 +158,16 @@ Diagnose whether the configured production pool is healthy, too small, too large
 
 ```bash
 cargo run -p poolsim-cli -- --format json doctor telemetry \
+  --config docs/fixtures/telemetry.json
+```
+
+Generate a runtime pool configuration snippet from the same sizing recommendation:
+
+```bash
+cargo run -p poolsim-cli -- --format json generate-config \
+  --framework sqlx \
+  --pool-name checkout-pool \
+  telemetry \
   --config docs/fixtures/telemetry.json
 ```
 

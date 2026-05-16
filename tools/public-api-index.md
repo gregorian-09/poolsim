@@ -172,7 +172,7 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_cli::args::CliQueueModel`: CLI-facing queue-model enum.
 - `poolsim_cli::args::CliSaturationLevel`: CLI-facing saturation-level enum.
 - `poolsim_cli::args::Cli`: top-level clap parser type defined in the `args` module.
-- `poolsim_cli::args::Commands`: subcommand enum for `simulate`, `evaluate`, `sweep`, `batch`, `import`, `gate`, and `doctor`.
+- `poolsim_cli::args::Commands`: subcommand enum for `simulate`, `evaluate`, `sweep`, `batch`, `import`, `gate`, `doctor`, and `generate-config`.
 - `poolsim_cli::args::SimulateArgs`: argument model for the `simulate` subcommand.
 - `poolsim_cli::args::CommonArgs`: shared argument model for simulation-style commands.
 - `poolsim_cli::args::EvaluateArgs`: argument model for the `evaluate` subcommand.
@@ -183,6 +183,9 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_cli::args::GateSourceCommands`: nested gate source enum for telemetry and Prometheus inputs.
 - `poolsim_cli::args::DoctorArgs`: argument model for the `doctor` subcommand.
 - `poolsim_cli::args::DoctorSourceCommands`: nested doctor source enum for telemetry and Prometheus inputs.
+- `poolsim_cli::args::CliConfigFramework`: CLI-facing target-framework enum for generated configuration snippets.
+- `poolsim_cli::args::GenerateConfigArgs`: argument model for the `generate-config` subcommand.
+- `poolsim_cli::args::GenerateConfigSourceCommands`: nested config-generator source enum for telemetry, Prometheus, and simulation inputs.
 - `poolsim_cli::args::TelemetryImportArgs`: argument model for `import telemetry`.
 - `poolsim_cli::args::PrometheusImportArgs`: argument model for `import prometheus`.
 
@@ -209,6 +212,7 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_cli::render::csv::telemetry`: renders telemetry recommendation diff as CSV.
 - `poolsim_cli::render::csv::gate`: renders a capacity gate report as CSV.
 - `poolsim_cli::render::csv::doctor`: renders a pool doctor report as CSV.
+- `poolsim_cli::render::csv::config_snippet`: renders a generated framework configuration snippet report as CSV.
 - `poolsim_cli::render::json`: JSON rendering module.
 - `poolsim_cli::render::json::print`: renders a serializable value as JSON.
 - `poolsim_cli::render::table`: table rendering module.
@@ -219,6 +223,7 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_cli::render::table::telemetry`: renders telemetry recommendation diff as a table.
 - `poolsim_cli::render::table::gate`: renders a capacity gate report as a table.
 - `poolsim_cli::render::table::doctor`: renders a pool doctor report as a table.
+- `poolsim_cli::render::table::config_snippet`: renders a generated framework configuration snippet report as a table.
 
 ### Route-Local Web Models
 

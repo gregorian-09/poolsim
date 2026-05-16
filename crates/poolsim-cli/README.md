@@ -16,6 +16,7 @@ It supports:
 - Prometheus-compatible telemetry import
 - CI capacity gates for telemetry-backed release checks
 - pool diagnosis for configured production settings
+- framework-specific runtime pool config generation
 - table, JSON, and CSV output
 
 ## Install
@@ -36,6 +37,9 @@ cargo install poolsim-cli
 - `poolsim-cli gate prometheus`
 - `poolsim-cli doctor telemetry`
 - `poolsim-cli doctor prometheus`
+- `poolsim-cli generate-config telemetry`
+- `poolsim-cli generate-config prometheus`
+- `poolsim-cli generate-config simulate`
 
 Supported output formats:
 
@@ -87,6 +91,16 @@ Doctor example:
 
 ```bash
 poolsim-cli --format json doctor telemetry --config docs/fixtures/telemetry.json
+```
+
+Config generator example:
+
+```bash
+poolsim-cli --format json generate-config \
+  --framework sqlx \
+  --pool-name checkout-pool \
+  telemetry \
+  --config docs/fixtures/telemetry.json
 ```
 
 ## Exit Codes

@@ -43,6 +43,9 @@ Available subcommands:
 - `gate prometheus`
 - `doctor telemetry`
 - `doctor prometheus`
+- `generate-config telemetry`
+- `generate-config prometheus`
+- `generate-config simulate`
 
 Global flags:
 
@@ -635,6 +638,168 @@ Uses the same flags as `import prometheus`:
 - `--p99-query`
 - `--header`
 - telemetry metadata, pool, and simulation-option flags
+
+## `generate-config`
+
+### Purpose
+
+Generates framework-specific pool configuration snippets from a Poolsim recommendation.
+
+Use `generate-config` after `simulate`, `import telemetry`, or `import prometheus` when you want to turn the recommended pool size into copy-pasteable configuration for a real runtime pool.
+
+Supported frameworks:
+
+- `hikaricp`
+- `spring-boot`
+- `sqlalchemy`
+- `prisma`
+- `node-pg`
+- `sqlx`
+- `deadpool`
+
+The command is intentionally additive: Poolsim still calculates settings, while the target framework enforces those settings at runtime.
+
+### Telemetry-file config example
+
+```bash
+poolsim --format json generate-config \
+  --framework sqlx \
+  --pool-name checkout-pool \
+  telemetry \
+  --config docs/fixtures/telemetry.json
+```
+
+### Prometheus response-file config example
+
+```bash
+poolsim --format json generate-config \
+  --framework spring-boot \
+  prometheus \
+  --response-file docs/fixtures/prometheus-responses.json \
+  --service-name checkout-api \
+  --window 5m \
+  --current-pool-size 8 \
+  --max-server-connections 100 \
+  --connection-overhead-ms 2 \
+  --min 2 \
+  --max 20
+```
+
+### Simulation config example
+
+```bash
+poolsim --format csv generate-config \
+  --framework node-pg \
+  simulate \
+  --config docs/fixtures/cli-config.json
+```
+
+### `generate-config` flags
+
+#### `--framework <name>`
+
+Required target framework.
+
+Poolsim maps its recommendation to the framework's documented pool-size keys:
+
+- HikariCP: `maximumPoolSize`, `minimumIdle`, `connectionTimeout`, `idleTimeout`
+- Spring Boot Hikari: `spring.datasource.hikari.maximum-pool-size`, `minimum-idle`, `connection-timeout`, `idle-timeout`
+- SQLAlchemy: `create_engine(pool_size=..., max_overflow=0, pool_timeout=...)`
+- Prisma: `connection_limit` and `pool_timeout` for URL-based configuration; `max`, `connectionTimeoutMillis`, and `idleTimeoutMillis` for the v7 PostgreSQL adapter
+- node-postgres: `new Pool({ max, min, connectionTimeoutMillis, idleTimeoutMillis })`
+- sqlx: `PgPoolOptions::max_connections`, `min_connections`, `acquire_timeout`, and `idle_timeout`
+- deadpool-postgres: environment keys under `PG__POOL__*`
+
+#### `--min-idle <n>`
+
+Optional minimum idle or warm-pool setting.
+
+Default behavior uses the simulation's `cold_start_min_pool_size`, clamped so it never exceeds `recommended_pool_size`.
+
+#### `--connection-timeout-ms <ms>`
+
+Connection acquisition timeout in milliseconds.
+
+Default: `30000`.
+
+#### `--idle-timeout-ms <ms>`
+
+Idle connection timeout in milliseconds.
+
+Default: `600000`.
+
+#### `--database-url-env <name>`
+
+Environment variable used in snippets that need a database URL.
+
+Default: `DATABASE_URL`.
+
+#### `--pool-name <name>`
+
+Pool name used by frameworks that expose a named pool setting.
+
+Default: `poolsim-recommended-pool`.
+
+### Source subcommands
+
+#### `generate-config telemetry`
+
+Uses the same flags as `import telemetry`:
+
+- `--config <path>`
+- `--current-pool-size <n>`
+
+#### `generate-config prometheus`
+
+Uses the same flags as `import prometheus`:
+
+- `--endpoint <url>` or `--response-file <path>`
+- `--rps-query`
+- `--p50-query`
+- `--p95-query`
+- `--p99-query`
+- `--header`
+- telemetry metadata, pool, and simulation-option flags
+
+#### `generate-config simulate`
+
+Uses the same common input flags as `simulate`, including:
+
+- `--config <path>`
+- workload percentile flags
+- pool limit flags
+- simulation-option flags
+
+### Output fields
+
+The JSON output is a `ConfigSnippetReport`:
+
+- `framework`: target framework
+- `source`: `telemetry`, `prometheus`, or `simulate`
+- `service_name`, `window`, and `observed_at` when available from telemetry
+- `recommended_pool_size`
+- `min_idle`
+- `connection_timeout_ms`
+- `idle_timeout_ms`
+- `database_url_env`
+- `pool_name`
+- `max_server_connections`
+- `utilisation_rho`
+- `mean_queue_wait_ms`
+- `p99_queue_wait_ms`
+- `snippet`: generated framework configuration
+- `notes`: operational cautions about database connection budgets and re-running Poolsim
+- `references`: documentation URLs used for the framework-specific setting names
+
+### Documentation references used by the generator
+
+- HikariCP: <https://github.com/brettwooldridge/HikariCP>
+- Spring Boot data access: <https://docs.spring.io/spring-boot/how-to/data-access.html>
+- SQLAlchemy pooling: <https://docs.sqlalchemy.org/en/latest/core/pooling.html>
+- Prisma connection pool: <https://www.prisma.io/docs/orm/prisma-client/setup-and-configuration/databases-connections/connection-pool>
+- node-postgres Pool API: <https://node-postgres.com/apis/pool>
+- sqlx PoolOptions: <https://docs.rs/sqlx/latest/sqlx/pool/struct.PoolOptions.html>
+- deadpool-postgres Config: <https://docs.rs/deadpool-postgres/latest/deadpool_postgres/struct.Config.html>
 
 ## Common Input Flags
 
