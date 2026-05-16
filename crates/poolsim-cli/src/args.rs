@@ -143,6 +143,7 @@ pub struct ImportArgs {
 #[derive(Debug, Clone, Subcommand)]
 pub enum ImportCommands {
     Telemetry(TelemetryImportArgs),
+    Prometheus(PrometheusImportArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -152,6 +153,60 @@ pub struct TelemetryImportArgs {
 
     #[arg(long)]
     pub current_pool_size: Option<u32>,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct PrometheusImportArgs {
+    #[arg(long, conflicts_with = "response_file", required_unless_present = "response_file")]
+    pub endpoint: Option<String>,
+
+    #[arg(long, conflicts_with = "endpoint", required_unless_present = "endpoint")]
+    pub response_file: Option<PathBuf>,
+
+    #[arg(long, required_unless_present = "response_file")]
+    pub rps_query: Option<String>,
+    #[arg(long, required_unless_present = "response_file")]
+    pub p50_query: Option<String>,
+    #[arg(long, required_unless_present = "response_file")]
+    pub p95_query: Option<String>,
+    #[arg(long, required_unless_present = "response_file")]
+    pub p99_query: Option<String>,
+
+    #[arg(long)]
+    pub header: Vec<String>,
+
+    #[arg(long)]
+    pub service_name: Option<String>,
+    #[arg(long)]
+    pub window: Option<String>,
+    #[arg(long)]
+    pub observed_at: Option<String>,
+
+    #[arg(long)]
+    pub current_pool_size: u32,
+    #[arg(long)]
+    pub max_server_connections: u32,
+    #[arg(long, alias = "connection-establishment-overhead-ms", default_value_t = 0.0)]
+    pub connection_overhead_ms: f64,
+    #[arg(long)]
+    pub idle_timeout_ms: Option<u64>,
+    #[arg(long)]
+    pub min: u32,
+    #[arg(long)]
+    pub max: u32,
+
+    #[arg(long)]
+    pub iterations: Option<u32>,
+    #[arg(long)]
+    pub seed: Option<u64>,
+    #[arg(long, value_enum)]
+    pub distribution: Option<CliDistributionModel>,
+    #[arg(long, value_enum)]
+    pub queue_model: Option<CliQueueModel>,
+    #[arg(long)]
+    pub target_wait_p99_ms: Option<f64>,
+    #[arg(long)]
+    pub max_acceptable_rho: Option<f64>,
 }
 
 #[cfg(test)]
@@ -253,8 +308,54 @@ mod tests {
                     assert_eq!(telemetry.config, PathBuf::from("telemetry.json"));
                     assert_eq!(telemetry.current_pool_size, Some(12));
                 }
+                ImportCommands::Prometheus(_) => panic!("expected telemetry import"),
             },
             _ => panic!("expected import telemetry command"),
+        }
+    }
+
+    #[test]
+    fn parser_handles_import_prometheus_subcommand() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "--format",
+            "json",
+            "import",
+            "prometheus",
+            "--endpoint",
+            "http://localhost:9090",
+            "--rps-query",
+            "sum(rate(http_requests_total[5m]))",
+            "--p50-query",
+            "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket[5m]))) * 1000",
+            "--p95-query",
+            "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m]))) * 1000",
+            "--p99-query",
+            "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[5m]))) * 1000",
+            "--current-pool-size",
+            "12",
+            "--max-server-connections",
+            "100",
+            "--min",
+            "2",
+            "--max",
+            "24",
+            "--header",
+            "Authorization: Bearer token",
+        ])
+        .expect("import prometheus args should parse");
+
+        match cli.command {
+            Commands::Import(args) => match args.command {
+                ImportCommands::Prometheus(prometheus) => {
+                    assert_eq!(prometheus.endpoint.as_deref(), Some("http://localhost:9090"));
+                    assert_eq!(prometheus.current_pool_size, 12);
+                    assert_eq!(prometheus.max_server_connections, 100);
+                    assert_eq!(prometheus.header.len(), 1);
+                }
+                ImportCommands::Telemetry(_) => panic!("expected prometheus import"),
+            },
+            _ => panic!("expected import prometheus command"),
         }
     }
 }

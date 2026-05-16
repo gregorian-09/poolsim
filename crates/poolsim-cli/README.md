@@ -13,6 +13,7 @@ It supports:
 - sensitivity sweeps
 - batch execution
 - telemetry import and recommendation diff
+- Prometheus-compatible telemetry import
 - table, JSON, and CSV output
 
 ## Install
@@ -28,6 +29,7 @@ cargo install poolsim-cli
 - `poolsim-cli sweep`
 - `poolsim-cli batch`
 - `poolsim-cli import telemetry`
+- `poolsim-cli import prometheus`
 
 Supported output formats:
 
@@ -53,6 +55,17 @@ Telemetry diff example:
 
 ```bash
 poolsim-cli --format json import telemetry --config docs/fixtures/telemetry.json
+```
+
+Prometheus response-file example:
+
+```bash
+poolsim-cli --format json import prometheus \
+  --response-file docs/fixtures/prometheus-responses.json \
+  --current-pool-size 8 \
+  --max-server-connections 100 \
+  --min 2 \
+  --max 20
 ```
 
 ## Exit Codes

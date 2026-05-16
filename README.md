@@ -61,6 +61,7 @@ Given workload data, pool bounds, and simulation options, `poolsim` can:
 - evaluate fixed pool sizes
 - analyze simple step-load scenarios
 - import telemetry snapshots and diff recommendations against current production settings
+- query Prometheus-compatible telemetry and diff recommendations against current production settings
 
 Current surfaces:
 
@@ -128,6 +129,18 @@ Import telemetry and compare the current production pool setting against the rec
 
 ```bash
 cargo run -p poolsim-cli -- --format json import telemetry --config docs/fixtures/telemetry.json
+```
+
+Import captured Prometheus query responses:
+
+```bash
+cargo run -p poolsim-cli -- --format json import prometheus \
+  --response-file docs/fixtures/prometheus-responses.json \
+  --current-pool-size 8 \
+  --max-server-connections 100 \
+  --connection-overhead-ms 2 \
+  --min 2 \
+  --max 20
 ```
 
 ## Example CLI Output

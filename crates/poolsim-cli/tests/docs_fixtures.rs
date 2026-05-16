@@ -199,6 +199,38 @@ fn docs_import_telemetry_example_works() {
 }
 
 #[test]
+fn docs_import_prometheus_example_works() {
+    let output = run_cli(&[
+        "--format",
+        "json",
+        "import",
+        "prometheus",
+        "--response-file",
+        &fixture("docs/fixtures/prometheus-responses.json"),
+        "--service-name",
+        "checkout-api",
+        "--window",
+        "5m",
+        "--current-pool-size",
+        "8",
+        "--max-server-connections",
+        "100",
+        "--connection-overhead-ms",
+        "2",
+        "--min",
+        "2",
+        "--max",
+        "20",
+    ]);
+    assert_success(&output, "prometheus import docs example");
+    let recommendation: Value = serde_json::from_str(&stdout_utf8(&output))
+        .expect("prometheus recommendation output should deserialize");
+    assert_eq!(recommendation["service_name"], "checkout-api");
+    assert_eq!(recommendation["window"], "5m");
+    assert!(recommendation["diff"]["recommended_pool_size"].is_number());
+}
+
+#[test]
 fn docs_warn_exit_example_is_stable() {
     let output = run_cli(&[
         "--warn-exit",

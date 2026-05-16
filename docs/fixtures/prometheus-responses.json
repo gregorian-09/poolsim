@@ -1,0 +1,50 @@
+{
+  "rps": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": {},
+          "value": [1710000000.0, "180"]
+        }
+      ]
+    }
+  },
+  "p50": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": {},
+          "value": [1710000000.0, "8"]
+        }
+      ]
+    }
+  },
+  "p95": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": {},
+          "value": [1710000000.0, "30"]
+        }
+      ]
+    }
+  },
+  "p99": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": {},
+          "value": [1710000000.0, "70"]
+        }
+      ]
+    }
+  }
+}

@@ -179,6 +179,7 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_cli::args::ImportArgs`: argument model for the `import` subcommand.
 - `poolsim_cli::args::ImportCommands`: nested import subcommand enum.
 - `poolsim_cli::args::TelemetryImportArgs`: argument model for `import telemetry`.
+- `poolsim_cli::args::PrometheusImportArgs`: argument model for `import prometheus`.
 
 ### `poolsim_cli::config`
 

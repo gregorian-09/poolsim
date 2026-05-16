@@ -25,6 +25,7 @@ Checked-in runnable fixture files live under `docs/fixtures/`:
 - `docs/fixtures/batch.json`
 - `docs/fixtures/batch.toml`
 - `docs/fixtures/telemetry.json`
+- `docs/fixtures/prometheus-responses.json`
 - `docs/fixtures/latencies.txt`
 
 ## Command Summary
@@ -36,6 +37,7 @@ Available subcommands:
 - `sweep`
 - `batch`
 - `import telemetry`
+- `import prometheus`
 
 Global flags:
 
@@ -287,6 +289,137 @@ The JSON output is a `TelemetryRecommendation`:
 - `diff.connection_change_percent`
 - `diff.current_evaluation`
 - `diff.recommended_report`
+
+## `import prometheus`
+
+### Purpose
+
+Queries Prometheus-compatible instant-query responses, converts them into a `TelemetrySnapshot`, and returns the same `TelemetryRecommendation` diff produced by `import telemetry`.
+
+This command is intended for Prometheus servers and OpenTelemetry metrics pipelines that expose Prometheus-compatible metrics.
+
+The command uses the Prometheus instant query API:
+
+- `GET /api/v1/query`
+- one query for request rate
+- one query for each latency percentile
+
+Each query must return exactly one scalar or one instant-vector series. If a query returns multiple series, aggregate it with PromQL first.
+
+### Live Prometheus example
+
+```bash
+poolsim import prometheus \
+  --endpoint http://prometheus:9090 \
+  --rps-query 'sum(rate(http_requests_total{service="checkout-api"}[5m]))' \
+  --p50-query 'histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket{service="checkout-api"}[5m]))) * 1000' \
+  --p95-query 'histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{service="checkout-api"}[5m]))) * 1000' \
+  --p99-query 'histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{service="checkout-api"}[5m]))) * 1000' \
+  --service-name checkout-api \
+  --window 5m \
+  --current-pool-size 8 \
+  --max-server-connections 100 \
+  --connection-overhead-ms 2 \
+  --min 2 \
+  --max 20 \
+  --format json
+```
+
+Latency queries must return milliseconds. If your histogram is in seconds, multiply by `1000` in PromQL as shown above.
+
+### Offline response-file example
+
+Use `--response-file` for reproducible tests, CI, examples, or environments where HTTPS/authentication is handled by another tool.
+
+```bash
+poolsim import prometheus \
+  --response-file docs/fixtures/prometheus-responses.json \
+  --service-name checkout-api \
+  --window 5m \
+  --current-pool-size 8 \
+  --max-server-connections 100 \
+  --connection-overhead-ms 2 \
+  --min 2 \
+  --max 20 \
+  --format json
+```
+
+### `import prometheus` source flags
+
+#### `--endpoint <url>`
+
+Prometheus base URL. Native endpoint mode currently supports `http://` URLs.
+
+Examples:
+
+```bash
+--endpoint http://localhost:9090
+--endpoint http://prometheus.monitoring.svc:9090/prometheus
+```
+
+#### `--response-file <path>`
+
+Reads a JSON file containing already-captured Prometheus API responses.
+
+Expected shape:
+
+```json
+{
+  "rps": { "status": "success", "data": { "resultType": "vector", "result": [] } },
+  "p50": { "status": "success", "data": { "resultType": "vector", "result": [] } },
+  "p95": { "status": "success", "data": { "resultType": "vector", "result": [] } },
+  "p99": { "status": "success", "data": { "resultType": "vector", "result": [] } }
+}
+```
+
+Use the checked-in example at `docs/fixtures/prometheus-responses.json`.
+
+#### `--header 'Name: value'`
+
+Adds a header to live Prometheus HTTP requests. This can be repeated.
+
+Example:
+
+```bash
+--header 'Authorization: Bearer token'
+```
+
+### `import prometheus` query flags
+
+These are required with `--endpoint` and ignored with `--response-file`:
+
+- `--rps-query`
+- `--p50-query`
+- `--p95-query`
+- `--p99-query`
+
+Each query must return one numeric value.
+
+### `import prometheus` metadata and pool flags
+
+Required:
+
+- `--current-pool-size`
+- `--max-server-connections`
+- `--min`
+- `--max`
+
+Optional:
+
+- `--service-name`
+- `--window`
+- `--observed-at`
+- `--connection-overhead-ms`
+- `--connection-establishment-overhead-ms`
+- `--idle-timeout-ms`
+- `--iterations`
+- `--seed`
+- `--distribution`
+- `--queue-model`
+- `--target-wait-p99-ms`
+- `--max-acceptable-rho`
+
+The output is the same `TelemetryRecommendation` JSON/table/CSV shape documented in `import telemetry`.
 
 ## Common Input Flags
 

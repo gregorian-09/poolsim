@@ -6,6 +6,7 @@
 
 mod args;
 mod config;
+mod prometheus;
 mod render;
 
 use std::process::ExitCode;
@@ -122,6 +123,15 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
                     cli.warn_exit,
                 ))
             }
+            args::ImportCommands::Prometheus(args) => {
+                let input = prometheus::resolve_prometheus_input(&args)?;
+                let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
+                render_telemetry(&recommendation, cli.format)?;
+                Ok(exit_code_for_saturation(
+                    recommendation.diff.worst_saturation(),
+                    cli.warn_exit,
+                ))
+            }
         },
     }
 }
@@ -220,7 +230,10 @@ mod tests {
     };
 
     use super::*;
-    use crate::args::{BatchArgs, CommonArgs, EvaluateArgs, ImportArgs, ImportCommands, SimulateArgs, TelemetryImportArgs};
+    use crate::args::{
+        BatchArgs, CommonArgs, EvaluateArgs, ImportArgs, ImportCommands, PrometheusImportArgs,
+        SimulateArgs, TelemetryImportArgs,
+    };
 
     fn sample_config_json() -> String {
         r#"
@@ -311,6 +324,27 @@ mod tests {
   }
 }
 "#
+        .to_string()
+    }
+
+    fn prometheus_response_json() -> String {
+        let response = |value: &str| {
+            serde_json::json!({
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [
+                        {"metric": {}, "value": [1710000000.0, value]}
+                    ]
+                }
+            })
+        };
+        serde_json::json!({
+            "rps": response("180"),
+            "p50": response("8"),
+            "p95": response("30"),
+            "p99": response("70")
+        })
         .to_string()
     }
 
@@ -563,9 +597,43 @@ mod tests {
         };
         let _ = run_with_cli(cli).expect("telemetry import should execute");
 
+        let prometheus_cfg = write_temp_file("main_prometheus", "json", &prometheus_response_json());
+        let cli = Cli {
+            command: Commands::Import(ImportArgs {
+                command: ImportCommands::Prometheus(PrometheusImportArgs {
+                    endpoint: None,
+                    response_file: Some(prometheus_cfg.clone()),
+                    rps_query: None,
+                    p50_query: None,
+                    p95_query: None,
+                    p99_query: None,
+                    header: Vec::new(),
+                    service_name: Some("checkout-api".to_string()),
+                    window: Some("5m".to_string()),
+                    observed_at: None,
+                    current_pool_size: 9,
+                    max_server_connections: 100,
+                    connection_overhead_ms: 2.0,
+                    idle_timeout_ms: None,
+                    min: 2,
+                    max: 20,
+                    iterations: Some(1_200),
+                    seed: Some(7),
+                    distribution: None,
+                    queue_model: None,
+                    target_wait_p99_ms: None,
+                    max_acceptable_rho: None,
+                }),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: true,
+        };
+        let _ = run_with_cli(cli).expect("prometheus import should execute");
+
         remove_if_exists(&cfg);
         remove_if_exists(&batch_cfg);
         remove_if_exists(&telemetry_cfg);
+        remove_if_exists(&prometheus_cfg);
     }
 
     #[test]
