@@ -540,6 +540,11 @@ mod tests {
         render_telemetry(&recommendation, OutputFormat::Json).expect("json telemetry should render");
         render_telemetry(&recommendation, OutputFormat::Csv).expect("csv telemetry should render");
         render_telemetry(&recommendation, OutputFormat::Table).expect("table telemetry should render");
+
+        let gate_report = gate::build_gate_report(recommendation, &gate::GatePolicy::default());
+        render_gate(&gate_report, OutputFormat::Json).expect("json gate should render");
+        render_gate(&gate_report, OutputFormat::Csv).expect("csv gate should render");
+        render_gate(&gate_report, OutputFormat::Table).expect("table gate should render");
     }
 
     #[test]
