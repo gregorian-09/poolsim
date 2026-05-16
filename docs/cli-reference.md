@@ -41,6 +41,8 @@ Available subcommands:
 - `import prometheus`
 - `gate telemetry`
 - `gate prometheus`
+- `doctor telemetry`
+- `doctor prometheus`
 
 Global flags:
 
@@ -549,6 +551,90 @@ jobs:
           toolchain: stable
       - run: cargo run -p poolsim-cli -- --format json gate --policy docs/fixtures/gate-policy.toml telemetry --config docs/fixtures/telemetry.json
 ```
+
+## `doctor`
+
+### Purpose
+
+Diagnoses the configured production pool against observed telemetry.
+
+Use `doctor` when you want an operational explanation instead of only a recommendation diff. It answers:
+
+- whether the current pool is healthy
+- whether it is too small
+- whether it is too large
+- whether it is close to saturation
+- whether the current or recommended pool is critically saturated
+
+The command reuses the same telemetry import paths as `import telemetry`, `import prometheus`, and `gate`.
+
+The JSON output is a `DoctorReport`:
+
+- `status`: `Healthy`, `TooSmall`, `TooLarge`, `CloseToSaturation`, or `Saturated`
+- `current_pool_size`: the configured production pool size
+- `recommended_pool_size`: the size selected by the sizing engine
+- `pool_size_delta`: positive when the pool should grow, negative when it can shrink
+- `current_rho`: current fixed-pool utilization ratio
+- `current_p99_queue_wait_ms`: current fixed-pool p99 queue wait
+- `current_saturation`: current fixed-pool saturation label
+- `recommended_saturation`: recommended-pool saturation label
+- `findings`: explanation and action rows
+- `recommendation`: the full underlying `TelemetryRecommendation`
+
+Default exit behavior is advisory:
+
+- `Saturated` returns exit code `2`
+- `Healthy`, `TooSmall`, `TooLarge`, and `CloseToSaturation` return exit code `0`
+- with global `--warn-exit`, `TooSmall` and `CloseToSaturation` return exit code `3`
+
+### Telemetry-file doctor example
+
+```bash
+poolsim --format json doctor telemetry \
+  --config docs/fixtures/telemetry.json
+```
+
+With warning exit behavior:
+
+```bash
+poolsim --warn-exit --format json doctor telemetry \
+  --config docs/fixtures/telemetry.json
+```
+
+### Prometheus response-file doctor example
+
+```bash
+poolsim --format json doctor prometheus \
+  --response-file docs/fixtures/prometheus-responses.json \
+  --service-name checkout-api \
+  --window 5m \
+  --current-pool-size 8 \
+  --max-server-connections 100 \
+  --connection-overhead-ms 2 \
+  --min 2 \
+  --max 20
+```
+
+### Doctor source subcommands
+
+#### `doctor telemetry`
+
+Uses the same flags as `import telemetry`:
+
+- `--config <path>`
+- `--current-pool-size <n>`
+
+#### `doctor prometheus`
+
+Uses the same flags as `import prometheus`:
+
+- `--endpoint <url>` or `--response-file <path>`
+- `--rps-query`
+- `--p50-query`
+- `--p95-query`
+- `--p99-query`
+- `--header`
+- telemetry metadata, pool, and simulation-option flags
 
 ## Common Input Flags
 
