@@ -296,6 +296,79 @@ fn docs_gate_examples_work() {
 }
 
 #[test]
+fn docs_guard_examples_work() {
+    let telemetry_output = run_cli(&[
+        "--format",
+        "json",
+        "guard",
+        "--policy",
+        &fixture("docs/fixtures/gate-policy.toml"),
+        "--max-current-rho",
+        "0.95",
+        "telemetry",
+        "--config",
+        &fixture("docs/fixtures/telemetry.json"),
+    ]);
+    assert_success(&telemetry_output, "guard telemetry docs example");
+    let report: Value = serde_json::from_str(&stdout_utf8(&telemetry_output))
+        .expect("guard output should deserialize");
+    assert_eq!(report["status"], "Pass");
+    assert_eq!(report["deployment_safe"], true);
+    assert_eq!(report["exit_code"], 0);
+    assert!(report["gate"]["checks"].is_array());
+
+    let prometheus_output = run_cli(&[
+        "--format",
+        "json",
+        "guard",
+        "--max-current-p99-queue-wait-ms",
+        "100",
+        "--max-current-mean-queue-wait-ms",
+        "20",
+        "--max-current-rho",
+        "0.95",
+        "prometheus",
+        "--response-file",
+        &fixture("docs/fixtures/prometheus-responses.json"),
+        "--service-name",
+        "checkout-api",
+        "--window",
+        "5m",
+        "--current-pool-size",
+        "8",
+        "--max-server-connections",
+        "100",
+        "--connection-overhead-ms",
+        "2",
+        "--min",
+        "2",
+        "--max",
+        "20",
+    ]);
+    assert_success(&prometheus_output, "guard prometheus docs example");
+    let report: Value = serde_json::from_str(&stdout_utf8(&prometheus_output))
+        .expect("guard prometheus output should deserialize");
+    assert_eq!(report["gate"]["service_name"], "checkout-api");
+    assert_eq!(report["gate"]["window"], "5m");
+
+    let failing_output = run_cli(&[
+        "--format",
+        "json",
+        "guard",
+        "--max-current-rho",
+        "0.01",
+        "telemetry",
+        "--config",
+        &fixture("docs/fixtures/telemetry.json"),
+    ]);
+    assert_eq!(failing_output.status.code(), Some(2));
+    let report: Value = serde_json::from_str(&stdout_utf8(&failing_output))
+        .expect("failing guard output should deserialize");
+    assert_eq!(report["status"], "Critical");
+    assert_eq!(report["deployment_safe"], false);
+}
+
+#[test]
 fn docs_doctor_examples_work() {
     let telemetry_output = run_cli(&[
         "--format",
