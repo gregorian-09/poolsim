@@ -62,6 +62,7 @@ Given workload data, pool bounds, and simulation options, `poolsim` can:
 - analyze simple step-load scenarios
 - import telemetry snapshots and diff recommendations against current production settings
 - query Prometheus-compatible telemetry and diff recommendations against current production settings
+- run CI capacity gates that fail deployments when telemetry violates pool policy
 
 Current surfaces:
 
@@ -143,6 +144,15 @@ cargo run -p poolsim-cli -- --format json import prometheus \
   --max 20
 ```
 
+Run a CI-style capacity gate:
+
+```bash
+cargo run -p poolsim-cli -- --format json gate \
+  --policy docs/fixtures/gate-policy.toml \
+  telemetry \
+  --config docs/fixtures/telemetry.json
+```
+
 ## Example CLI Output
 
 Real output from the checked-in CLI fixture:
@@ -175,6 +185,7 @@ Use `poolsim` when you need to:
 - compare candidate pool sizes against latency targets
 - justify pool settings to platform or database teams
 - test how close a workload is to saturation
+- block risky pool settings in CI before deployment
 - expose pool sizing as an internal API or service
 
 ## Product Surfaces

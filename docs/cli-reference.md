@@ -26,6 +26,7 @@ Checked-in runnable fixture files live under `docs/fixtures/`:
 - `docs/fixtures/batch.toml`
 - `docs/fixtures/telemetry.json`
 - `docs/fixtures/prometheus-responses.json`
+- `docs/fixtures/gate-policy.toml`
 - `docs/fixtures/latencies.txt`
 
 ## Command Summary
@@ -38,6 +39,8 @@ Available subcommands:
 - `batch`
 - `import telemetry`
 - `import prometheus`
+- `gate telemetry`
+- `gate prometheus`
 
 Global flags:
 
@@ -420,6 +423,132 @@ Optional:
 - `--max-acceptable-rho`
 
 The output is the same `TelemetryRecommendation` JSON/table/CSV shape documented in `import telemetry`.
+
+## `gate`
+
+### Purpose
+
+Runs a CI-friendly capacity gate against imported telemetry and exits according to policy.
+
+Use `gate` when a deployment, pull request, or scheduled capacity job needs a hard pass/fail answer instead of only a sizing recommendation.
+
+The command reuses the same telemetry import paths as `import telemetry` and `import prometheus`, then evaluates a `GateReport`:
+
+- `status`: `Pass`, `Warning`, or `Critical`
+- `checks`: one row per policy rule
+- `recommendation`: the full `TelemetryRecommendation` used by the gate
+- process exit code: `0` for pass, `1` for warning policy failure, `2` for critical policy failure
+
+Unlike global `--warn-exit`, `gate` has dedicated CI exit codes and does not require `--warn-exit`.
+
+### Telemetry-file gate example
+
+```bash
+poolsim --format json gate \
+  --policy docs/fixtures/gate-policy.toml \
+  telemetry \
+  --config docs/fixtures/telemetry.json
+```
+
+### Prometheus response-file gate example
+
+```bash
+poolsim --format json gate \
+  --policy docs/fixtures/gate-policy.toml \
+  prometheus \
+  --response-file docs/fixtures/prometheus-responses.json \
+  --service-name checkout-api \
+  --window 5m \
+  --current-pool-size 8 \
+  --max-server-connections 100 \
+  --connection-overhead-ms 2 \
+  --min 2 \
+  --max 20
+```
+
+### Direct policy flags
+
+All policy-file fields can also be supplied directly as CLI flags.
+
+```bash
+poolsim --format json gate \
+  --max-saturation warning \
+  --max-pool-increase-percent 50 \
+  --max-additional-connections 8 \
+  --max-recommended-pool-size 20 \
+  --max-recommended-p99-queue-wait-ms 80 \
+  --max-recommended-mean-queue-wait-ms 20 \
+  --max-recommended-rho 0.90 \
+  telemetry \
+  --config docs/fixtures/telemetry.json
+```
+
+CLI policy flags override values loaded from `--policy`.
+
+### Policy file
+
+`--policy` accepts JSON or TOML. The checked-in fixture is `docs/fixtures/gate-policy.toml`.
+
+```toml
+max_saturation = "Warning"
+max_pool_increase_percent = 100
+max_additional_connections = 10
+max_recommended_pool_size = 20
+max_recommended_p99_queue_wait_ms = 80
+max_recommended_mean_queue_wait_ms = 20
+max_recommended_rho = 0.90
+```
+
+Supported policy fields:
+
+- `max_saturation`: allowed worst saturation, one of `Ok`, `Warning`, or `Critical`; default is `Warning`
+- `max_pool_increase_percent`: maximum allowed positive pool-size increase percentage
+- `max_additional_connections`: maximum allowed additional connections
+- `max_recommended_pool_size`: maximum allowed recommended pool size
+- `max_recommended_p99_queue_wait_ms`: maximum allowed recommended p99 queue wait in milliseconds
+- `max_recommended_mean_queue_wait_ms`: maximum allowed recommended mean queue wait in milliseconds
+- `max_recommended_rho`: maximum allowed recommended utilization ratio
+- `expected_pool_size`: exact recommended pool size expected by a checked-in config
+
+### Gate source subcommands
+
+#### `gate telemetry`
+
+Uses the same flags as `import telemetry`:
+
+- `--config <path>`
+- `--current-pool-size <n>`
+
+#### `gate prometheus`
+
+Uses the same flags as `import prometheus`:
+
+- `--endpoint <url>` or `--response-file <path>`
+- `--rps-query`
+- `--p50-query`
+- `--p95-query`
+- `--p99-query`
+- `--header`
+- telemetry metadata, pool, and simulation-option flags
+
+### GitHub Actions example
+
+```yaml
+name: capacity-gate
+
+on:
+  pull_request:
+
+jobs:
+  poolsim:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - run: cargo run -p poolsim-cli -- --format json gate --policy docs/fixtures/gate-policy.toml telemetry --config docs/fixtures/telemetry.json
+```
 
 ## Common Input Flags
 

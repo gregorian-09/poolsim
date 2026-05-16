@@ -14,6 +14,7 @@ It supports:
 - batch execution
 - telemetry import and recommendation diff
 - Prometheus-compatible telemetry import
+- CI capacity gates for telemetry-backed release checks
 - table, JSON, and CSV output
 
 ## Install
@@ -30,6 +31,8 @@ cargo install poolsim-cli
 - `poolsim-cli batch`
 - `poolsim-cli import telemetry`
 - `poolsim-cli import prometheus`
+- `poolsim-cli gate telemetry`
+- `poolsim-cli gate prometheus`
 
 Supported output formats:
 
@@ -68,9 +71,19 @@ poolsim-cli --format json import prometheus \
   --max 20
 ```
 
+Capacity gate example:
+
+```bash
+poolsim-cli --format json gate \
+  --policy docs/fixtures/gate-policy.toml \
+  telemetry \
+  --config docs/fixtures/telemetry.json
+```
+
 ## Exit Codes
 
 - `0`: success
+- `1`: capacity-gate warning policy failure
 - `2`: critical outcome
 - `3`: warning/advisory outcome when `--warn-exit` is enabled
 

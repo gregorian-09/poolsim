@@ -1,0 +1,8 @@
+# CI capacity gate policy for the checked-in telemetry fixture.
+max_saturation = "Warning"
+max_pool_increase_percent = 100
+max_additional_connections = 10
+max_recommended_pool_size = 20
+max_recommended_p99_queue_wait_ms = 80
+max_recommended_mean_queue_wait_ms = 20
+max_recommended_rho = 0.90

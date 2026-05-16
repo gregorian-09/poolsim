@@ -170,14 +170,17 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_cli::args::OutputFormat`: output-format enum used by the clap parser.
 - `poolsim_cli::args::CliDistributionModel`: CLI-facing distribution-model enum.
 - `poolsim_cli::args::CliQueueModel`: CLI-facing queue-model enum.
+- `poolsim_cli::args::CliSaturationLevel`: CLI-facing saturation-level enum.
 - `poolsim_cli::args::Cli`: top-level clap parser type defined in the `args` module.
-- `poolsim_cli::args::Commands`: subcommand enum for `simulate`, `evaluate`, `sweep`, `batch`, and `import`.
+- `poolsim_cli::args::Commands`: subcommand enum for `simulate`, `evaluate`, `sweep`, `batch`, `import`, and `gate`.
 - `poolsim_cli::args::SimulateArgs`: argument model for the `simulate` subcommand.
 - `poolsim_cli::args::CommonArgs`: shared argument model for simulation-style commands.
 - `poolsim_cli::args::EvaluateArgs`: argument model for the `evaluate` subcommand.
 - `poolsim_cli::args::BatchArgs`: argument model for the `batch` subcommand.
 - `poolsim_cli::args::ImportArgs`: argument model for the `import` subcommand.
 - `poolsim_cli::args::ImportCommands`: nested import subcommand enum.
+- `poolsim_cli::args::GateArgs`: argument model for the `gate` subcommand.
+- `poolsim_cli::args::GateSourceCommands`: nested gate source enum for telemetry and Prometheus inputs.
 - `poolsim_cli::args::TelemetryImportArgs`: argument model for `import telemetry`.
 - `poolsim_cli::args::PrometheusImportArgs`: argument model for `import prometheus`.
 
@@ -202,6 +205,7 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_cli::render::csv::sweep`: renders a sensitivity sweep as CSV.
 - `poolsim_cli::render::csv::batch`: renders a batch result as CSV.
 - `poolsim_cli::render::csv::telemetry`: renders telemetry recommendation diff as CSV.
+- `poolsim_cli::render::csv::gate`: renders a capacity gate report as CSV.
 - `poolsim_cli::render::json`: JSON rendering module.
 - `poolsim_cli::render::json::print`: renders a serializable value as JSON.
 - `poolsim_cli::render::table`: table rendering module.
@@ -210,6 +214,7 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_cli::render::table::sweep`: renders a sensitivity sweep as a table.
 - `poolsim_cli::render::table::batch`: renders a batch result as a table.
 - `poolsim_cli::render::table::telemetry`: renders telemetry recommendation diff as a table.
+- `poolsim_cli::render::table::gate`: renders a capacity gate report as a table.
 
 ### Route-Local Web Models
 

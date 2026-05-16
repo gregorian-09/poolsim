@@ -10,6 +10,7 @@ This directory contains checked-in sample inputs used by the documentation and v
 - `batch.toml`: TOML batch input for `poolsim batch`
 - `telemetry.json`: telemetry import body for `poolsim import telemetry` and `POST /v1/telemetry/recommend`
 - `prometheus-responses.json`: offline Prometheus API response bundle for `poolsim import prometheus`
+- `gate-policy.toml`: CI capacity-gate policy for `poolsim gate`
 - `latencies.txt`: empirical latency sample file for `--samples-file`
 - `web-simulate.json`: request body for `POST /v1/simulate`
 - `web-evaluate.json`: request body for `POST /v1/evaluate`
