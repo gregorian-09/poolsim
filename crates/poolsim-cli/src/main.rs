@@ -6,6 +6,7 @@
 
 mod args;
 mod config;
+mod doctor;
 mod gate;
 mod prometheus;
 mod render;
@@ -145,6 +146,16 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
             render_gate(&report, cli.format)?;
             Ok(report.status.exit_code())
         }
+        Commands::Doctor(args) => {
+            let input = match args.source {
+                args::DoctorSourceCommands::Telemetry(source) => config::resolve_telemetry_input(&source)?,
+                args::DoctorSourceCommands::Prometheus(source) => prometheus::resolve_prometheus_input(&source)?,
+            };
+            let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
+            let report = doctor::build_doctor_report(recommendation);
+            render_doctor(&report, cli.format)?;
+            Ok(report.status.exit_code(cli.warn_exit))
+        }
     }
 }
 
@@ -193,6 +204,14 @@ fn render_gate(report: &gate::GateReport, format: OutputFormat) -> Result<()> {
         OutputFormat::Table => render::table::gate(report),
         OutputFormat::Json => render::json::print(report),
         OutputFormat::Csv => render::csv::gate(report),
+    }
+}
+
+fn render_doctor(report: &doctor::DoctorReport, format: OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Table => render::table::doctor(report),
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => render::csv::doctor(report),
     }
 }
 
@@ -251,8 +270,9 @@ mod tests {
 
     use super::*;
     use crate::args::{
-        BatchArgs, CommonArgs, EvaluateArgs, GateArgs, GateSourceCommands, ImportArgs,
-        ImportCommands, PrometheusImportArgs, SimulateArgs, TelemetryImportArgs,
+        BatchArgs, CommonArgs, DoctorArgs, DoctorSourceCommands, EvaluateArgs, GateArgs,
+        GateSourceCommands, ImportArgs, ImportCommands, PrometheusImportArgs, SimulateArgs,
+        TelemetryImportArgs,
     };
 
     fn sample_config_json() -> String {
@@ -545,6 +565,11 @@ mod tests {
         render_gate(&gate_report, OutputFormat::Json).expect("json gate should render");
         render_gate(&gate_report, OutputFormat::Csv).expect("csv gate should render");
         render_gate(&gate_report, OutputFormat::Table).expect("table gate should render");
+
+        let doctor_report = doctor::build_doctor_report(sample_recommendation());
+        render_doctor(&doctor_report, OutputFormat::Json).expect("json doctor should render");
+        render_doctor(&doctor_report, OutputFormat::Csv).expect("csv doctor should render");
+        render_doctor(&doctor_report, OutputFormat::Table).expect("table doctor should render");
     }
 
     #[test]
@@ -716,6 +741,50 @@ mod tests {
             warn_exit: false,
         };
         let _ = run_with_cli(cli).expect("gate prometheus should execute");
+
+        let cli = Cli {
+            command: Commands::Doctor(DoctorArgs {
+                source: DoctorSourceCommands::Telemetry(TelemetryImportArgs {
+                    config: telemetry_cfg.clone(),
+                    current_pool_size: Some(9),
+                }),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: true,
+        };
+        let _ = run_with_cli(cli).expect("doctor telemetry should execute");
+
+        let cli = Cli {
+            command: Commands::Doctor(DoctorArgs {
+                source: DoctorSourceCommands::Prometheus(PrometheusImportArgs {
+                    endpoint: None,
+                    response_file: Some(prometheus_cfg.clone()),
+                    rps_query: None,
+                    p50_query: None,
+                    p95_query: None,
+                    p99_query: None,
+                    header: Vec::new(),
+                    service_name: Some("checkout-api".to_string()),
+                    window: Some("5m".to_string()),
+                    observed_at: None,
+                    current_pool_size: 9,
+                    max_server_connections: 100,
+                    connection_overhead_ms: 2.0,
+                    idle_timeout_ms: None,
+                    min: 2,
+                    max: 20,
+                    iterations: Some(1_200),
+                    seed: Some(7),
+                    distribution: None,
+                    queue_model: None,
+                    target_wait_p99_ms: None,
+                    max_acceptable_rho: None,
+                }),
+            }),
+            format: OutputFormat::Csv,
+            warn_exit: false,
+        };
+        let _ = run_with_cli(cli).expect("doctor prometheus should execute");
 
         remove_if_exists(&cfg);
         remove_if_exists(&batch_cfg);

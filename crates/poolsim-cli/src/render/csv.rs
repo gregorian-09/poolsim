@@ -1,6 +1,7 @@
 use anyhow::Result;
-use csv::{Writer, WriterBuilder};
+use crate::doctor::DoctorReport;
 use crate::gate::GateReport;
+use csv::{Writer, WriterBuilder};
 use poolsim_core::telemetry::TelemetryRecommendation;
 use poolsim_core::types::{EvaluationResult, SensitivityRow, SimulationReport};
 
@@ -200,6 +201,52 @@ pub fn gate(report: &GateReport) -> Result<()> {
     Ok(())
 }
 
+pub fn doctor(report: &DoctorReport) -> Result<()> {
+    let mut wtr = WriterBuilder::new().flexible(true).from_writer(std::io::stdout());
+    wtr.write_record(["field", "value"])?;
+    wtr.write_record(["status", &format!("{:?}", report.status)])?;
+    wtr.write_record([
+        "service_name",
+        report.service_name.as_deref().unwrap_or("-"),
+    ])?;
+    wtr.write_record(["window", report.window.as_deref().unwrap_or("-")])?;
+    wtr.write_record([
+        "observed_at",
+        report.observed_at.as_deref().unwrap_or("-"),
+    ])?;
+    wtr.write_record(["current_pool_size", &report.current_pool_size.to_string()])?;
+    wtr.write_record([
+        "recommended_pool_size",
+        &report.recommended_pool_size.to_string(),
+    ])?;
+    wtr.write_record(["pool_size_delta", &report.pool_size_delta.to_string()])?;
+    wtr.write_record(["current_rho", &report.current_rho.to_string()])?;
+    wtr.write_record([
+        "current_p99_queue_wait_ms",
+        &report.current_p99_queue_wait_ms.to_string(),
+    ])?;
+    wtr.write_record([
+        "current_saturation",
+        &format!("{:?}", report.current_saturation),
+    ])?;
+    wtr.write_record([
+        "recommended_saturation",
+        &format!("{:?}", report.recommended_saturation),
+    ])?;
+    wtr.write_record(["", ""])?;
+    wtr.write_record(["finding", "severity", "message", "action"])?;
+    for finding in &report.findings {
+        wtr.write_record([
+            finding.name.clone(),
+            format!("{:?}", finding.severity),
+            finding.message.clone(),
+            finding.action.clone(),
+        ])?;
+    }
+    wtr.flush()?;
+    Ok(())
+}
+
 fn write_sensitivity_row(wtr: &mut Writer<std::io::Stdout>, row: &SensitivityRow) -> Result<()> {
     wtr.write_record([
         row.pool_size.to_string(),
@@ -302,5 +349,7 @@ mod tests {
             &crate::gate::GatePolicy::default(),
         ))
         .expect("gate CSV render should succeed");
+        doctor(&crate::doctor::build_doctor_report(sample_recommendation()))
+            .expect("doctor CSV render should succeed");
     }
 }

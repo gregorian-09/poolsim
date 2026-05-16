@@ -1,6 +1,7 @@
 use std::io::IsTerminal;
 
 use anyhow::Result;
+use crate::doctor::DoctorReport;
 use crate::gate::GateReport;
 use poolsim_core::telemetry::TelemetryRecommendation;
 use poolsim_core::types::{EvaluationResult, RiskLevel, SaturationLevel, SensitivityRow, SimulationReport};
@@ -47,6 +48,14 @@ struct GateCheckTableRow {
     observed: String,
     threshold: String,
     message: String,
+}
+
+#[derive(Tabled)]
+struct DoctorFindingTableRow {
+    finding: String,
+    severity: String,
+    message: String,
+    action: String,
 }
 
 pub fn simulation(report: &SimulationReport) -> Result<()> {
@@ -316,6 +325,73 @@ pub fn gate(report: &GateReport) -> Result<()> {
     Ok(())
 }
 
+pub fn doctor(report: &DoctorReport) -> Result<()> {
+    let summary = vec![
+        SummaryRow {
+            metric: "status".to_string(),
+            value: format!("{:?}", report.status),
+        },
+        SummaryRow {
+            metric: "service_name".to_string(),
+            value: report.service_name.as_deref().unwrap_or("-").to_string(),
+        },
+        SummaryRow {
+            metric: "window".to_string(),
+            value: report.window.as_deref().unwrap_or("-").to_string(),
+        },
+        SummaryRow {
+            metric: "observed_at".to_string(),
+            value: report.observed_at.as_deref().unwrap_or("-").to_string(),
+        },
+        SummaryRow {
+            metric: "current_pool_size".to_string(),
+            value: report.current_pool_size.to_string(),
+        },
+        SummaryRow {
+            metric: "recommended_pool_size".to_string(),
+            value: report.recommended_pool_size.to_string(),
+        },
+        SummaryRow {
+            metric: "pool_size_delta".to_string(),
+            value: format!("{:+}", report.pool_size_delta),
+        },
+        SummaryRow {
+            metric: "current_rho".to_string(),
+            value: format!("{:.4}", report.current_rho),
+        },
+        SummaryRow {
+            metric: "current_p99_queue_wait_ms".to_string(),
+            value: format!("{:.3}", report.current_p99_queue_wait_ms),
+        },
+        SummaryRow {
+            metric: "current_saturation".to_string(),
+            value: format!("{:?}", report.current_saturation),
+        },
+        SummaryRow {
+            metric: "recommended_saturation".to_string(),
+            value: format!("{:?}", report.recommended_saturation),
+        },
+    ];
+    let mut summary_table = Table::new(summary);
+    summary_table.with(Style::rounded());
+    println!("{summary_table}");
+
+    let rows: Vec<DoctorFindingTableRow> = report
+        .findings
+        .iter()
+        .map(|finding| DoctorFindingTableRow {
+            finding: finding.name.clone(),
+            severity: format!("{:?}", finding.severity),
+            message: finding.message.clone(),
+            action: finding.action.clone(),
+        })
+        .collect();
+    let mut findings_table = Table::new(rows);
+    findings_table.with(Style::psql());
+    println!("{findings_table}");
+    Ok(())
+}
+
 fn render_pool_size(pool_size: u32, recommended: Option<u32>, risk: RiskLevel, use_color: bool) -> String {
     let text = pool_size.to_string();
     if !use_color {
@@ -473,5 +549,7 @@ mod tests {
             &crate::gate::GatePolicy::default(),
         ))
         .expect("gate table should render");
+        doctor(&crate::doctor::build_doctor_report(sample_recommendation()))
+            .expect("doctor table should render");
     }
 }

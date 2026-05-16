@@ -65,6 +65,7 @@ pub enum Commands {
     Batch(BatchArgs),
     Import(ImportArgs),
     Gate(GateArgs),
+    Doctor(DoctorArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -169,6 +170,18 @@ pub struct GateArgs {
 
 #[derive(Debug, Clone, Subcommand)]
 pub enum GateSourceCommands {
+    Telemetry(TelemetryImportArgs),
+    Prometheus(PrometheusImportArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct DoctorArgs {
+    #[command(subcommand)]
+    pub source: DoctorSourceCommands,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum DoctorSourceCommands {
     Telemetry(TelemetryImportArgs),
     Prometheus(PrometheusImportArgs),
 }
@@ -475,6 +488,40 @@ mod tests {
                 }
             }
             _ => panic!("expected gate command"),
+        }
+    }
+
+    #[test]
+    fn parser_handles_doctor_prometheus_subcommand() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "--format",
+            "json",
+            "doctor",
+            "prometheus",
+            "--response-file",
+            "prometheus.json",
+            "--current-pool-size",
+            "12",
+            "--max-server-connections",
+            "100",
+            "--min",
+            "2",
+            "--max",
+            "24",
+        ])
+        .expect("doctor prometheus args should parse");
+
+        match cli.command {
+            Commands::Doctor(args) => match args.source {
+                DoctorSourceCommands::Prometheus(prometheus) => {
+                    assert_eq!(prometheus.response_file, Some(PathBuf::from("prometheus.json")));
+                    assert_eq!(prometheus.current_pool_size, 12);
+                    assert_eq!(prometheus.max_server_connections, 100);
+                }
+                DoctorSourceCommands::Telemetry(_) => panic!("expected prometheus source"),
+            },
+            _ => panic!("expected doctor command"),
         }
     }
 }
