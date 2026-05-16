@@ -41,6 +41,8 @@ Available subcommands:
 - `import prometheus`
 - `gate telemetry`
 - `gate prometheus`
+- `guard telemetry`
+- `guard prometheus`
 - `doctor telemetry`
 - `doctor prometheus`
 - `generate-config telemetry`
@@ -484,6 +486,9 @@ poolsim --format json gate \
   --max-recommended-p99-queue-wait-ms 80 \
   --max-recommended-mean-queue-wait-ms 20 \
   --max-recommended-rho 0.90 \
+  --max-current-p99-queue-wait-ms 100 \
+  --max-current-mean-queue-wait-ms 25 \
+  --max-current-rho 0.95 \
   telemetry \
   --config docs/fixtures/telemetry.json
 ```
@@ -502,6 +507,9 @@ max_recommended_pool_size = 20
 max_recommended_p99_queue_wait_ms = 80
 max_recommended_mean_queue_wait_ms = 20
 max_recommended_rho = 0.90
+max_current_p99_queue_wait_ms = 100
+max_current_mean_queue_wait_ms = 25
+max_current_rho = 0.95
 ```
 
 Supported policy fields:
@@ -513,6 +521,9 @@ Supported policy fields:
 - `max_recommended_p99_queue_wait_ms`: maximum allowed recommended p99 queue wait in milliseconds
 - `max_recommended_mean_queue_wait_ms`: maximum allowed recommended mean queue wait in milliseconds
 - `max_recommended_rho`: maximum allowed recommended utilization ratio
+- `max_current_p99_queue_wait_ms`: maximum allowed p99 queue wait for the currently configured production pool
+- `max_current_mean_queue_wait_ms`: maximum allowed mean queue wait for the currently configured production pool
+- `max_current_rho`: maximum allowed utilization ratio for the currently configured production pool
 - `expected_pool_size`: exact recommended pool size expected by a checked-in config
 
 ### Gate source subcommands
@@ -549,10 +560,105 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
+      - uses: dtolnay/rust-toolchain@stable
       - run: cargo run -p poolsim-cli -- --format json gate --policy docs/fixtures/gate-policy.toml telemetry --config docs/fixtures/telemetry.json
+```
+
+## `guard`
+
+### Purpose
+
+Runs CI guard mode against imported telemetry and returns deployment-oriented output.
+
+`guard` uses the same policy engine as `gate`, but wraps the result in a `GuardReport` with fields that are easier for CI systems to consume:
+
+- `status`: `Pass`, `Warning`, or `Critical`
+- `deployment_safe`: `true` only when the policy passes
+- `exit_code`: numeric process exit code that the CLI returns
+- `reason`: short human-readable deployment summary
+- `gate`: the underlying `GateReport` with all policy checks and the full recommendation
+
+Use `guard` when you want a deployment or pull request to fail if the currently configured pool becomes unsafe under new traffic or latency assumptions.
+
+Exit codes:
+
+- `0`: deployment is within policy
+- `1`: deployment has warning-level policy failures
+- `2`: deployment has critical policy failures
+
+### Telemetry-file guard example
+
+```bash
+poolsim --format json guard \
+  --policy docs/fixtures/gate-policy.toml \
+  --max-current-rho 0.95 \
+  telemetry \
+  --config docs/fixtures/telemetry.json
+```
+
+### Prometheus response-file guard example
+
+```bash
+poolsim --format json guard \
+  --max-current-p99-queue-wait-ms 100 \
+  --max-current-mean-queue-wait-ms 20 \
+  --max-current-rho 0.95 \
+  prometheus \
+  --response-file docs/fixtures/prometheus-responses.json \
+  --service-name checkout-api \
+  --window 5m \
+  --current-pool-size 8 \
+  --max-server-connections 100 \
+  --connection-overhead-ms 2 \
+  --min 2 \
+  --max 20
+```
+
+### Failing guard example
+
+```bash
+poolsim --format json guard \
+  --max-current-rho 0.01 \
+  telemetry \
+  --config docs/fixtures/telemetry.json
+```
+
+### Guard source subcommands
+
+#### `guard telemetry`
+
+Uses the same flags as `import telemetry`:
+
+- `--config <path>`
+- `--current-pool-size <n>`
+
+#### `guard prometheus`
+
+Uses the same flags as `import prometheus`:
+
+- `--endpoint <url>` or `--response-file <path>`
+- `--rps-query`
+- `--p50-query`
+- `--p95-query`
+- `--p99-query`
+- `--header`
+- telemetry metadata, pool, and simulation-option flags
+
+### GitHub Actions guard example
+
+```yaml
+name: pool-guard
+
+on:
+  pull_request:
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo run -p poolsim-cli -- --format json guard --policy docs/fixtures/gate-policy.toml --max-current-rho 0.95 telemetry --config docs/fixtures/telemetry.json
 ```
 
 ## `doctor`

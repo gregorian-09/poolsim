@@ -35,6 +35,8 @@ cargo install poolsim-cli
 - `poolsim-cli import prometheus`
 - `poolsim-cli gate telemetry`
 - `poolsim-cli gate prometheus`
+- `poolsim-cli guard telemetry`
+- `poolsim-cli guard prometheus`
 - `poolsim-cli doctor telemetry`
 - `poolsim-cli doctor prometheus`
 - `poolsim-cli generate-config telemetry`
@@ -87,6 +89,16 @@ poolsim-cli --format json gate \
   --config docs/fixtures/telemetry.json
 ```
 
+Deployment guard example:
+
+```bash
+poolsim-cli --format json guard \
+  --policy docs/fixtures/gate-policy.toml \
+  --max-current-rho 0.95 \
+  telemetry \
+  --config docs/fixtures/telemetry.json
+```
+
 Doctor example:
 
 ```bash
@@ -106,7 +118,7 @@ poolsim-cli --format json generate-config \
 ## Exit Codes
 
 - `0`: success
-- `1`: capacity-gate warning policy failure
+- `1`: capacity-gate or deployment-guard warning policy failure
 - `2`: critical outcome
 - `3`: warning/advisory outcome when `--warn-exit` is enabled
 

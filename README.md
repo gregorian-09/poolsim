@@ -63,6 +63,7 @@ Given workload data, pool bounds, and simulation options, `poolsim` can:
 - import telemetry snapshots and diff recommendations against current production settings
 - query Prometheus-compatible telemetry and diff recommendations against current production settings
 - run CI capacity gates that fail deployments when telemetry violates pool policy
+- run deployment guard checks that return CI-ready safety fields and exit codes
 - generate framework-specific pool configuration snippets from the recommendation
 
 Current surfaces:
@@ -154,6 +155,16 @@ cargo run -p poolsim-cli -- --format json gate \
   --config docs/fixtures/telemetry.json
 ```
 
+Run the deployment guard wrapper for CI pipelines that need explicit `deployment_safe`, `exit_code`, and `reason` fields:
+
+```bash
+cargo run -p poolsim-cli -- --format json guard \
+  --policy docs/fixtures/gate-policy.toml \
+  --max-current-rho 0.95 \
+  telemetry \
+  --config docs/fixtures/telemetry.json
+```
+
 Diagnose whether the configured production pool is healthy, too small, too large, or close to saturation:
 
 ```bash
@@ -204,6 +215,7 @@ Use `poolsim` when you need to:
 - justify pool settings to platform or database teams
 - test how close a workload is to saturation
 - block risky pool settings in CI before deployment
+- expose deployment-safe guard reports to release automation
 - expose pool sizing as an internal API or service
 
 ## Product Surfaces
