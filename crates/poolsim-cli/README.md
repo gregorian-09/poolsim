@@ -12,6 +12,7 @@ It supports:
 - fixed-size evaluation
 - sensitivity sweeps
 - batch execution
+- named scenario comparison
 - telemetry import and recommendation diff
 - Prometheus-compatible telemetry import
 - CI capacity gates for telemetry-backed release checks
@@ -31,6 +32,7 @@ cargo install poolsim-cli
 - `poolsim-cli evaluate`
 - `poolsim-cli sweep`
 - `poolsim-cli batch`
+- `poolsim-cli compare`
 - `poolsim-cli import telemetry`
 - `poolsim-cli import prometheus`
 - `poolsim-cli gate telemetry`
@@ -87,6 +89,12 @@ poolsim-cli --format json gate \
   --policy docs/fixtures/gate-policy.toml \
   telemetry \
   --config docs/fixtures/telemetry.json
+```
+
+Scenario comparison example:
+
+```bash
+poolsim-cli --format json compare --config docs/fixtures/scenarios.json
 ```
 
 Deployment guard example:

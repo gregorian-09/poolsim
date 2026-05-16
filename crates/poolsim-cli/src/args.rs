@@ -63,6 +63,7 @@ pub enum Commands {
     Evaluate(EvaluateArgs),
     Sweep(CommonArgs),
     Batch(BatchArgs),
+    Compare(CompareArgs),
     Import(ImportArgs),
     Gate(GateArgs),
     Guard(GuardArgs),
@@ -150,6 +151,15 @@ pub struct BatchArgs {
 }
 
 #[derive(Debug, Clone, Args)]
+pub struct CompareArgs {
+    #[arg(long)]
+    pub config: PathBuf,
+
+    #[arg(long)]
+    pub baseline: Option<String>,
+}
+
+#[derive(Debug, Clone, Args)]
 pub struct ImportArgs {
     #[command(subcommand)]
     pub command: ImportCommands,
@@ -188,6 +198,7 @@ pub struct GateArgs {
 }
 
 #[derive(Debug, Clone, Subcommand)]
+#[allow(clippy::large_enum_variant)]
 pub enum GateSourceCommands {
     Telemetry(TelemetryImportArgs),
     Prometheus(PrometheusImportArgs),
@@ -232,6 +243,7 @@ pub struct DoctorArgs {
 }
 
 #[derive(Debug, Clone, Subcommand)]
+#[allow(clippy::large_enum_variant)]
 pub enum DoctorSourceCommands {
     Telemetry(TelemetryImportArgs),
     Prometheus(PrometheusImportArgs),
@@ -286,6 +298,7 @@ impl From<CliSaturationLevel> for SaturationLevel {
 }
 
 #[derive(Debug, Clone, Subcommand)]
+#[allow(clippy::large_enum_variant)]
 pub enum ImportCommands {
     Telemetry(TelemetryImportArgs),
     Prometheus(PrometheusImportArgs),
@@ -302,10 +315,18 @@ pub struct TelemetryImportArgs {
 
 #[derive(Debug, Clone, Args)]
 pub struct PrometheusImportArgs {
-    #[arg(long, conflicts_with = "response_file", required_unless_present = "response_file")]
+    #[arg(
+        long,
+        conflicts_with = "response_file",
+        required_unless_present = "response_file"
+    )]
     pub endpoint: Option<String>,
 
-    #[arg(long, conflicts_with = "endpoint", required_unless_present = "endpoint")]
+    #[arg(
+        long,
+        conflicts_with = "endpoint",
+        required_unless_present = "endpoint"
+    )]
     pub response_file: Option<PathBuf>,
 
     #[arg(long, required_unless_present = "response_file")]
@@ -331,7 +352,11 @@ pub struct PrometheusImportArgs {
     pub current_pool_size: u32,
     #[arg(long)]
     pub max_server_connections: u32,
-    #[arg(long, alias = "connection-establishment-overhead-ms", default_value_t = 0.0)]
+    #[arg(
+        long,
+        alias = "connection-establishment-overhead-ms",
+        default_value_t = 0.0
+    )]
     pub connection_overhead_ms: f64,
     #[arg(long)]
     pub idle_timeout_ms: Option<u64>,
@@ -536,6 +561,29 @@ mod tests {
     }
 
     #[test]
+    fn parser_handles_compare_subcommand() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "--format",
+            "json",
+            "compare",
+            "--config",
+            "scenarios.json",
+            "--baseline",
+            "normal",
+        ])
+        .expect("compare args should parse");
+
+        match cli.command {
+            Commands::Compare(args) => {
+                assert_eq!(args.config, PathBuf::from("scenarios.json"));
+                assert_eq!(args.baseline.as_deref(), Some("normal"));
+            }
+            _ => panic!("expected compare command"),
+        }
+    }
+
+    #[test]
     fn parser_handles_import_telemetry_subcommand() {
         let cli = Cli::try_parse_from([
             "poolsim",
@@ -596,7 +644,10 @@ mod tests {
         match cli.command {
             Commands::Import(args) => match args.command {
                 ImportCommands::Prometheus(prometheus) => {
-                    assert_eq!(prometheus.endpoint.as_deref(), Some("http://localhost:9090"));
+                    assert_eq!(
+                        prometheus.endpoint.as_deref(),
+                        Some("http://localhost:9090")
+                    );
                     assert_eq!(prometheus.current_pool_size, 12);
                     assert_eq!(prometheus.max_server_connections, 100);
                     assert_eq!(prometheus.header.len(), 1);
@@ -647,7 +698,10 @@ mod tests {
         match cli.command {
             Commands::Gate(args) => {
                 assert_eq!(args.policy, Some(PathBuf::from("gate.toml")));
-                assert!(matches!(args.max_saturation, Some(CliSaturationLevel::Warning)));
+                assert!(matches!(
+                    args.max_saturation,
+                    Some(CliSaturationLevel::Warning)
+                ));
                 assert_eq!(args.max_pool_increase_percent, Some(25.0));
                 assert_eq!(args.max_additional_connections, Some(4));
                 assert_eq!(args.max_recommended_pool_size, Some(16));
@@ -700,7 +754,10 @@ mod tests {
                 assert_eq!(args.max_current_rho, Some(0.85));
                 match args.source {
                     GateSourceCommands::Prometheus(prometheus) => {
-                        assert_eq!(prometheus.response_file, Some(PathBuf::from("prometheus.json")));
+                        assert_eq!(
+                            prometheus.response_file,
+                            Some(PathBuf::from("prometheus.json"))
+                        );
                         assert_eq!(prometheus.current_pool_size, 12);
                     }
                     GateSourceCommands::Telemetry(_) => panic!("expected prometheus source"),
@@ -734,7 +791,10 @@ mod tests {
         match cli.command {
             Commands::Doctor(args) => match args.source {
                 DoctorSourceCommands::Prometheus(prometheus) => {
-                    assert_eq!(prometheus.response_file, Some(PathBuf::from("prometheus.json")));
+                    assert_eq!(
+                        prometheus.response_file,
+                        Some(PathBuf::from("prometheus.json"))
+                    );
                     assert_eq!(prometheus.current_pool_size, 12);
                     assert_eq!(prometheus.max_server_connections, 100);
                 }

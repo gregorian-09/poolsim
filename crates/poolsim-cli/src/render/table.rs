@@ -1,12 +1,15 @@
 use std::io::IsTerminal;
 
-use anyhow::Result;
+use crate::compare::ScenarioComparisonReport;
 use crate::config_gen::ConfigSnippetReport;
 use crate::doctor::DoctorReport;
 use crate::gate::GateReport;
 use crate::guard::GuardReport;
+use anyhow::Result;
 use poolsim_core::telemetry::TelemetryRecommendation;
-use poolsim_core::types::{EvaluationResult, RiskLevel, SaturationLevel, SensitivityRow, SimulationReport};
+use poolsim_core::types::{
+    EvaluationResult, RiskLevel, SaturationLevel, SensitivityRow, SimulationReport,
+};
 use tabled::{settings::Style, Table, Tabled};
 
 #[derive(Tabled)]
@@ -30,6 +33,19 @@ struct BatchTableRow {
     optimal_pool_size: u32,
     utilisation_rho: String,
     p99_queue_wait_ms: String,
+    saturation: String,
+}
+
+#[derive(Tabled)]
+struct ScenarioComparisonTableRow {
+    scenario: String,
+    baseline: String,
+    requests_per_second: String,
+    optimal_pool_size: u32,
+    pool_size_delta: String,
+    p99_queue_wait_ms: String,
+    p99_queue_wait_delta_ms: String,
+    utilisation_rho: String,
     saturation: String,
 }
 
@@ -69,7 +85,10 @@ pub fn simulation(report: &SimulationReport) -> Result<()> {
         },
         SummaryRow {
             metric: "confidence_interval".to_string(),
-            value: format!("{}..{}", report.confidence_interval.0, report.confidence_interval.1),
+            value: format!(
+                "{}..{}",
+                report.confidence_interval.0, report.confidence_interval.1
+            ),
         },
         SummaryRow {
             metric: "cold_start_min_pool_size".to_string(),
@@ -101,7 +120,12 @@ pub fn simulation(report: &SimulationReport) -> Result<()> {
         .sensitivity
         .iter()
         .map(|row| SensitivityTableRow {
-            pool_size: render_pool_size(row.pool_size, Some(report.optimal_pool_size), row.risk, use_color),
+            pool_size: render_pool_size(
+                row.pool_size,
+                Some(report.optimal_pool_size),
+                row.risk,
+                use_color,
+            ),
             utilisation_rho: format!("{:.4}", row.utilisation_rho),
             mean_queue_wait_ms: format!("{:.3}", row.mean_queue_wait_ms),
             p99_queue_wait_ms: format!("{:.3}", row.p99_queue_wait_ms),
@@ -217,12 +241,56 @@ pub fn batch(reports: &[SimulationReport]) -> Result<()> {
     Ok(())
 }
 
+pub fn compare(report: &ScenarioComparisonReport) -> Result<()> {
+    let summary = vec![
+        SummaryRow {
+            metric: "baseline".to_string(),
+            value: report.baseline.clone(),
+        },
+        SummaryRow {
+            metric: "scenario_count".to_string(),
+            value: report.rows.len().to_string(),
+        },
+        SummaryRow {
+            metric: "worst_saturation".to_string(),
+            value: format!("{:?}", report.worst_saturation),
+        },
+    ];
+    let mut summary_table = Table::new(summary);
+    summary_table.with(Style::rounded());
+    println!("{summary_table}");
+
+    let rows: Vec<ScenarioComparisonTableRow> = report
+        .rows
+        .iter()
+        .map(|row| ScenarioComparisonTableRow {
+            scenario: row.name.clone(),
+            baseline: row.is_baseline.to_string(),
+            requests_per_second: format!("{:.3}", row.requests_per_second),
+            optimal_pool_size: row.optimal_pool_size,
+            pool_size_delta: format!("{:+}", row.pool_size_delta),
+            p99_queue_wait_ms: format!("{:.3}", row.p99_queue_wait_ms),
+            p99_queue_wait_delta_ms: format!("{:+.3}", row.p99_queue_wait_delta_ms),
+            utilisation_rho: format!("{:.4}", row.utilisation_rho),
+            saturation: format!("{:?}", row.saturation),
+        })
+        .collect();
+    let mut table = Table::new(rows);
+    table.with(Style::psql());
+    println!("{table}");
+    Ok(())
+}
+
 pub fn telemetry(recommendation: &TelemetryRecommendation) -> Result<()> {
     let diff = &recommendation.diff;
     let summary = vec![
         SummaryRow {
             metric: "service_name".to_string(),
-            value: recommendation.service_name.as_deref().unwrap_or("-").to_string(),
+            value: recommendation
+                .service_name
+                .as_deref()
+                .unwrap_or("-")
+                .to_string(),
         },
         SummaryRow {
             metric: "window".to_string(),
@@ -230,7 +298,11 @@ pub fn telemetry(recommendation: &TelemetryRecommendation) -> Result<()> {
         },
         SummaryRow {
             metric: "observed_at".to_string(),
-            value: recommendation.observed_at.as_deref().unwrap_or("-").to_string(),
+            value: recommendation
+                .observed_at
+                .as_deref()
+                .unwrap_or("-")
+                .to_string(),
         },
         SummaryRow {
             metric: "current_pool_size".to_string(),
@@ -487,7 +559,12 @@ pub fn config_snippet(report: &ConfigSnippetReport) -> Result<()> {
     Ok(())
 }
 
-fn render_pool_size(pool_size: u32, recommended: Option<u32>, risk: RiskLevel, use_color: bool) -> String {
+fn render_pool_size(
+    pool_size: u32,
+    recommended: Option<u32>,
+    risk: RiskLevel,
+    use_color: bool,
+) -> String {
     let text = pool_size.to_string();
     if !use_color {
         return text;
@@ -535,7 +612,9 @@ fn render_saturation(saturation: SaturationLevel, use_color: bool) -> String {
 #[cfg(test)]
 mod tests {
     use poolsim_core::telemetry::{PoolRecommendationDiff, PoolSizeChange};
-    use poolsim_core::types::{StepLoadResult, RiskLevel, SaturationLevel};
+    use poolsim_core::types::{
+        PoolConfig, RiskLevel, SaturationLevel, SimulationOptions, StepLoadResult, WorkloadConfig,
+    };
 
     use super::*;
 
@@ -609,6 +688,32 @@ mod tests {
         }
     }
 
+    fn sample_scenario(name: &str, rps: f64) -> crate::config::ScenarioInput {
+        crate::config::ScenarioInput {
+            name: name.to_string(),
+            workload: WorkloadConfig {
+                requests_per_second: rps,
+                latency_p50_ms: 8.0,
+                latency_p95_ms: 30.0,
+                latency_p99_ms: 70.0,
+                raw_samples_ms: None,
+                step_load_profile: None,
+            },
+            pool: PoolConfig {
+                max_server_connections: 100,
+                connection_overhead_ms: 2.0,
+                idle_timeout_ms: None,
+                min_pool_size: 2,
+                max_pool_size: 20,
+            },
+            options: SimulationOptions {
+                iterations: 1_200,
+                seed: Some(5),
+                ..SimulationOptions::default()
+            },
+        }
+    }
+
     #[test]
     fn private_render_helpers_cover_colored_and_plain_paths() {
         assert_eq!(render_pool_size(4, None, RiskLevel::Low, false), "4");
@@ -638,16 +743,31 @@ mod tests {
         evaluation(&sample_evaluation()).expect("evaluation table should render");
         sweep(&sample_rows()).expect("sweep table should render");
         batch(&[sample_report(), sample_report()]).expect("batch table should render");
+        compare(
+            &crate::compare::build_scenario_comparison_report(
+                crate::config::ScenarioComparisonInput {
+                    baseline: "normal".to_string(),
+                    scenarios: vec![
+                        sample_scenario("normal", 180.0),
+                        sample_scenario("peak", 260.0),
+                    ],
+                },
+            )
+            .expect("comparison report should build"),
+        )
+        .expect("compare table should render");
         telemetry(&sample_recommendation()).expect("telemetry table should render");
         gate(&crate::gate::build_gate_report(
             sample_recommendation(),
             &crate::gate::GatePolicy::default(),
         ))
         .expect("gate table should render");
-        guard(&crate::guard::build_guard_report(crate::gate::build_gate_report(
-            sample_recommendation(),
-            &crate::gate::GatePolicy::default(),
-        )))
+        guard(&crate::guard::build_guard_report(
+            crate::gate::build_gate_report(
+                sample_recommendation(),
+                &crate::gate::GatePolicy::default(),
+            ),
+        ))
         .expect("guard table should render");
         doctor(&crate::doctor::build_doctor_report(sample_recommendation()))
             .expect("doctor table should render");
@@ -660,25 +780,27 @@ mod tests {
                 idle_timeout_ms: 600_000,
                 database_url_env: "DATABASE_URL".to_string(),
                 pool_name: "checkout-pool".to_string(),
-                source: crate::args::GenerateConfigSourceCommands::Simulate(crate::args::CommonArgs {
-                    config: None,
-                    rps: None,
-                    p50: None,
-                    p95: None,
-                    p99: None,
-                    samples_file: None,
-                    max_server_connections: None,
-                    connection_overhead_ms: None,
-                    idle_timeout_ms: None,
-                    min: None,
-                    max: None,
-                    iterations: None,
-                    seed: None,
-                    distribution: None,
-                    queue_model: None,
-                    target_wait_p99_ms: None,
-                    max_acceptable_rho: None,
-                }),
+                source: crate::args::GenerateConfigSourceCommands::Simulate(
+                    crate::args::CommonArgs {
+                        config: None,
+                        rps: None,
+                        p50: None,
+                        p95: None,
+                        p99: None,
+                        samples_file: None,
+                        max_server_connections: None,
+                        connection_overhead_ms: None,
+                        idle_timeout_ms: None,
+                        min: None,
+                        max: None,
+                        iterations: None,
+                        seed: None,
+                        distribution: None,
+                        queue_model: None,
+                        target_wait_p99_ms: None,
+                        max_acceptable_rho: None,
+                    },
+                ),
             },
             crate::config_gen::ConfigRecommendation {
                 source: crate::config_gen::ConfigSourceKind::Simulate,

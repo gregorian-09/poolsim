@@ -1,20 +1,26 @@
-use anyhow::Result;
+use crate::compare::ScenarioComparisonReport;
 use crate::config_gen::ConfigSnippetReport;
 use crate::doctor::DoctorReport;
 use crate::gate::GateReport;
 use crate::guard::GuardReport;
+use anyhow::Result;
 use csv::{Writer, WriterBuilder};
 use poolsim_core::telemetry::TelemetryRecommendation;
 use poolsim_core::types::{EvaluationResult, SensitivityRow, SimulationReport};
 
 pub fn simulation(report: &SimulationReport) -> Result<()> {
-    let mut wtr = WriterBuilder::new().flexible(true).from_writer(std::io::stdout());
+    let mut wtr = WriterBuilder::new()
+        .flexible(true)
+        .from_writer(std::io::stdout());
 
     wtr.write_record(["summary_field", "value"])?;
     wtr.write_record(["optimal_pool_size", &report.optimal_pool_size.to_string()])?;
     wtr.write_record([
         "confidence_interval",
-        &format!("{}..{}", report.confidence_interval.0, report.confidence_interval.1),
+        &format!(
+            "{}..{}",
+            report.confidence_interval.0, report.confidence_interval.1
+        ),
     ])?;
     wtr.write_record([
         "cold_start_min_pool_size",
@@ -62,7 +68,9 @@ pub fn simulation(report: &SimulationReport) -> Result<()> {
 }
 
 pub fn evaluation(result: &EvaluationResult) -> Result<()> {
-    let mut wtr = WriterBuilder::new().flexible(true).from_writer(std::io::stdout());
+    let mut wtr = WriterBuilder::new()
+        .flexible(true)
+        .from_writer(std::io::stdout());
     wtr.write_record([
         "pool_size",
         "utilisation_rho",
@@ -82,7 +90,9 @@ pub fn evaluation(result: &EvaluationResult) -> Result<()> {
 }
 
 pub fn sweep(rows: &[SensitivityRow]) -> Result<()> {
-    let mut wtr = WriterBuilder::new().flexible(true).from_writer(std::io::stdout());
+    let mut wtr = WriterBuilder::new()
+        .flexible(true)
+        .from_writer(std::io::stdout());
     wtr.write_record([
         "pool_size",
         "utilisation_rho",
@@ -100,7 +110,9 @@ pub fn sweep(rows: &[SensitivityRow]) -> Result<()> {
 }
 
 pub fn batch(reports: &[SimulationReport]) -> Result<()> {
-    let mut wtr = WriterBuilder::new().flexible(true).from_writer(std::io::stdout());
+    let mut wtr = WriterBuilder::new()
+        .flexible(true)
+        .from_writer(std::io::stdout());
     wtr.write_record([
         "request_index",
         "optimal_pool_size",
@@ -125,9 +137,51 @@ pub fn batch(reports: &[SimulationReport]) -> Result<()> {
     Ok(())
 }
 
+pub fn compare(report: &ScenarioComparisonReport) -> Result<()> {
+    let mut wtr = WriterBuilder::new()
+        .flexible(true)
+        .from_writer(std::io::stdout());
+    wtr.write_record([
+        "scenario",
+        "baseline",
+        "requests_per_second",
+        "optimal_pool_size",
+        "pool_size_delta",
+        "p99_queue_wait_ms",
+        "p99_queue_wait_delta_ms",
+        "mean_queue_wait_ms",
+        "mean_queue_wait_delta_ms",
+        "utilisation_rho",
+        "utilisation_rho_delta",
+        "saturation",
+    ])?;
+
+    for row in &report.rows {
+        wtr.write_record([
+            row.name.clone(),
+            row.is_baseline.to_string(),
+            row.requests_per_second.to_string(),
+            row.optimal_pool_size.to_string(),
+            row.pool_size_delta.to_string(),
+            row.p99_queue_wait_ms.to_string(),
+            row.p99_queue_wait_delta_ms.to_string(),
+            row.mean_queue_wait_ms.to_string(),
+            row.mean_queue_wait_delta_ms.to_string(),
+            row.utilisation_rho.to_string(),
+            row.utilisation_rho_delta.to_string(),
+            format!("{:?}", row.saturation),
+        ])?;
+    }
+
+    wtr.flush()?;
+    Ok(())
+}
+
 pub fn telemetry(recommendation: &TelemetryRecommendation) -> Result<()> {
     let diff = &recommendation.diff;
-    let mut wtr = WriterBuilder::new().flexible(true).from_writer(std::io::stdout());
+    let mut wtr = WriterBuilder::new()
+        .flexible(true)
+        .from_writer(std::io::stdout());
     wtr.write_record(["field", "value"])?;
     wtr.write_record([
         "service_name",
@@ -149,7 +203,10 @@ pub fn telemetry(recommendation: &TelemetryRecommendation) -> Result<()> {
         "additional_connections_required",
         &diff.additional_connections_required.to_string(),
     ])?;
-    wtr.write_record(["removable_connections", &diff.removable_connections.to_string()])?;
+    wtr.write_record([
+        "removable_connections",
+        &diff.removable_connections.to_string(),
+    ])?;
     wtr.write_record([
         "connection_change_percent",
         &diff.connection_change_percent.to_string(),
@@ -167,7 +224,9 @@ pub fn telemetry(recommendation: &TelemetryRecommendation) -> Result<()> {
 }
 
 pub fn gate(report: &GateReport) -> Result<()> {
-    let mut wtr = WriterBuilder::new().flexible(true).from_writer(std::io::stdout());
+    let mut wtr = WriterBuilder::new()
+        .flexible(true)
+        .from_writer(std::io::stdout());
     wtr.write_record(["field", "value"])?;
     wtr.write_record(["status", &format!("{:?}", report.status)])?;
     wtr.write_record([
@@ -175,11 +234,11 @@ pub fn gate(report: &GateReport) -> Result<()> {
         report.service_name.as_deref().unwrap_or("-"),
     ])?;
     wtr.write_record(["window", report.window.as_deref().unwrap_or("-")])?;
+    wtr.write_record(["observed_at", report.observed_at.as_deref().unwrap_or("-")])?;
     wtr.write_record([
-        "observed_at",
-        report.observed_at.as_deref().unwrap_or("-"),
+        "worst_saturation",
+        &format!("{:?}", report.worst_saturation),
     ])?;
-    wtr.write_record(["worst_saturation", &format!("{:?}", report.worst_saturation)])?;
     wtr.write_record(["", ""])?;
     wtr.write_record([
         "check",
@@ -204,13 +263,18 @@ pub fn gate(report: &GateReport) -> Result<()> {
 }
 
 pub fn guard(report: &GuardReport) -> Result<()> {
-    let mut wtr = WriterBuilder::new().flexible(true).from_writer(std::io::stdout());
+    let mut wtr = WriterBuilder::new()
+        .flexible(true)
+        .from_writer(std::io::stdout());
     wtr.write_record(["field", "value"])?;
     wtr.write_record(["status", &format!("{:?}", report.status)])?;
     wtr.write_record(["deployment_safe", &report.deployment_safe.to_string()])?;
     wtr.write_record(["exit_code", &report.exit_code.to_string()])?;
     wtr.write_record(["reason", &report.reason])?;
-    wtr.write_record(["service_name", report.gate.service_name.as_deref().unwrap_or("-")])?;
+    wtr.write_record([
+        "service_name",
+        report.gate.service_name.as_deref().unwrap_or("-"),
+    ])?;
     wtr.write_record(["window", report.gate.window.as_deref().unwrap_or("-")])?;
     wtr.write_record([
         "observed_at",
@@ -244,7 +308,9 @@ pub fn guard(report: &GuardReport) -> Result<()> {
 }
 
 pub fn doctor(report: &DoctorReport) -> Result<()> {
-    let mut wtr = WriterBuilder::new().flexible(true).from_writer(std::io::stdout());
+    let mut wtr = WriterBuilder::new()
+        .flexible(true)
+        .from_writer(std::io::stdout());
     wtr.write_record(["field", "value"])?;
     wtr.write_record(["status", &format!("{:?}", report.status)])?;
     wtr.write_record([
@@ -252,10 +318,7 @@ pub fn doctor(report: &DoctorReport) -> Result<()> {
         report.service_name.as_deref().unwrap_or("-"),
     ])?;
     wtr.write_record(["window", report.window.as_deref().unwrap_or("-")])?;
-    wtr.write_record([
-        "observed_at",
-        report.observed_at.as_deref().unwrap_or("-"),
-    ])?;
+    wtr.write_record(["observed_at", report.observed_at.as_deref().unwrap_or("-")])?;
     wtr.write_record(["current_pool_size", &report.current_pool_size.to_string()])?;
     wtr.write_record([
         "recommended_pool_size",
@@ -290,7 +353,9 @@ pub fn doctor(report: &DoctorReport) -> Result<()> {
 }
 
 pub fn config_snippet(report: &ConfigSnippetReport) -> Result<()> {
-    let mut wtr = WriterBuilder::new().flexible(true).from_writer(std::io::stdout());
+    let mut wtr = WriterBuilder::new()
+        .flexible(true)
+        .from_writer(std::io::stdout());
     wtr.write_record(["field", "value"])?;
     wtr.write_record(["framework", report.framework.as_str()])?;
     wtr.write_record(["source", report.source.as_str()])?;
@@ -299,10 +364,7 @@ pub fn config_snippet(report: &ConfigSnippetReport) -> Result<()> {
         report.service_name.as_deref().unwrap_or("-"),
     ])?;
     wtr.write_record(["window", report.window.as_deref().unwrap_or("-")])?;
-    wtr.write_record([
-        "observed_at",
-        report.observed_at.as_deref().unwrap_or("-"),
-    ])?;
+    wtr.write_record(["observed_at", report.observed_at.as_deref().unwrap_or("-")])?;
     wtr.write_record([
         "recommended_pool_size",
         &report.recommended_pool_size.to_string(),
@@ -320,17 +382,17 @@ pub fn config_snippet(report: &ConfigSnippetReport) -> Result<()> {
         &report.max_server_connections.to_string(),
     ])?;
     wtr.write_record(["utilisation_rho", &report.utilisation_rho.to_string()])?;
-    wtr.write_record([
-        "mean_queue_wait_ms",
-        &report.mean_queue_wait_ms.to_string(),
-    ])?;
+    wtr.write_record(["mean_queue_wait_ms", &report.mean_queue_wait_ms.to_string()])?;
     wtr.write_record(["p99_queue_wait_ms", &report.p99_queue_wait_ms.to_string()])?;
     wtr.write_record(["snippet", &report.snippet])?;
     for note in &report.notes {
         wtr.write_record(["note", note])?;
     }
     for reference in &report.references {
-        wtr.write_record(["reference", &format!("{}: {}", reference.title, reference.url)])?;
+        wtr.write_record([
+            "reference",
+            &format!("{}: {}", reference.title, reference.url),
+        ])?;
     }
     wtr.flush()?;
     Ok(())
@@ -351,7 +413,8 @@ fn write_sensitivity_row(wtr: &mut Writer<std::io::Stdout>, row: &SensitivityRow
 mod tests {
     use poolsim_core::telemetry::{PoolRecommendationDiff, PoolSizeChange};
     use poolsim_core::types::{
-        EvaluationResult, RiskLevel, SaturationLevel, SensitivityRow, SimulationReport, StepLoadResult,
+        EvaluationResult, PoolConfig, RiskLevel, SaturationLevel, SensitivityRow,
+        SimulationOptions, SimulationReport, StepLoadResult, WorkloadConfig,
     };
 
     use super::*;
@@ -426,22 +489,63 @@ mod tests {
         }
     }
 
+    fn sample_scenario(name: &str, rps: f64) -> crate::config::ScenarioInput {
+        crate::config::ScenarioInput {
+            name: name.to_string(),
+            workload: WorkloadConfig {
+                requests_per_second: rps,
+                latency_p50_ms: 8.0,
+                latency_p95_ms: 30.0,
+                latency_p99_ms: 70.0,
+                raw_samples_ms: None,
+                step_load_profile: None,
+            },
+            pool: PoolConfig {
+                max_server_connections: 100,
+                connection_overhead_ms: 2.0,
+                idle_timeout_ms: None,
+                min_pool_size: 2,
+                max_pool_size: 20,
+            },
+            options: SimulationOptions {
+                iterations: 1_200,
+                seed: Some(5),
+                ..SimulationOptions::default()
+            },
+        }
+    }
+
     #[test]
     fn csv_renderers_execute_for_all_output_types() {
         simulation(&sample_report()).expect("simulation CSV render should succeed");
         evaluation(&sample_evaluation()).expect("evaluation CSV render should succeed");
         sweep(&sample_rows()).expect("sweep CSV render should succeed");
         batch(&[sample_report(), sample_report()]).expect("batch CSV render should succeed");
+        compare(
+            &crate::compare::build_scenario_comparison_report(
+                crate::config::ScenarioComparisonInput {
+                    baseline: "normal".to_string(),
+                    scenarios: vec![
+                        sample_scenario("normal", 180.0),
+                        sample_scenario("peak", 260.0),
+                    ],
+                },
+            )
+            .expect("comparison report should build"),
+        )
+        .expect("compare CSV render should succeed");
         telemetry(&sample_recommendation()).expect("telemetry CSV render should succeed");
         gate(&crate::gate::build_gate_report(
             sample_recommendation(),
             &crate::gate::GatePolicy::default(),
         ))
         .expect("gate CSV render should succeed");
-        guard(&crate::guard::build_guard_report(crate::gate::build_gate_report(
-            sample_recommendation(),
-            &crate::gate::GatePolicy::default(),
-        )))
+        guard(&crate::guard::build_guard_report(
+            crate::gate::build_gate_report(
+                sample_recommendation(),
+                &crate::gate::GatePolicy::default(),
+            ),
+        ))
         .expect("guard CSV render should succeed");
         doctor(&crate::doctor::build_doctor_report(sample_recommendation()))
             .expect("doctor CSV render should succeed");
@@ -454,25 +558,27 @@ mod tests {
                 idle_timeout_ms: 600_000,
                 database_url_env: "DATABASE_URL".to_string(),
                 pool_name: "checkout-pool".to_string(),
-                source: crate::args::GenerateConfigSourceCommands::Simulate(crate::args::CommonArgs {
-                    config: None,
-                    rps: None,
-                    p50: None,
-                    p95: None,
-                    p99: None,
-                    samples_file: None,
-                    max_server_connections: None,
-                    connection_overhead_ms: None,
-                    idle_timeout_ms: None,
-                    min: None,
-                    max: None,
-                    iterations: None,
-                    seed: None,
-                    distribution: None,
-                    queue_model: None,
-                    target_wait_p99_ms: None,
-                    max_acceptable_rho: None,
-                }),
+                source: crate::args::GenerateConfigSourceCommands::Simulate(
+                    crate::args::CommonArgs {
+                        config: None,
+                        rps: None,
+                        p50: None,
+                        p95: None,
+                        p99: None,
+                        samples_file: None,
+                        max_server_connections: None,
+                        connection_overhead_ms: None,
+                        idle_timeout_ms: None,
+                        min: None,
+                        max: None,
+                        iterations: None,
+                        seed: None,
+                        distribution: None,
+                        queue_model: None,
+                        target_wait_p99_ms: None,
+                        max_acceptable_rho: None,
+                    },
+                ),
             },
             crate::config_gen::ConfigRecommendation {
                 source: crate::config_gen::ConfigSourceKind::Simulate,

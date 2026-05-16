@@ -7,7 +7,7 @@ use poolsim_core::{
 };
 use serde::Deserialize;
 
-use crate::args::{BatchArgs, CommonArgs, EvaluateArgs, TelemetryImportArgs};
+use crate::args::{BatchArgs, CommonArgs, CompareArgs, EvaluateArgs, TelemetryImportArgs};
 
 #[derive(Debug, Clone)]
 pub struct SimulationInput {
@@ -35,6 +35,20 @@ pub struct BatchSimulationInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct ScenarioInput {
+    pub name: String,
+    pub workload: WorkloadConfig,
+    pub pool: PoolConfig,
+    pub options: SimulationOptions,
+}
+
+#[derive(Debug, Clone)]
+pub struct ScenarioComparisonInput {
+    pub baseline: String,
+    pub scenarios: Vec<ScenarioInput>,
+}
+
+#[derive(Debug, Clone)]
 pub struct TelemetryInput {
     pub snapshot: TelemetrySnapshot,
     pub options: SimulationOptions,
@@ -58,6 +72,21 @@ struct BatchRequest {
 #[derive(Debug, Clone, Deserialize)]
 struct BatchFile {
     requests: Vec<BatchRequest>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ScenarioRequest {
+    name: String,
+    workload: WorkloadConfig,
+    pool: PoolConfig,
+    #[serde(default)]
+    options: SimulationOptions,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ScenarioFile {
+    baseline: Option<String>,
+    scenarios: Vec<ScenarioRequest>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -182,16 +211,79 @@ pub fn resolve_batch_input(args: &BatchArgs) -> Result<BatchSimulationInput> {
     Ok(BatchSimulationInput { requests: mapped })
 }
 
+pub fn resolve_scenario_comparison_input(args: &CompareArgs) -> Result<ScenarioComparisonInput> {
+    let raw = fs::read_to_string(&args.config).with_context(|| {
+        format!(
+            "failed to read scenario comparison file {}",
+            args.config.display()
+        )
+    })?;
+
+    let parsed = match args.config.extension().and_then(|e| e.to_str()) {
+        Some("json") => parse_scenario_json(&raw).with_context(|| {
+            format!(
+                "invalid JSON scenario comparison file {}",
+                args.config.display()
+            )
+        })?,
+        Some("toml") => toml::from_str::<ScenarioFile>(&raw).with_context(|| {
+            format!(
+                "invalid TOML scenario comparison file {}",
+                args.config.display()
+            )
+        })?,
+        _ => {
+            return Err(anyhow!(
+                "unsupported scenario comparison extension for {} (use .json or .toml)",
+                args.config.display()
+            ))
+        }
+    };
+
+    let scenarios = map_scenarios(parsed.scenarios)?;
+    let baseline = args
+        .baseline
+        .clone()
+        .or(parsed.baseline)
+        .unwrap_or_else(|| scenarios[0].name.clone());
+    if !scenarios.iter().any(|scenario| scenario.name == baseline) {
+        return Err(anyhow!(
+            "baseline scenario '{}' was not found in {}",
+            baseline,
+            args.config.display()
+        ));
+    }
+
+    Ok(ScenarioComparisonInput {
+        baseline,
+        scenarios,
+    })
+}
+
 pub fn resolve_telemetry_input(args: &TelemetryImportArgs) -> Result<TelemetryInput> {
-    let raw = fs::read_to_string(&args.config)
-        .with_context(|| format!("failed to read telemetry config file {}", args.config.display()))?;
+    let raw = fs::read_to_string(&args.config).with_context(|| {
+        format!(
+            "failed to read telemetry config file {}",
+            args.config.display()
+        )
+    })?;
 
     let mut input = match args.config.extension().and_then(|e| e.to_str()) {
         Some("json") => serde_json::from_str::<TelemetryConfigFile>(&raw)
-            .with_context(|| format!("invalid JSON telemetry config file {}", args.config.display()))?
+            .with_context(|| {
+                format!(
+                    "invalid JSON telemetry config file {}",
+                    args.config.display()
+                )
+            })?
             .into_input(),
         Some("toml") => toml::from_str::<TelemetryConfigFile>(&raw)
-            .with_context(|| format!("invalid TOML telemetry config file {}", args.config.display()))?
+            .with_context(|| {
+                format!(
+                    "invalid TOML telemetry config file {}",
+                    args.config.display()
+                )
+            })?
             .into_input(),
         _ => {
             return Err(anyhow!(
@@ -339,7 +431,7 @@ fn load_samples_file(path: &Path) -> Result<Vec<f64>> {
         .with_context(|| format!("failed to read samples file {}", path.display()))?;
 
     let mut out = Vec::new();
-    for token in raw.split(|c| c == ',' || c == '\n' || c == '\r' || c == '\t' || c == ' ') {
+    for token in raw.split([',', '\n', '\r', '\t', ' ']) {
         let token = token.trim();
         if token.is_empty() {
             continue;
@@ -351,7 +443,10 @@ fn load_samples_file(path: &Path) -> Result<Vec<f64>> {
     }
 
     if out.is_empty() {
-        return Err(anyhow!("samples file {} contains no numeric values", path.display()));
+        return Err(anyhow!(
+            "samples file {} contains no numeric values",
+            path.display()
+        ));
     }
 
     Ok(out)
@@ -369,6 +464,46 @@ fn parse_batch_json(raw: &str) -> Result<Vec<BatchRequest>> {
 fn parse_batch_toml(raw: &str) -> Result<Vec<BatchRequest>> {
     let wrapped: BatchFile = toml::from_str(raw)?;
     Ok(wrapped.requests)
+}
+
+fn parse_scenario_json(raw: &str) -> Result<ScenarioFile> {
+    let value: serde_json::Value = serde_json::from_str(raw)?;
+    if value.is_array() {
+        Ok(ScenarioFile {
+            baseline: None,
+            scenarios: serde_json::from_value(value)?,
+        })
+    } else {
+        Ok(serde_json::from_value(value)?)
+    }
+}
+
+fn map_scenarios(scenarios: Vec<ScenarioRequest>) -> Result<Vec<ScenarioInput>> {
+    if scenarios.is_empty() {
+        return Err(anyhow!("scenario comparison contains no scenarios"));
+    }
+
+    let mut out = Vec::with_capacity(scenarios.len());
+    for scenario in scenarios {
+        let name = scenario.name.trim().to_string();
+        if name.is_empty() {
+            return Err(anyhow!("scenario names must not be empty"));
+        }
+        if out
+            .iter()
+            .any(|existing: &ScenarioInput| existing.name == name)
+        {
+            return Err(anyhow!("duplicate scenario name '{}'", name));
+        }
+        out.push(ScenarioInput {
+            name,
+            workload: scenario.workload,
+            pool: scenario.pool,
+            options: scenario.options,
+        });
+    }
+
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -410,7 +545,12 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("clock should be after UNIX epoch")
             .as_nanos();
-        std::env::temp_dir().join(format!("poolsim_cli_config_{name}_{}_{}.{}", std::process::id(), ts, ext))
+        std::env::temp_dir().join(format!(
+            "poolsim_cli_config_{name}_{}_{}.{}",
+            std::process::id(),
+            ts,
+            ext
+        ))
     }
 
     fn write_temp_file(name: &str, ext: &str, content: &str) -> PathBuf {
@@ -535,7 +675,8 @@ mod tests {
         pool_only.connection_overhead_ms = Some(2.0);
         pool_only.min = Some(2);
         pool_only.max = Some(10);
-        let err = resolve_simulation_input(&pool_only).expect_err("workload config should be required");
+        let err =
+            resolve_simulation_input(&pool_only).expect_err("workload config should be required");
         assert!(err.to_string().contains("missing workload configuration"));
     }
 
@@ -557,7 +698,10 @@ mod tests {
         let resolved = resolve_evaluate_input(&evaluate).expect("evaluate input should resolve");
         assert_eq!(resolved.workload.requests_per_second, 200.0);
         assert_eq!(resolved.options.iterations, 333);
-        assert_eq!(resolved.options.distribution, DistributionModel::Exponential);
+        assert_eq!(
+            resolved.options.distribution,
+            DistributionModel::Exponential
+        );
         assert_eq!(resolved.options.queue_model, QueueModel::MDC);
 
         remove_if_exists(&json_path);
@@ -715,10 +859,194 @@ max_pool_size = 16
             config: unknown.clone(),
         })
         .expect_err("unsupported extension should fail");
-        assert!(err.to_string().contains("unsupported batch config extension"));
+        assert!(err
+            .to_string()
+            .contains("unsupported batch config extension"));
 
         remove_if_exists(&empty);
         remove_if_exists(&unknown);
+    }
+
+    #[test]
+    fn resolve_scenario_comparison_input_supports_json_and_toml() {
+        let json = format!(
+            r#"{{
+  "baseline": "normal",
+  "scenarios": [
+    {{
+      "name": "normal",
+      "workload": {{
+        "requests_per_second": 180.0,
+        "latency_p50_ms": 7.0,
+        "latency_p95_ms": 25.0,
+        "latency_p99_ms": 60.0
+      }},
+      "pool": {{
+        "max_server_connections": 100,
+        "connection_overhead_ms": 2.0,
+        "min_pool_size": 2,
+        "max_pool_size": 20
+      }}
+    }},
+    {}
+  ]
+}}"#,
+            sample_config_json().replace("\"workload\"", "\"name\": \"peak\", \"workload\"")
+        );
+        let json_path = write_temp_file("scenario_json", "json", &json);
+        let input = resolve_scenario_comparison_input(&CompareArgs {
+            config: json_path.clone(),
+            baseline: None,
+        })
+        .expect("scenario JSON should parse");
+        assert_eq!(input.baseline, "normal");
+        assert_eq!(input.scenarios.len(), 2);
+
+        let toml = r#"
+baseline = "normal"
+
+[[scenarios]]
+name = "normal"
+[scenarios.workload]
+requests_per_second = 180.0
+latency_p50_ms = 7.0
+latency_p95_ms = 25.0
+latency_p99_ms = 60.0
+[scenarios.pool]
+max_server_connections = 100
+connection_overhead_ms = 2.0
+min_pool_size = 2
+max_pool_size = 20
+
+[[scenarios]]
+name = "incident"
+[scenarios.workload]
+requests_per_second = 320.0
+latency_p50_ms = 10.0
+latency_p95_ms = 45.0
+latency_p99_ms = 120.0
+[scenarios.pool]
+max_server_connections = 120
+connection_overhead_ms = 2.0
+min_pool_size = 3
+max_pool_size = 30
+"#;
+        let toml_path = write_temp_file("scenario_toml", "toml", toml);
+        let input = resolve_scenario_comparison_input(&CompareArgs {
+            config: toml_path.clone(),
+            baseline: Some("incident".to_string()),
+        })
+        .expect("scenario TOML should parse");
+        assert_eq!(input.baseline, "incident");
+        assert_eq!(input.scenarios.len(), 2);
+
+        remove_if_exists(&json_path);
+        remove_if_exists(&toml_path);
+    }
+
+    #[test]
+    fn resolve_scenario_comparison_input_rejects_invalid_files() {
+        let missing = unique_temp_path("scenario_missing", "json");
+        let err = resolve_scenario_comparison_input(&CompareArgs {
+            config: missing,
+            baseline: None,
+        })
+        .expect_err("missing scenario file should fail");
+        assert!(err
+            .to_string()
+            .contains("failed to read scenario comparison file"));
+
+        let invalid_json = write_temp_file("scenario_invalid", "json", "{");
+        let err = resolve_scenario_comparison_input(&CompareArgs {
+            config: invalid_json.clone(),
+            baseline: None,
+        })
+        .expect_err("invalid scenario JSON should fail");
+        assert!(err
+            .to_string()
+            .contains("invalid JSON scenario comparison file"));
+
+        let invalid_toml = write_temp_file("scenario_invalid", "toml", "scenarios = [");
+        let err = resolve_scenario_comparison_input(&CompareArgs {
+            config: invalid_toml.clone(),
+            baseline: None,
+        })
+        .expect_err("invalid scenario TOML should fail");
+        assert!(err
+            .to_string()
+            .contains("invalid TOML scenario comparison file"));
+
+        let empty = write_temp_file("scenario_empty", "json", r#"{"scenarios":[]}"#);
+        let err = resolve_scenario_comparison_input(&CompareArgs {
+            config: empty.clone(),
+            baseline: None,
+        })
+        .expect_err("empty scenario list should fail");
+        assert!(err.to_string().contains("contains no scenarios"));
+
+        let duplicate = write_temp_file(
+            "scenario_duplicate",
+            "json",
+            &format!(
+                r#"[{}, {}]"#,
+                sample_config_json().replace("\"workload\"", "\"name\": \"normal\", \"workload\""),
+                sample_config_json().replace("\"workload\"", "\"name\": \"normal\", \"workload\"")
+            ),
+        );
+        let err = resolve_scenario_comparison_input(&CompareArgs {
+            config: duplicate.clone(),
+            baseline: None,
+        })
+        .expect_err("duplicate scenario should fail");
+        assert!(err.to_string().contains("duplicate scenario name"));
+
+        let empty_name = write_temp_file(
+            "scenario_empty_name",
+            "json",
+            &format!(
+                r#"[{}]"#,
+                sample_config_json().replace("\"workload\"", "\"name\": \" \", \"workload\"")
+            ),
+        );
+        let err = resolve_scenario_comparison_input(&CompareArgs {
+            config: empty_name.clone(),
+            baseline: None,
+        })
+        .expect_err("empty scenario name should fail");
+        assert!(err.to_string().contains("scenario names must not be empty"));
+
+        let missing_baseline = write_temp_file(
+            "scenario_missing_baseline",
+            "json",
+            &format!(
+                r#"[{}]"#,
+                sample_config_json().replace("\"workload\"", "\"name\": \"normal\", \"workload\"")
+            ),
+        );
+        let err = resolve_scenario_comparison_input(&CompareArgs {
+            config: missing_baseline.clone(),
+            baseline: Some("peak".to_string()),
+        })
+        .expect_err("missing baseline should fail");
+        assert!(err.to_string().contains("was not found"));
+
+        let unsupported = write_temp_file("scenario_yaml", "yaml", "scenarios: []");
+        let err = resolve_scenario_comparison_input(&CompareArgs {
+            config: unsupported.clone(),
+            baseline: None,
+        })
+        .expect_err("unsupported extension should fail");
+        assert!(err
+            .to_string()
+            .contains("unsupported scenario comparison extension"));
+
+        remove_if_exists(&invalid_json);
+        remove_if_exists(&invalid_toml);
+        remove_if_exists(&empty);
+        remove_if_exists(&duplicate);
+        remove_if_exists(&empty_name);
+        remove_if_exists(&missing_baseline);
+        remove_if_exists(&unsupported);
     }
 
     #[test]
@@ -766,13 +1094,25 @@ max_pool_size = 12
 
     #[test]
     fn resolve_telemetry_input_rejects_bad_files() {
+        let missing = unique_temp_path("telemetry_missing", "json");
+        let err = resolve_telemetry_input(&TelemetryImportArgs {
+            config: missing,
+            current_pool_size: None,
+        })
+        .expect_err("missing telemetry file should fail");
+        assert!(err
+            .to_string()
+            .contains("failed to read telemetry config file"));
+
         let unsupported = write_temp_file("telemetry_bad", "yaml", "telemetry: {}");
         let err = resolve_telemetry_input(&TelemetryImportArgs {
             config: unsupported.clone(),
             current_pool_size: None,
         })
         .expect_err("unsupported telemetry extension should fail");
-        assert!(err.to_string().contains("unsupported telemetry config extension"));
+        assert!(err
+            .to_string()
+            .contains("unsupported telemetry config extension"));
 
         let invalid = write_temp_file("telemetry_invalid", "json", "{}");
         let err = resolve_telemetry_input(&TelemetryImportArgs {
@@ -780,10 +1120,23 @@ max_pool_size = 12
             current_pool_size: None,
         })
         .expect_err("invalid telemetry config should fail");
-        assert!(err.to_string().contains("invalid JSON telemetry config file"));
+        assert!(err
+            .to_string()
+            .contains("invalid JSON telemetry config file"));
+
+        let invalid_toml = write_temp_file("telemetry_invalid", "toml", "telemetry = [");
+        let err = resolve_telemetry_input(&TelemetryImportArgs {
+            config: invalid_toml.clone(),
+            current_pool_size: None,
+        })
+        .expect_err("invalid telemetry TOML should fail");
+        assert!(err
+            .to_string()
+            .contains("invalid TOML telemetry config file"));
 
         remove_if_exists(&unsupported);
         remove_if_exists(&invalid);
+        remove_if_exists(&invalid_toml);
     }
 
     #[test]
@@ -793,7 +1146,8 @@ max_pool_size = 12
         assert_eq!(items.len(), 1);
 
         let wrapped = format!("{{\"requests\": [{}]}}", sample_config_json());
-        let items = parse_batch_json(&wrapped).expect("parse_batch_json should support wrapped object");
+        let items =
+            parse_batch_json(&wrapped).expect("parse_batch_json should support wrapped object");
         assert_eq!(items.len(), 1);
 
         let toml = r#"

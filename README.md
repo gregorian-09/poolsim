@@ -60,6 +60,7 @@ Given workload data, pool bounds, and simulation options, `poolsim` can:
 - generate sensitivity tables across candidate pool sizes
 - evaluate fixed pool sizes
 - analyze simple step-load scenarios
+- compare normal, peak, and incident scenarios side by side
 - import telemetry snapshots and diff recommendations against current production settings
 - query Prometheus-compatible telemetry and diff recommendations against current production settings
 - run CI capacity gates that fail deployments when telemetry violates pool policy
@@ -155,6 +156,13 @@ cargo run -p poolsim-cli -- --format json gate \
   --config docs/fixtures/telemetry.json
 ```
 
+Compare normal, peak, and incident traffic scenarios side by side:
+
+```bash
+cargo run -p poolsim-cli -- --format json compare \
+  --config docs/fixtures/scenarios.json
+```
+
 Run the deployment guard wrapper for CI pipelines that need explicit `deployment_safe`, `exit_code`, and `reason` fields:
 
 ```bash
@@ -212,6 +220,7 @@ Use `poolsim` when you need to:
 - size a new service before rollout
 - revisit bad pool defaults
 - compare candidate pool sizes against latency targets
+- compare normal, peak, and incident assumptions in one report
 - justify pool settings to platform or database teams
 - test how close a workload is to saturation
 - block risky pool settings in CI before deployment

@@ -1,10 +1,10 @@
 #![doc = include_str!("../README.md")]
 #![doc(html_root_url = "https://docs.rs/poolsim-cli/0.1.0")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-
 #![deny(missing_docs)]
 
 mod args;
+mod compare;
 mod config;
 mod config_gen;
 mod doctor;
@@ -41,8 +41,8 @@ fn run() -> Result<ExitCode> {
 
 fn parse_cli_from_env() -> Result<Cli> {
     if let Ok(raw) = std::env::var("POOLSIM_TEST_ARGS_JSON") {
-        let mut args: Vec<String> =
-            serde_json::from_str(&raw).context("POOLSIM_TEST_ARGS_JSON must be a JSON array of strings")?;
+        let mut args: Vec<String> = serde_json::from_str(&raw)
+            .context("POOLSIM_TEST_ARGS_JSON must be a JSON array of strings")?;
         args.insert(0, "poolsim-cli".to_string());
         return Cli::try_parse_from(args).map_err(|err| anyhow::anyhow!(err.to_string()));
     }
@@ -117,6 +117,15 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
             };
             Ok(code)
         }
+        Commands::Compare(args) => {
+            let input = config::resolve_scenario_comparison_input(&args)?;
+            let report = compare::build_scenario_comparison_report(input)?;
+            render_compare(&report, cli.format)?;
+            Ok(exit_code_for_saturation(
+                report.worst_saturation,
+                cli.warn_exit,
+            ))
+        }
         Commands::Import(args) => match args.command {
             args::ImportCommands::Telemetry(args) => {
                 let input = config::resolve_telemetry_input(&args)?;
@@ -140,8 +149,12 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
         Commands::Gate(args) => {
             let policy = gate::policy_from_args(&args)?;
             let input = match args.source {
-                args::GateSourceCommands::Telemetry(source) => config::resolve_telemetry_input(&source)?,
-                args::GateSourceCommands::Prometheus(source) => prometheus::resolve_prometheus_input(&source)?,
+                args::GateSourceCommands::Telemetry(source) => {
+                    config::resolve_telemetry_input(&source)?
+                }
+                args::GateSourceCommands::Prometheus(source) => {
+                    prometheus::resolve_prometheus_input(&source)?
+                }
             };
             let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
             let report = gate::build_gate_report(recommendation, &policy);
@@ -151,8 +164,12 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
         Commands::Guard(args) => {
             let policy = gate::policy_from_guard_args(&args)?;
             let input = match args.source {
-                args::GateSourceCommands::Telemetry(source) => config::resolve_telemetry_input(&source)?,
-                args::GateSourceCommands::Prometheus(source) => prometheus::resolve_prometheus_input(&source)?,
+                args::GateSourceCommands::Telemetry(source) => {
+                    config::resolve_telemetry_input(&source)?
+                }
+                args::GateSourceCommands::Prometheus(source) => {
+                    prometheus::resolve_prometheus_input(&source)?
+                }
             };
             let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
             let gate_report = gate::build_gate_report(recommendation, &policy);
@@ -162,8 +179,12 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
         }
         Commands::Doctor(args) => {
             let input = match args.source {
-                args::DoctorSourceCommands::Telemetry(source) => config::resolve_telemetry_input(&source)?,
-                args::DoctorSourceCommands::Prometheus(source) => prometheus::resolve_prometheus_input(&source)?,
+                args::DoctorSourceCommands::Telemetry(source) => {
+                    config::resolve_telemetry_input(&source)?
+                }
+                args::DoctorSourceCommands::Prometheus(source) => {
+                    prometheus::resolve_prometheus_input(&source)?
+                }
             };
             let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
             let report = doctor::build_doctor_report(recommendation);
@@ -237,6 +258,14 @@ fn render_batch(reports: &[SimulationReport], format: OutputFormat) -> Result<()
     }
 }
 
+fn render_compare(report: &compare::ScenarioComparisonReport, format: OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Table => render::table::compare(report),
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => render::csv::compare(report),
+    }
+}
+
 fn render_telemetry(recommendation: &TelemetryRecommendation, format: OutputFormat) -> Result<()> {
     match format {
         OutputFormat::Table => render::table::telemetry(recommendation),
@@ -269,7 +298,10 @@ fn render_doctor(report: &doctor::DoctorReport, format: OutputFormat) -> Result<
     }
 }
 
-fn render_config_snippet(report: &config_gen::ConfigSnippetReport, format: OutputFormat) -> Result<()> {
+fn render_config_snippet(
+    report: &config_gen::ConfigSnippetReport,
+    format: OutputFormat,
+) -> Result<()> {
     match format {
         OutputFormat::Table => render::table::config_snippet(report),
         OutputFormat::Json => render::json::print(report),
@@ -303,7 +335,10 @@ fn risk_severity(risk: RiskLevel) -> u8 {
 }
 
 fn worst_risk(rows: &[SensitivityRow]) -> u8 {
-    rows.iter().map(|row| risk_severity(row.risk)).max().unwrap_or(0)
+    rows.iter()
+        .map(|row| risk_severity(row.risk))
+        .max()
+        .unwrap_or(0)
 }
 
 fn exit_code_for_worst_risk(worst: u8, warn_exit: bool) -> ExitCode {
@@ -327,14 +362,15 @@ mod tests {
 
     use poolsim_core::{
         telemetry::{PoolRecommendationDiff, PoolSizeChange, TelemetryRecommendation},
-        types::{RiskLevel, StepLoadResult},
+        types::{PoolConfig, RiskLevel, SimulationOptions, StepLoadResult, WorkloadConfig},
     };
 
     use super::*;
     use crate::args::{
-        BatchArgs, CliConfigFramework, CommonArgs, DoctorArgs, DoctorSourceCommands, EvaluateArgs,
-        GateArgs, GateSourceCommands, GenerateConfigArgs, GenerateConfigSourceCommands, GuardArgs,
-        ImportArgs, ImportCommands, PrometheusImportArgs, SimulateArgs, TelemetryImportArgs,
+        BatchArgs, CliConfigFramework, CommonArgs, CompareArgs, DoctorArgs, DoctorSourceCommands,
+        EvaluateArgs, GateArgs, GateSourceCommands, GenerateConfigArgs,
+        GenerateConfigSourceCommands, GuardArgs, ImportArgs, ImportCommands, PrometheusImportArgs,
+        SimulateArgs, TelemetryImportArgs,
     };
 
     fn sample_config_json() -> String {
@@ -396,6 +432,55 @@ mod tests {
         )
     }
 
+    fn scenario_comparison_json() -> String {
+        r#"
+{
+  "baseline": "normal",
+  "scenarios": [
+    {
+      "name": "normal",
+      "workload": {
+        "requests_per_second": 180.0,
+        "latency_p50_ms": 7.0,
+        "latency_p95_ms": 25.0,
+        "latency_p99_ms": 60.0
+      },
+      "pool": {
+        "max_server_connections": 100,
+        "connection_overhead_ms": 2.0,
+        "min_pool_size": 2,
+        "max_pool_size": 20
+      },
+      "options": {
+        "iterations": 1200,
+        "seed": 3
+      }
+    },
+    {
+      "name": "peak",
+      "workload": {
+        "requests_per_second": 260.0,
+        "latency_p50_ms": 8.0,
+        "latency_p95_ms": 30.0,
+        "latency_p99_ms": 70.0
+      },
+      "pool": {
+        "max_server_connections": 120,
+        "connection_overhead_ms": 2.0,
+        "min_pool_size": 3,
+        "max_pool_size": 24
+      },
+      "options": {
+        "iterations": 1200,
+        "seed": 3
+      }
+    }
+  ]
+}
+"#
+        .to_string()
+    }
+
     fn telemetry_config_json() -> String {
         r#"
 {
@@ -455,7 +540,12 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("clock should be after UNIX epoch")
             .as_nanos();
-        std::env::temp_dir().join(format!("poolsim_cli_main_{name}_{}_{}.{}", std::process::id(), ts, ext))
+        std::env::temp_dir().join(format!(
+            "poolsim_cli_main_{name}_{}_{}.{}",
+            std::process::id(),
+            ts,
+            ext
+        ))
     }
 
     fn write_temp_file(name: &str, ext: &str, content: &str) -> PathBuf {
@@ -518,6 +608,32 @@ mod tests {
                 saturation: SaturationLevel::Warning,
             }],
             warnings: Vec::new(),
+        }
+    }
+
+    fn sample_scenario(name: &str, rps: f64) -> config::ScenarioInput {
+        config::ScenarioInput {
+            name: name.to_string(),
+            workload: WorkloadConfig {
+                requests_per_second: rps,
+                latency_p50_ms: 8.0,
+                latency_p95_ms: 30.0,
+                latency_p99_ms: 70.0,
+                raw_samples_ms: None,
+                step_load_profile: None,
+            },
+            pool: PoolConfig {
+                max_server_connections: 100,
+                connection_overhead_ms: 2.0,
+                idle_timeout_ms: None,
+                min_pool_size: 2,
+                max_pool_size: 20,
+            },
+            options: SimulationOptions {
+                iterations: 1_200,
+                seed: Some(7),
+                ..SimulationOptions::default()
+            },
         }
     }
 
@@ -608,7 +724,8 @@ mod tests {
 
         render_evaluation(&evaluation, OutputFormat::Json).expect("json evaluation should render");
         render_evaluation(&evaluation, OutputFormat::Csv).expect("csv evaluation should render");
-        render_evaluation(&evaluation, OutputFormat::Table).expect("table evaluation should render");
+        render_evaluation(&evaluation, OutputFormat::Table)
+            .expect("table evaluation should render");
 
         render_sweep(&rows, OutputFormat::Json).expect("json sweep should render");
         render_sweep(&rows, OutputFormat::Csv).expect("csv sweep should render");
@@ -618,10 +735,25 @@ mod tests {
         render_batch(&reports, OutputFormat::Csv).expect("csv batch should render");
         render_batch(&reports, OutputFormat::Table).expect("table batch should render");
 
+        let compare_report =
+            compare::build_scenario_comparison_report(config::ScenarioComparisonInput {
+                baseline: "normal".to_string(),
+                scenarios: vec![
+                    sample_scenario("normal", 180.0),
+                    sample_scenario("peak", 260.0),
+                ],
+            })
+            .expect("compare report should build");
+        render_compare(&compare_report, OutputFormat::Json).expect("json compare should render");
+        render_compare(&compare_report, OutputFormat::Csv).expect("csv compare should render");
+        render_compare(&compare_report, OutputFormat::Table).expect("table compare should render");
+
         let recommendation = sample_recommendation();
-        render_telemetry(&recommendation, OutputFormat::Json).expect("json telemetry should render");
+        render_telemetry(&recommendation, OutputFormat::Json)
+            .expect("json telemetry should render");
         render_telemetry(&recommendation, OutputFormat::Csv).expect("csv telemetry should render");
-        render_telemetry(&recommendation, OutputFormat::Table).expect("table telemetry should render");
+        render_telemetry(&recommendation, OutputFormat::Table)
+            .expect("table telemetry should render");
 
         let gate_report = gate::build_gate_report(recommendation, &gate::GatePolicy::default());
         render_gate(&gate_report, OutputFormat::Json).expect("json gate should render");
@@ -646,7 +778,9 @@ mod tests {
                 idle_timeout_ms: 600_000,
                 database_url_env: "DATABASE_URL".to_string(),
                 pool_name: "checkout-pool".to_string(),
-                source: GenerateConfigSourceCommands::Simulate(common_with_config(Path::new("unused.json"))),
+                source: GenerateConfigSourceCommands::Simulate(common_with_config(Path::new(
+                    "unused.json",
+                ))),
             },
             config_gen::ConfigRecommendation {
                 source: config_gen::ConfigSourceKind::Simulate,
@@ -661,9 +795,12 @@ mod tests {
                 p99_queue_wait_ms: 12.0,
             },
         );
-        render_config_snippet(&config_report, OutputFormat::Json).expect("json config snippet should render");
-        render_config_snippet(&config_report, OutputFormat::Csv).expect("csv config snippet should render");
-        render_config_snippet(&config_report, OutputFormat::Table).expect("table config snippet should render");
+        render_config_snippet(&config_report, OutputFormat::Json)
+            .expect("json config snippet should render");
+        render_config_snippet(&config_report, OutputFormat::Csv)
+            .expect("csv config snippet should render");
+        render_config_snippet(&config_report, OutputFormat::Table)
+            .expect("table config snippet should render");
     }
 
     #[test]
@@ -720,13 +857,27 @@ mod tests {
         };
         let _ = run_with_cli(cli).expect("sweep should execute");
 
-        let batch_cfg = write_temp_file("main_batch", "json", &format!("[{}]", sample_config_json()));
+        let batch_cfg =
+            write_temp_file("main_batch", "json", &format!("[{}]", sample_config_json()));
         let cli = Cli {
-            command: Commands::Batch(BatchArgs { config: batch_cfg.clone() }),
+            command: Commands::Batch(BatchArgs {
+                config: batch_cfg.clone(),
+            }),
             format: OutputFormat::Json,
             warn_exit: true,
         };
         let _ = run_with_cli(cli).expect("batch should execute");
+
+        let compare_cfg = write_temp_file("main_compare", "json", &scenario_comparison_json());
+        let cli = Cli {
+            command: Commands::Compare(CompareArgs {
+                config: compare_cfg.clone(),
+                baseline: Some("normal".to_string()),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: true,
+        };
+        let _ = run_with_cli(cli).expect("compare should execute");
 
         let telemetry_cfg = write_temp_file("main_telemetry", "json", &telemetry_config_json());
         let cli = Cli {
@@ -741,7 +892,8 @@ mod tests {
         };
         let _ = run_with_cli(cli).expect("telemetry import should execute");
 
-        let prometheus_cfg = write_temp_file("main_prometheus", "json", &prometheus_response_json());
+        let prometheus_cfg =
+            write_temp_file("main_prometheus", "json", &prometheus_response_json());
         let cli = Cli {
             command: Commands::Import(ImportArgs {
                 command: ImportCommands::Prometheus(PrometheusImportArgs {
@@ -1027,13 +1179,15 @@ mod tests {
 
         remove_if_exists(&cfg);
         remove_if_exists(&batch_cfg);
+        remove_if_exists(&compare_cfg);
         remove_if_exists(&telemetry_cfg);
         remove_if_exists(&prometheus_cfg);
     }
 
     #[test]
     fn batch_command_exit_codes_cover_warning_and_critical_paths() {
-        let warning_cfg = write_temp_file("main_batch_warning", "json", &batch_config_json(260.0, 4));
+        let warning_cfg =
+            write_temp_file("main_batch_warning", "json", &batch_config_json(260.0, 4));
         let warning_cli = Cli {
             command: Commands::Batch(BatchArgs {
                 config: warning_cfg.clone(),
@@ -1043,7 +1197,11 @@ mod tests {
         };
         let _ = run_with_cli(warning_cli).expect("warning batch should execute");
 
-        let critical_cfg = write_temp_file("main_batch_critical", "json", &batch_config_json(2_000.0, 2));
+        let critical_cfg = write_temp_file(
+            "main_batch_critical",
+            "json",
+            &batch_config_json(2_000.0, 2),
+        );
         let critical_cli = Cli {
             command: Commands::Batch(BatchArgs {
                 config: critical_cfg.clone(),

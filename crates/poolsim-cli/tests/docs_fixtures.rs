@@ -166,6 +166,49 @@ fn docs_batch_examples_work_for_json_and_toml_inputs() {
 }
 
 #[test]
+fn docs_compare_examples_work_for_json_csv_and_toml_inputs() {
+    let json_output = run_cli(&[
+        "--format",
+        "json",
+        "compare",
+        "--config",
+        &fixture("docs/fixtures/scenarios.json"),
+    ]);
+    assert_success(&json_output, "compare JSON docs example");
+    let report: Value = serde_json::from_str(&stdout_utf8(&json_output))
+        .expect("compare JSON output should deserialize");
+    assert_eq!(report["baseline"], "normal");
+    assert_eq!(report["rows"].as_array().expect("rows should be an array").len(), 3);
+    assert!(report["rows"][1]["pool_size_delta"].is_number());
+
+    let csv_output = run_cli(&[
+        "--format",
+        "csv",
+        "compare",
+        "--config",
+        &fixture("docs/fixtures/scenarios.json"),
+        "--baseline",
+        "peak",
+    ]);
+    assert_success(&csv_output, "compare CSV docs example");
+    let csv = stdout_utf8(&csv_output);
+    assert!(csv.contains("scenario,baseline"));
+    assert!(csv.contains("incident"));
+
+    let toml_output = run_cli(&[
+        "--format",
+        "table",
+        "compare",
+        "--config",
+        &fixture("docs/fixtures/scenarios.toml"),
+    ]);
+    assert_success(&toml_output, "compare TOML docs example");
+    let table = stdout_utf8(&toml_output);
+    assert!(table.contains("scenario_count"));
+    assert!(table.contains("worst_saturation"));
+}
+
+#[test]
 fn docs_import_telemetry_example_works() {
     let json_output = run_cli(&[
         "--format",

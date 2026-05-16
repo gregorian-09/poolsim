@@ -24,6 +24,8 @@ Checked-in runnable fixture files live under `docs/fixtures/`:
 - `docs/fixtures/cli-config.toml`
 - `docs/fixtures/batch.json`
 - `docs/fixtures/batch.toml`
+- `docs/fixtures/scenarios.json`
+- `docs/fixtures/scenarios.toml`
 - `docs/fixtures/telemetry.json`
 - `docs/fixtures/prometheus-responses.json`
 - `docs/fixtures/gate-policy.toml`
@@ -37,6 +39,7 @@ Available subcommands:
 - `evaluate`
 - `sweep`
 - `batch`
+- `compare`
 - `import telemetry`
 - `import prometheus`
 - `gate telemetry`
@@ -206,6 +209,72 @@ Runs multiple simulation requests from a single batch file.
 ```bash
 poolsim batch --config docs/fixtures/batch.json --format json
 ```
+
+## `compare`
+
+### Purpose
+
+Runs named scenarios side by side and reports how each scenario differs from a baseline.
+
+Use `compare` when you want one report for normal traffic, peak traffic, and incident traffic instead of running separate simulations by hand.
+
+The JSON output is a `ScenarioComparisonReport`:
+
+- `baseline`: scenario name used as the delta reference
+- `worst_saturation`: worst saturation level across all scenarios
+- `rows`: one row per scenario
+
+Each row includes:
+
+- `name`: scenario name
+- `is_baseline`: whether the row is the baseline scenario
+- `requests_per_second`: workload request rate for the scenario
+- `optimal_pool_size`: recommended pool size for the scenario
+- `pool_size_delta`: recommended-size delta against the baseline
+- `p99_queue_wait_ms`: scenario p99 queue wait
+- `p99_queue_wait_delta_ms`: p99 queue-wait delta against the baseline
+- `mean_queue_wait_ms`: scenario mean queue wait
+- `mean_queue_wait_delta_ms`: mean queue-wait delta against the baseline
+- `utilisation_rho`: scenario utilization ratio
+- `utilisation_rho_delta`: utilization delta against the baseline
+- `saturation`: scenario saturation label
+- `report`: full underlying `SimulationReport`
+
+Default baseline behavior:
+
+- `--baseline <name>` overrides the file baseline
+- file-level `baseline` is used when present
+- otherwise the first scenario in the file is used
+
+### JSON scenario comparison example
+
+```bash
+poolsim --format json compare --config docs/fixtures/scenarios.json
+```
+
+### CSV scenario comparison example
+
+```bash
+poolsim --format csv compare \
+  --config docs/fixtures/scenarios.json \
+  --baseline peak
+```
+
+### TOML scenario comparison example
+
+```bash
+poolsim --format table compare --config docs/fixtures/scenarios.toml
+```
+
+### `compare` flags
+
+#### `--config <path>`
+
+Required path to a JSON or TOML scenario comparison file.
+
+#### `--baseline <name>`
+
+Optional scenario name to use as the delta baseline.
 
 ## `import telemetry`
 
@@ -1241,6 +1310,96 @@ max_pool_size = 20
 iterations = 10000
 ```
 
+## Scenario Comparison File Formats
+
+## JSON scenario comparison
+
+```json
+{
+  "baseline": "normal",
+  "scenarios": [
+    {
+      "name": "normal",
+      "workload": {
+        "requests_per_second": 180.0,
+        "latency_p50_ms": 7.0,
+        "latency_p95_ms": 25.0,
+        "latency_p99_ms": 60.0
+      },
+      "pool": {
+        "max_server_connections": 100,
+        "connection_overhead_ms": 2.0,
+        "min_pool_size": 2,
+        "max_pool_size": 20
+      },
+      "options": {
+        "iterations": 10000,
+        "seed": 17
+      }
+    },
+    {
+      "name": "peak",
+      "workload": {
+        "requests_per_second": 260.0,
+        "latency_p50_ms": 8.0,
+        "latency_p95_ms": 30.0,
+        "latency_p99_ms": 70.0
+      },
+      "pool": {
+        "max_server_connections": 120,
+        "connection_overhead_ms": 2.0,
+        "min_pool_size": 3,
+        "max_pool_size": 24
+      },
+      "options": {
+        "iterations": 10000,
+        "seed": 17
+      }
+    }
+  ]
+}
+```
+
+JSON also supports a direct array of scenario objects. In that form, the first scenario is the baseline unless `--baseline` is supplied.
+
+## TOML scenario comparison
+
+```toml
+baseline = "normal"
+
+[[scenarios]]
+name = "normal"
+[scenarios.workload]
+requests_per_second = 180.0
+latency_p50_ms = 7.0
+latency_p95_ms = 25.0
+latency_p99_ms = 60.0
+[scenarios.pool]
+max_server_connections = 100
+connection_overhead_ms = 2.0
+min_pool_size = 2
+max_pool_size = 20
+[scenarios.options]
+iterations = 10000
+seed = 17
+
+[[scenarios]]
+name = "peak"
+[scenarios.workload]
+requests_per_second = 260.0
+latency_p50_ms = 8.0
+latency_p95_ms = 30.0
+latency_p99_ms = 70.0
+[scenarios.pool]
+max_server_connections = 120
+connection_overhead_ms = 2.0
+min_pool_size = 3
+max_pool_size = 24
+[scenarios.options]
+iterations = 10000
+seed = 17
+```
+
 ## Output Formats
 
 ### Table output
@@ -1350,6 +1509,12 @@ poolsim simulate \
 
 ```bash
 poolsim batch --config docs/fixtures/batch.json --format json
+```
+
+### Example: scenario comparison
+
+```bash
+poolsim compare --config docs/fixtures/scenarios.json --format json
 ```
 
 ## Notes
