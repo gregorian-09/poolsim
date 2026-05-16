@@ -507,6 +507,22 @@ mod tests {
     }
 
     #[test]
+    fn policy_from_args_loads_policy_file() {
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!(
+            "poolsim_gate_args_policy_{}.toml",
+            std::process::id()
+        ));
+        fs::write(&path, "max_saturation = \"Critical\"\n")
+            .expect("gate policy file should write");
+
+        let policy = policy_from_args(&gate_args(Some(path.clone()))).expect("policy should load");
+        assert_eq!(policy.max_saturation, SaturationLevel::Critical);
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
     fn gate_report_passes_when_all_checks_pass() {
         let policy = GatePolicy {
             max_saturation: SaturationLevel::Warning,
@@ -538,6 +554,20 @@ mod tests {
         assert_eq!(report.status, GateDecision::Warning);
         let _ = report.status.exit_code();
         assert!(report.checks[0].message.contains("exceeds"));
+    }
+
+    #[test]
+    fn gate_report_fails_for_critical_saturation_above_budget() {
+        let policy = GatePolicy {
+            max_saturation: SaturationLevel::Warning,
+            ..GatePolicy::default()
+        };
+        let mut recommendation = recommendation(8);
+        recommendation.diff.recommended_report.saturation = SaturationLevel::Critical;
+
+        let report = build_gate_report(recommendation, &policy);
+        assert_eq!(report.status, GateDecision::Critical);
+        assert_eq!(report.checks[0].severity, GateDecision::Critical);
     }
 
     #[test]
