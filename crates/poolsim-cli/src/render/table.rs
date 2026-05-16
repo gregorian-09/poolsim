@@ -4,6 +4,7 @@ use anyhow::Result;
 use crate::config_gen::ConfigSnippetReport;
 use crate::doctor::DoctorReport;
 use crate::gate::GateReport;
+use crate::guard::GuardReport;
 use poolsim_core::telemetry::TelemetryRecommendation;
 use poolsim_core::types::{EvaluationResult, RiskLevel, SaturationLevel, SensitivityRow, SimulationReport};
 use tabled::{settings::Style, Table, Tabled};
@@ -326,6 +327,33 @@ pub fn gate(report: &GateReport) -> Result<()> {
     Ok(())
 }
 
+pub fn guard(report: &GuardReport) -> Result<()> {
+    let summary = vec![
+        SummaryRow {
+            metric: "status".to_string(),
+            value: format!("{:?}", report.status),
+        },
+        SummaryRow {
+            metric: "deployment_safe".to_string(),
+            value: report.deployment_safe.to_string(),
+        },
+        SummaryRow {
+            metric: "exit_code".to_string(),
+            value: report.exit_code.to_string(),
+        },
+        SummaryRow {
+            metric: "reason".to_string(),
+            value: report.reason.clone(),
+        },
+    ];
+    let mut summary_table = Table::new(summary);
+    summary_table.with(Style::rounded());
+    println!("{summary_table}");
+
+    gate(&report.gate)?;
+    Ok(())
+}
+
 pub fn doctor(report: &DoctorReport) -> Result<()> {
     let summary = vec![
         SummaryRow {
@@ -616,6 +644,11 @@ mod tests {
             &crate::gate::GatePolicy::default(),
         ))
         .expect("gate table should render");
+        guard(&crate::guard::build_guard_report(crate::gate::build_gate_report(
+            sample_recommendation(),
+            &crate::gate::GatePolicy::default(),
+        )))
+        .expect("guard table should render");
         doctor(&crate::doctor::build_doctor_report(sample_recommendation()))
             .expect("doctor table should render");
 

@@ -9,6 +9,7 @@ mod config;
 mod config_gen;
 mod doctor;
 mod gate;
+mod guard;
 mod prometheus;
 mod render;
 
@@ -147,6 +148,18 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
             render_gate(&report, cli.format)?;
             Ok(report.status.exit_code())
         }
+        Commands::Guard(args) => {
+            let policy = gate::policy_from_guard_args(&args)?;
+            let input = match args.source {
+                args::GateSourceCommands::Telemetry(source) => config::resolve_telemetry_input(&source)?,
+                args::GateSourceCommands::Prometheus(source) => prometheus::resolve_prometheus_input(&source)?,
+            };
+            let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
+            let gate_report = gate::build_gate_report(recommendation, &policy);
+            let report = guard::build_guard_report(gate_report);
+            render_guard(&report, cli.format)?;
+            Ok(report.exit_code())
+        }
         Commands::Doctor(args) => {
             let input = match args.source {
                 args::DoctorSourceCommands::Telemetry(source) => config::resolve_telemetry_input(&source)?,
@@ -240,6 +253,14 @@ fn render_gate(report: &gate::GateReport, format: OutputFormat) -> Result<()> {
     }
 }
 
+fn render_guard(report: &guard::GuardReport, format: OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Table => render::table::guard(report),
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => render::csv::guard(report),
+    }
+}
+
 fn render_doctor(report: &doctor::DoctorReport, format: OutputFormat) -> Result<()> {
     match format {
         OutputFormat::Table => render::table::doctor(report),
@@ -312,8 +333,8 @@ mod tests {
     use super::*;
     use crate::args::{
         BatchArgs, CliConfigFramework, CommonArgs, DoctorArgs, DoctorSourceCommands, EvaluateArgs,
-        GateArgs, GateSourceCommands, GenerateConfigArgs, GenerateConfigSourceCommands, ImportArgs,
-        ImportCommands, PrometheusImportArgs, SimulateArgs, TelemetryImportArgs,
+        GateArgs, GateSourceCommands, GenerateConfigArgs, GenerateConfigSourceCommands, GuardArgs,
+        ImportArgs, ImportCommands, PrometheusImportArgs, SimulateArgs, TelemetryImportArgs,
     };
 
     fn sample_config_json() -> String {
@@ -607,6 +628,11 @@ mod tests {
         render_gate(&gate_report, OutputFormat::Csv).expect("csv gate should render");
         render_gate(&gate_report, OutputFormat::Table).expect("table gate should render");
 
+        let guard_report = guard::build_guard_report(gate_report);
+        render_guard(&guard_report, OutputFormat::Json).expect("json guard should render");
+        render_guard(&guard_report, OutputFormat::Csv).expect("csv guard should render");
+        render_guard(&guard_report, OutputFormat::Table).expect("table guard should render");
+
         let doctor_report = doctor::build_doctor_report(sample_recommendation());
         render_doctor(&doctor_report, OutputFormat::Json).expect("json doctor should render");
         render_doctor(&doctor_report, OutputFormat::Csv).expect("csv doctor should render");
@@ -758,6 +784,9 @@ mod tests {
                 max_recommended_p99_queue_wait_ms: Some(100.0),
                 max_recommended_mean_queue_wait_ms: Some(20.0),
                 max_recommended_rho: Some(1.0),
+                max_current_p99_queue_wait_ms: Some(100.0),
+                max_current_mean_queue_wait_ms: Some(20.0),
+                max_current_rho: Some(1.0),
                 expected_pool_size: None,
                 source: GateSourceCommands::Telemetry(TelemetryImportArgs {
                     config: telemetry_cfg.clone(),
@@ -779,6 +808,9 @@ mod tests {
                 max_recommended_p99_queue_wait_ms: Some(100.0),
                 max_recommended_mean_queue_wait_ms: Some(20.0),
                 max_recommended_rho: Some(1.0),
+                max_current_p99_queue_wait_ms: Some(100.0),
+                max_current_mean_queue_wait_ms: Some(20.0),
+                max_current_rho: Some(1.0),
                 expected_pool_size: None,
                 source: GateSourceCommands::Prometheus(PrometheusImportArgs {
                     endpoint: None,
@@ -809,6 +841,74 @@ mod tests {
             warn_exit: false,
         };
         let _ = run_with_cli(cli).expect("gate prometheus should execute");
+
+        let cli = Cli {
+            command: Commands::Guard(GuardArgs {
+                policy: None,
+                max_saturation: None,
+                max_pool_increase_percent: Some(100.0),
+                max_additional_connections: Some(10),
+                max_recommended_pool_size: Some(20),
+                max_recommended_p99_queue_wait_ms: Some(100.0),
+                max_recommended_mean_queue_wait_ms: Some(20.0),
+                max_recommended_rho: Some(1.0),
+                max_current_p99_queue_wait_ms: Some(100.0),
+                max_current_mean_queue_wait_ms: Some(20.0),
+                max_current_rho: Some(1.0),
+                expected_pool_size: None,
+                source: GateSourceCommands::Telemetry(TelemetryImportArgs {
+                    config: telemetry_cfg.clone(),
+                    current_pool_size: Some(9),
+                }),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: false,
+        };
+        let _ = run_with_cli(cli).expect("guard telemetry should execute");
+
+        let cli = Cli {
+            command: Commands::Guard(GuardArgs {
+                policy: None,
+                max_saturation: None,
+                max_pool_increase_percent: Some(100.0),
+                max_additional_connections: Some(10),
+                max_recommended_pool_size: Some(20),
+                max_recommended_p99_queue_wait_ms: Some(100.0),
+                max_recommended_mean_queue_wait_ms: Some(20.0),
+                max_recommended_rho: Some(1.0),
+                max_current_p99_queue_wait_ms: Some(100.0),
+                max_current_mean_queue_wait_ms: Some(20.0),
+                max_current_rho: Some(1.0),
+                expected_pool_size: None,
+                source: GateSourceCommands::Prometheus(PrometheusImportArgs {
+                    endpoint: None,
+                    response_file: Some(prometheus_cfg.clone()),
+                    rps_query: None,
+                    p50_query: None,
+                    p95_query: None,
+                    p99_query: None,
+                    header: Vec::new(),
+                    service_name: Some("checkout-api".to_string()),
+                    window: Some("5m".to_string()),
+                    observed_at: None,
+                    current_pool_size: 9,
+                    max_server_connections: 100,
+                    connection_overhead_ms: 2.0,
+                    idle_timeout_ms: None,
+                    min: 2,
+                    max: 20,
+                    iterations: Some(1_200),
+                    seed: Some(7),
+                    distribution: None,
+                    queue_model: None,
+                    target_wait_p99_ms: None,
+                    max_acceptable_rho: None,
+                }),
+            }),
+            format: OutputFormat::Csv,
+            warn_exit: false,
+        };
+        let _ = run_with_cli(cli).expect("guard prometheus should execute");
 
         let cli = Cli {
             command: Commands::Doctor(DoctorArgs {

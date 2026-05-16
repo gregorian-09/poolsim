@@ -65,6 +65,7 @@ pub enum Commands {
     Batch(BatchArgs),
     Import(ImportArgs),
     Gate(GateArgs),
+    Guard(GuardArgs),
     Doctor(DoctorArgs),
     GenerateConfig(GenerateConfigArgs),
 }
@@ -174,6 +175,12 @@ pub struct GateArgs {
     #[arg(long)]
     pub max_recommended_rho: Option<f64>,
     #[arg(long)]
+    pub max_current_p99_queue_wait_ms: Option<f64>,
+    #[arg(long)]
+    pub max_current_mean_queue_wait_ms: Option<f64>,
+    #[arg(long)]
+    pub max_current_rho: Option<f64>,
+    #[arg(long)]
     pub expected_pool_size: Option<u32>,
 
     #[command(subcommand)]
@@ -184,6 +191,38 @@ pub struct GateArgs {
 pub enum GateSourceCommands {
     Telemetry(TelemetryImportArgs),
     Prometheus(PrometheusImportArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct GuardArgs {
+    #[arg(long)]
+    pub policy: Option<PathBuf>,
+
+    #[arg(long, value_enum)]
+    pub max_saturation: Option<CliSaturationLevel>,
+    #[arg(long)]
+    pub max_pool_increase_percent: Option<f64>,
+    #[arg(long)]
+    pub max_additional_connections: Option<u32>,
+    #[arg(long)]
+    pub max_recommended_pool_size: Option<u32>,
+    #[arg(long)]
+    pub max_recommended_p99_queue_wait_ms: Option<f64>,
+    #[arg(long)]
+    pub max_recommended_mean_queue_wait_ms: Option<f64>,
+    #[arg(long)]
+    pub max_recommended_rho: Option<f64>,
+    #[arg(long)]
+    pub max_current_p99_queue_wait_ms: Option<f64>,
+    #[arg(long)]
+    pub max_current_mean_queue_wait_ms: Option<f64>,
+    #[arg(long)]
+    pub max_current_rho: Option<f64>,
+    #[arg(long)]
+    pub expected_pool_size: Option<u32>,
+
+    #[command(subcommand)]
+    pub source: GateSourceCommands,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -591,6 +630,12 @@ mod tests {
             "10",
             "--max-recommended-rho",
             "0.85",
+            "--max-current-p99-queue-wait-ms",
+            "75",
+            "--max-current-mean-queue-wait-ms",
+            "15",
+            "--max-current-rho",
+            "0.9",
             "--expected-pool-size",
             "8",
             "telemetry",
@@ -609,6 +654,9 @@ mod tests {
                 assert_eq!(args.max_recommended_p99_queue_wait_ms, Some(50.0));
                 assert_eq!(args.max_recommended_mean_queue_wait_ms, Some(10.0));
                 assert_eq!(args.max_recommended_rho, Some(0.85));
+                assert_eq!(args.max_current_p99_queue_wait_ms, Some(75.0));
+                assert_eq!(args.max_current_mean_queue_wait_ms, Some(15.0));
+                assert_eq!(args.max_current_rho, Some(0.9));
                 assert_eq!(args.expected_pool_size, Some(8));
                 match args.source {
                     GateSourceCommands::Telemetry(telemetry) => {
@@ -618,6 +666,47 @@ mod tests {
                 }
             }
             _ => panic!("expected gate command"),
+        }
+    }
+
+    #[test]
+    fn parser_handles_guard_prometheus_subcommand() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "--format",
+            "json",
+            "guard",
+            "--policy",
+            "guard.toml",
+            "--max-current-rho",
+            "0.85",
+            "prometheus",
+            "--response-file",
+            "prometheus.json",
+            "--current-pool-size",
+            "12",
+            "--max-server-connections",
+            "100",
+            "--min",
+            "2",
+            "--max",
+            "24",
+        ])
+        .expect("guard prometheus args should parse");
+
+        match cli.command {
+            Commands::Guard(args) => {
+                assert_eq!(args.policy, Some(PathBuf::from("guard.toml")));
+                assert_eq!(args.max_current_rho, Some(0.85));
+                match args.source {
+                    GateSourceCommands::Prometheus(prometheus) => {
+                        assert_eq!(prometheus.response_file, Some(PathBuf::from("prometheus.json")));
+                        assert_eq!(prometheus.current_pool_size, 12);
+                    }
+                    GateSourceCommands::Telemetry(_) => panic!("expected prometheus source"),
+                }
+            }
+            _ => panic!("expected guard command"),
         }
     }
 

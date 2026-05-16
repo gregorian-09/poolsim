@@ -7,7 +7,7 @@ use poolsim_core::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::args::GateArgs;
+use crate::args::{GateArgs, GuardArgs};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub(crate) struct GatePolicy {
@@ -25,6 +25,12 @@ pub(crate) struct GatePolicy {
     pub max_recommended_mean_queue_wait_ms: Option<f64>,
     #[serde(default)]
     pub max_recommended_rho: Option<f64>,
+    #[serde(default)]
+    pub max_current_p99_queue_wait_ms: Option<f64>,
+    #[serde(default)]
+    pub max_current_mean_queue_wait_ms: Option<f64>,
+    #[serde(default)]
+    pub max_current_rho: Option<f64>,
     #[serde(default)]
     pub expected_pool_size: Option<u32>,
 }
@@ -67,6 +73,9 @@ impl Default for GatePolicy {
             max_recommended_p99_queue_wait_ms: None,
             max_recommended_mean_queue_wait_ms: None,
             max_recommended_rho: None,
+            max_current_p99_queue_wait_ms: None,
+            max_current_mean_queue_wait_ms: None,
+            max_current_rho: None,
             expected_pool_size: None,
         }
     }
@@ -83,33 +92,94 @@ impl GateDecision {
 }
 
 pub(crate) fn policy_from_args(args: &GateArgs) -> Result<GatePolicy> {
-    let mut policy = match args.policy.as_deref() {
+    let overrides = PolicyOverrides {
+        max_saturation: args.max_saturation,
+        max_pool_increase_percent: args.max_pool_increase_percent,
+        max_additional_connections: args.max_additional_connections,
+        max_recommended_pool_size: args.max_recommended_pool_size,
+        max_recommended_p99_queue_wait_ms: args.max_recommended_p99_queue_wait_ms,
+        max_recommended_mean_queue_wait_ms: args.max_recommended_mean_queue_wait_ms,
+        max_recommended_rho: args.max_recommended_rho,
+        max_current_p99_queue_wait_ms: args.max_current_p99_queue_wait_ms,
+        max_current_mean_queue_wait_ms: args.max_current_mean_queue_wait_ms,
+        max_current_rho: args.max_current_rho,
+        expected_pool_size: args.expected_pool_size,
+    };
+    policy_from_path_and_overrides(args.policy.as_deref(), overrides)
+}
+
+pub(crate) fn policy_from_guard_args(args: &GuardArgs) -> Result<GatePolicy> {
+    let overrides = PolicyOverrides {
+        max_saturation: args.max_saturation,
+        max_pool_increase_percent: args.max_pool_increase_percent,
+        max_additional_connections: args.max_additional_connections,
+        max_recommended_pool_size: args.max_recommended_pool_size,
+        max_recommended_p99_queue_wait_ms: args.max_recommended_p99_queue_wait_ms,
+        max_recommended_mean_queue_wait_ms: args.max_recommended_mean_queue_wait_ms,
+        max_recommended_rho: args.max_recommended_rho,
+        max_current_p99_queue_wait_ms: args.max_current_p99_queue_wait_ms,
+        max_current_mean_queue_wait_ms: args.max_current_mean_queue_wait_ms,
+        max_current_rho: args.max_current_rho,
+        expected_pool_size: args.expected_pool_size,
+    };
+    policy_from_path_and_overrides(args.policy.as_deref(), overrides)
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PolicyOverrides {
+    max_saturation: Option<crate::args::CliSaturationLevel>,
+    max_pool_increase_percent: Option<f64>,
+    max_additional_connections: Option<u32>,
+    max_recommended_pool_size: Option<u32>,
+    max_recommended_p99_queue_wait_ms: Option<f64>,
+    max_recommended_mean_queue_wait_ms: Option<f64>,
+    max_recommended_rho: Option<f64>,
+    max_current_p99_queue_wait_ms: Option<f64>,
+    max_current_mean_queue_wait_ms: Option<f64>,
+    max_current_rho: Option<f64>,
+    expected_pool_size: Option<u32>,
+}
+
+fn policy_from_path_and_overrides(
+    policy_path: Option<&Path>,
+    overrides: PolicyOverrides,
+) -> Result<GatePolicy> {
+    let mut policy = match policy_path {
         Some(path) => load_policy(path)?,
         None => GatePolicy::default(),
     };
 
-    if let Some(value) = args.max_saturation {
+    if let Some(value) = overrides.max_saturation {
         policy.max_saturation = value.into();
     }
-    if let Some(value) = args.max_pool_increase_percent {
+    if let Some(value) = overrides.max_pool_increase_percent {
         policy.max_pool_increase_percent = Some(value);
     }
-    if let Some(value) = args.max_additional_connections {
+    if let Some(value) = overrides.max_additional_connections {
         policy.max_additional_connections = Some(value);
     }
-    if let Some(value) = args.max_recommended_pool_size {
+    if let Some(value) = overrides.max_recommended_pool_size {
         policy.max_recommended_pool_size = Some(value);
     }
-    if let Some(value) = args.max_recommended_p99_queue_wait_ms {
+    if let Some(value) = overrides.max_recommended_p99_queue_wait_ms {
         policy.max_recommended_p99_queue_wait_ms = Some(value);
     }
-    if let Some(value) = args.max_recommended_mean_queue_wait_ms {
+    if let Some(value) = overrides.max_recommended_mean_queue_wait_ms {
         policy.max_recommended_mean_queue_wait_ms = Some(value);
     }
-    if let Some(value) = args.max_recommended_rho {
+    if let Some(value) = overrides.max_recommended_rho {
         policy.max_recommended_rho = Some(value);
     }
-    if let Some(value) = args.expected_pool_size {
+    if let Some(value) = overrides.max_current_p99_queue_wait_ms {
+        policy.max_current_p99_queue_wait_ms = Some(value);
+    }
+    if let Some(value) = overrides.max_current_mean_queue_wait_ms {
+        policy.max_current_mean_queue_wait_ms = Some(value);
+    }
+    if let Some(value) = overrides.max_current_rho {
+        policy.max_current_rho = Some(value);
+    }
+    if let Some(value) = overrides.expected_pool_size {
         policy.expected_pool_size = Some(value);
     }
 
@@ -183,6 +253,33 @@ pub(crate) fn build_gate_report(
             "",
         ));
     }
+    if let Some(threshold) = policy.max_current_p99_queue_wait_ms {
+        checks.push(check_f64_max(
+            "max_current_p99_queue_wait_ms",
+            diff.current_evaluation.p99_queue_wait_ms,
+            threshold,
+            GateDecision::Critical,
+            "ms",
+        ));
+    }
+    if let Some(threshold) = policy.max_current_mean_queue_wait_ms {
+        checks.push(check_f64_max(
+            "max_current_mean_queue_wait_ms",
+            diff.current_evaluation.mean_queue_wait_ms,
+            threshold,
+            GateDecision::Critical,
+            "ms",
+        ));
+    }
+    if let Some(threshold) = policy.max_current_rho {
+        checks.push(check_f64_max(
+            "max_current_rho",
+            diff.current_evaluation.utilisation_rho,
+            threshold,
+            GateDecision::Critical,
+            "",
+        ));
+    }
     if let Some(expected) = policy.expected_pool_size {
         checks.push(check_expected_pool_size(
             diff.recommended_pool_size,
@@ -240,6 +337,15 @@ fn validate_policy(policy: &GatePolicy) -> Result<()> {
         policy.max_recommended_mean_queue_wait_ms,
     )?;
     validate_non_negative("max_recommended_rho", policy.max_recommended_rho)?;
+    validate_non_negative(
+        "max_current_p99_queue_wait_ms",
+        policy.max_current_p99_queue_wait_ms,
+    )?;
+    validate_non_negative(
+        "max_current_mean_queue_wait_ms",
+        policy.max_current_mean_queue_wait_ms,
+    )?;
+    validate_non_negative("max_current_rho", policy.max_current_rho)?;
     Ok(())
 }
 
@@ -429,6 +535,9 @@ mod tests {
             max_recommended_p99_queue_wait_ms: None,
             max_recommended_mean_queue_wait_ms: None,
             max_recommended_rho: None,
+            max_current_p99_queue_wait_ms: None,
+            max_current_mean_queue_wait_ms: None,
+            max_current_rho: None,
             expected_pool_size: None,
             source: GateSourceCommands::Telemetry(TelemetryImportArgs {
                 config: PathBuf::from("telemetry.json"),
@@ -454,6 +563,9 @@ mod tests {
         args.max_recommended_p99_queue_wait_ms = Some(30.0);
         args.max_recommended_mean_queue_wait_ms = Some(5.0);
         args.max_recommended_rho = Some(0.8);
+        args.max_current_p99_queue_wait_ms = Some(40.0);
+        args.max_current_mean_queue_wait_ms = Some(6.0);
+        args.max_current_rho = Some(0.9);
         args.expected_pool_size = Some(9);
 
         let policy = policy_from_args(&args).expect("policy should resolve");
@@ -464,9 +576,15 @@ mod tests {
         assert_eq!(policy.max_recommended_p99_queue_wait_ms, Some(30.0));
         assert_eq!(policy.max_recommended_mean_queue_wait_ms, Some(5.0));
         assert_eq!(policy.max_recommended_rho, Some(0.8));
+        assert_eq!(policy.max_current_p99_queue_wait_ms, Some(40.0));
+        assert_eq!(policy.max_current_mean_queue_wait_ms, Some(6.0));
+        assert_eq!(policy.max_current_rho, Some(0.9));
         assert_eq!(policy.expected_pool_size, Some(9));
 
         args.max_recommended_rho = Some(f64::NAN);
+        assert!(policy_from_args(&args).is_err());
+        args.max_recommended_rho = None;
+        args.max_current_rho = Some(f64::INFINITY);
         assert!(policy_from_args(&args).is_err());
     }
 
@@ -532,6 +650,9 @@ mod tests {
             max_recommended_p99_queue_wait_ms: Some(30.0),
             max_recommended_mean_queue_wait_ms: Some(5.0),
             max_recommended_rho: Some(0.80),
+            max_current_p99_queue_wait_ms: Some(20.0),
+            max_current_mean_queue_wait_ms: Some(5.0),
+            max_current_rho: Some(0.80),
             expected_pool_size: Some(10),
         };
 
@@ -580,6 +701,9 @@ mod tests {
             max_recommended_p99_queue_wait_ms: Some(1.0),
             max_recommended_mean_queue_wait_ms: Some(1.0),
             max_recommended_rho: Some(0.1),
+            max_current_p99_queue_wait_ms: Some(1.0),
+            max_current_mean_queue_wait_ms: Some(1.0),
+            max_current_rho: Some(0.1),
             expected_pool_size: Some(8),
         };
 

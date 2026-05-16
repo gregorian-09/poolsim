@@ -2,6 +2,7 @@ use anyhow::Result;
 use crate::config_gen::ConfigSnippetReport;
 use crate::doctor::DoctorReport;
 use crate::gate::GateReport;
+use crate::guard::GuardReport;
 use csv::{Writer, WriterBuilder};
 use poolsim_core::telemetry::TelemetryRecommendation;
 use poolsim_core::types::{EvaluationResult, SensitivityRow, SimulationReport};
@@ -189,6 +190,46 @@ pub fn gate(report: &GateReport) -> Result<()> {
         "message",
     ])?;
     for check in &report.checks {
+        wtr.write_record([
+            check.name.clone(),
+            check.passed.to_string(),
+            format!("{:?}", check.severity),
+            check.observed.clone(),
+            check.threshold.clone(),
+            check.message.clone(),
+        ])?;
+    }
+    wtr.flush()?;
+    Ok(())
+}
+
+pub fn guard(report: &GuardReport) -> Result<()> {
+    let mut wtr = WriterBuilder::new().flexible(true).from_writer(std::io::stdout());
+    wtr.write_record(["field", "value"])?;
+    wtr.write_record(["status", &format!("{:?}", report.status)])?;
+    wtr.write_record(["deployment_safe", &report.deployment_safe.to_string()])?;
+    wtr.write_record(["exit_code", &report.exit_code.to_string()])?;
+    wtr.write_record(["reason", &report.reason])?;
+    wtr.write_record(["service_name", report.gate.service_name.as_deref().unwrap_or("-")])?;
+    wtr.write_record(["window", report.gate.window.as_deref().unwrap_or("-")])?;
+    wtr.write_record([
+        "observed_at",
+        report.gate.observed_at.as_deref().unwrap_or("-"),
+    ])?;
+    wtr.write_record([
+        "worst_saturation",
+        &format!("{:?}", report.gate.worst_saturation),
+    ])?;
+    wtr.write_record(["", ""])?;
+    wtr.write_record([
+        "check",
+        "passed",
+        "severity",
+        "observed",
+        "threshold",
+        "message",
+    ])?;
+    for check in &report.gate.checks {
         wtr.write_record([
             check.name.clone(),
             check.passed.to_string(),
@@ -397,6 +438,11 @@ mod tests {
             &crate::gate::GatePolicy::default(),
         ))
         .expect("gate CSV render should succeed");
+        guard(&crate::guard::build_guard_report(crate::gate::build_gate_report(
+            sample_recommendation(),
+            &crate::gate::GatePolicy::default(),
+        )))
+        .expect("guard CSV render should succeed");
         doctor(&crate::doctor::build_doctor_report(sample_recommendation()))
             .expect("doctor CSV render should succeed");
 
