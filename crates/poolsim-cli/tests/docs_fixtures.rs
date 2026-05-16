@@ -296,6 +296,53 @@ fn docs_gate_examples_work() {
 }
 
 #[test]
+fn docs_doctor_examples_work() {
+    let telemetry_output = run_cli(&[
+        "--format",
+        "json",
+        "doctor",
+        "telemetry",
+        "--config",
+        &fixture("docs/fixtures/telemetry.json"),
+    ]);
+    assert_success(&telemetry_output, "doctor telemetry docs example");
+    let report: Value = serde_json::from_str(&stdout_utf8(&telemetry_output))
+        .expect("doctor output should deserialize");
+    assert!(report["status"].is_string());
+    assert!(report["findings"].is_array());
+    assert!(report["recommendation"]["diff"]["recommended_pool_size"].is_number());
+
+    let prometheus_output = run_cli(&[
+        "--format",
+        "json",
+        "doctor",
+        "prometheus",
+        "--response-file",
+        &fixture("docs/fixtures/prometheus-responses.json"),
+        "--service-name",
+        "checkout-api",
+        "--window",
+        "5m",
+        "--current-pool-size",
+        "8",
+        "--max-server-connections",
+        "100",
+        "--connection-overhead-ms",
+        "2",
+        "--min",
+        "2",
+        "--max",
+        "20",
+    ]);
+    assert_success(&prometheus_output, "doctor prometheus docs example");
+    let report: Value = serde_json::from_str(&stdout_utf8(&prometheus_output))
+        .expect("doctor prometheus output should deserialize");
+    assert_eq!(report["service_name"], "checkout-api");
+    assert_eq!(report["window"], "5m");
+    assert!(report["current_pool_size"].is_number());
+}
+
+#[test]
 fn docs_warn_exit_example_is_stable() {
     let output = run_cli(&[
         "--warn-exit",
