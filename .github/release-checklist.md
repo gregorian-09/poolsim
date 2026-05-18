@@ -36,7 +36,7 @@ This checklist is for publishing the current sizing-calculator version of `pools
 
 1. Confirm the repository secret `CARGO_REGISTRY_TOKEN` is present.
 2. Commit the release changes.
-3. Create a tag matching the root `VERSION` file, for example `v0.2.0`.
+3. Create a tag matching the root `VERSION` file, for example `v0.2.1`.
 4. Push the tag.
 5. Confirm the `Publish` workflow starts automatically for that tag.
 6. Use `workflow_dispatch` only when you want a manual dry-run of the core publish path or a controlled fallback publish.

@@ -12,9 +12,11 @@
 
 Use it when you want to expose the sizing calculator to dashboards, internal developer platforms, remote CI jobs, or non-Rust services over HTTP.
 
-## What Is New In `0.2.0`
+## What Is New In `0.2.1`
 
-For `poolsim-web`, `0.2.0` documents and validates the service as part of the broader operational Poolsim release:
+`0.2.1` is an API-compatible patch over the additive `0.2.0` feature release. For `poolsim-web`, it keeps the documented REST/WebSocket service surface and aligns the published crate set with the restored `poolsim-core` no-default-features WASM build.
+
+The service release documents and validates:
 
 - REST endpoint documentation for health, models, simulate, evaluate, sensitivity, batch, and telemetry recommendation workflows.
 - WebSocket live simulation documentation and executable fixtures.
@@ -77,7 +79,7 @@ Example response:
 ```json
 {
   "status": "ok",
-  "version": "0.2.0"
+  "version": "0.2.1"
 }
 ```
 

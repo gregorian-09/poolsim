@@ -12,15 +12,16 @@
 
 Use it when you want to embed Poolsim directly inside Rust code instead of shelling out to `poolsim-cli` or running `poolsim-web`.
 
-## What Is New In `0.2.0`
+## What Is New In `0.2.1`
 
-`0.2.0` is an additive feature release across the Poolsim workspace.
+`0.2.1` is an API-compatible patch over the additive `0.2.0` feature release. It keeps the new operational workflows and restores the documented `wasm32-unknown-unknown` build for `poolsim-core` when compiled with `--no-default-features`.
 
 For `poolsim-core`, the important user-facing capabilities are:
 
 - Telemetry-backed recommendation diffs through `poolsim_core::telemetry::recommend_from_telemetry`.
 - Stronger docs and executable examples for the public sizing model.
 - A fully covered core source tree enforced by CI at `100%` line coverage.
+- `wasm32-unknown-unknown` compatibility for the no-default-features core build.
 - Stable typed outputs that can feed CLI workflows such as `doctor`, `gate`, `guard`, `generate-config`, and `budget`.
 
 The database budget planner itself currently lives in `poolsim-cli` because it is an operational command workflow. Use `poolsim-core` to compute per-service recommendations, then use `poolsim-cli budget` to allocate a shared database connection budget across services.
@@ -29,14 +30,14 @@ The database budget planner itself currently lives in `poolsim-cli` because it i
 
 ```toml
 [dependencies]
-poolsim-core = "0.2.0"
+poolsim-core = "0.2.1"
 ```
 
 Optional default feature:
 
 ```toml
 [dependencies]
-poolsim-core = { version = "0.2.0", default-features = false }
+poolsim-core = { version = "0.2.1", default-features = false }
 ```
 
 Default features enable parallel simulation support. Disable default features when you need a smaller dependency surface or a `wasm32-unknown-unknown` build.

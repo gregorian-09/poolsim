@@ -57,7 +57,7 @@ Response:
 ```json
 {
   "status": "ok",
-  "version": "0.2.0"
+  "version": "0.2.1"
 }
 ```
 
@@ -608,10 +608,10 @@ use poolsim_web::state::AppState;
 
 let state = AppState {
     simulation_timeout: Duration::from_secs(30),
-    version: "0.2.0",
+    version: "0.2.1",
 };
 
-assert_eq!(state.version, "0.2.0");
+assert_eq!(state.version, "0.2.1");
 ```
 
 ### `RateLimitState`
@@ -642,7 +642,7 @@ use poolsim_web::{
 
 let state = AppState {
     simulation_timeout: Duration::from_secs(30),
-    version: "0.2.0",
+    version: "0.2.1",
 };
 
 let rate_limit = RateLimitState::new(60, Duration::from_secs(60));

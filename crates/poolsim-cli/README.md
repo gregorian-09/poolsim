@@ -12,9 +12,9 @@
 
 It is built for backend engineers, platform teams, SREs, and CI pipelines that need repeatable, machine-readable pool-sizing recommendations without embedding Rust code directly.
 
-## What Is New In `0.2.0`
+## What Is New In `0.2.1`
 
-`0.2.0` turns the CLI from a sizing calculator into an operational workflow tool.
+`0.2.1` is an API-compatible patch over the additive `0.2.0` feature release. It keeps the CLI operational workflows and aligns the published crate set with the restored `poolsim-core` no-default-features WASM build.
 
 New and expanded workflows include:
 

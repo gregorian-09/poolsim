@@ -8,6 +8,17 @@ The format is based on Keep a Changelog, and this project uses Semantic Versioni
 
 - No unreleased entries yet.
 
+## [0.2.1] - 2026-05-18
+
+### Fixed
+
+- Restored the documented `wasm32-unknown-unknown` build for `poolsim-core` with `--no-default-features` by enabling `getrandom` WebAssembly JavaScript support for wasm targets.
+- Kept the release additive and API-compatible with `0.2.0`; no public APIs were removed, renamed, or semantically narrowed.
+
+### Quality
+
+- Re-ran the release quality gates after the patch: workspace tests, docs coverage, executable examples, workspace line coverage, examples coverage, package verification, and the remote publish workflow.
+
 ## [0.2.0] - 2026-05-18
 
 ### Added
