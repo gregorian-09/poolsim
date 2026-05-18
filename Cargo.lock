@@ -817,7 +817,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "poolsim-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -831,7 +831,7 @@ dependencies = [
 
 [[package]]
 name = "poolsim-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rand",
  "rand_distr",
@@ -844,7 +844,7 @@ dependencies = [
 
 [[package]]
 name = "poolsim-web"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "futures-util",

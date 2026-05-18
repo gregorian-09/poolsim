@@ -1,5 +1,5 @@
 #![doc = include_str!("../README.md")]
-#![doc(html_root_url = "https://docs.rs/poolsim-cli/0.1.0")]
+#![doc(html_root_url = "https://docs.rs/poolsim-cli/0.2.0")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![deny(missing_docs)]
 
