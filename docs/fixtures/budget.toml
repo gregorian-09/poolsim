@@ -1,0 +1,30 @@
+max_connections = 120
+reserved_connections = 20
+safety_margin_connections = 10
+
+[[services]]
+name = "checkout-api"
+replicas = 6
+current_pool_size = 8
+min_pool_size = 4
+max_pool_size = 12
+recommended_pool_size = 10
+priority = 5
+
+[[services]]
+name = "billing-api"
+replicas = 4
+current_pool_size = 6
+min_pool_size = 3
+max_pool_size = 10
+recommended_pool_size = 8
+priority = 3
+
+[[services]]
+name = "admin-api"
+replicas = 2
+current_pool_size = 4
+min_pool_size = 2
+max_pool_size = 6
+recommended_pool_size = 5
+priority = 1

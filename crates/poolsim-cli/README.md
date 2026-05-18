@@ -33,6 +33,7 @@ cargo install poolsim-cli
 - `poolsim-cli sweep`
 - `poolsim-cli batch`
 - `poolsim-cli compare`
+- `poolsim-cli budget`
 - `poolsim-cli import telemetry`
 - `poolsim-cli import prometheus`
 - `poolsim-cli gate telemetry`
@@ -111,6 +112,12 @@ Doctor example:
 
 ```bash
 poolsim-cli --format json doctor telemetry --config docs/fixtures/telemetry.json
+```
+
+Database budget planner example:
+
+```bash
+poolsim-cli --format json budget --config docs/fixtures/budget.json
 ```
 
 Config generator example:

@@ -1,5 +1,6 @@
 use std::io::IsTerminal;
 
+use crate::budget::BudgetPlanReport;
 use crate::compare::ScenarioComparisonReport;
 use crate::config_gen::ConfigSnippetReport;
 use crate::doctor::DoctorReport;
@@ -47,6 +48,20 @@ struct ScenarioComparisonTableRow {
     p99_queue_wait_delta_ms: String,
     utilisation_rho: String,
     saturation: String,
+}
+
+#[derive(Tabled)]
+struct BudgetServiceTableRow {
+    service: String,
+    replicas: u32,
+    priority: u32,
+    current: String,
+    recommended: u32,
+    allocated: u32,
+    total_connections: u32,
+    delta: String,
+    reduction: u32,
+    minimum_ok: String,
 }
 
 #[derive(Tabled)]
@@ -278,6 +293,85 @@ pub fn compare(report: &ScenarioComparisonReport) -> Result<()> {
     let mut table = Table::new(rows);
     table.with(Style::psql());
     println!("{table}");
+    Ok(())
+}
+
+pub fn budget(report: &BudgetPlanReport) -> Result<()> {
+    let summary = vec![
+        SummaryRow {
+            metric: "status".to_string(),
+            value: format!("{:?}", report.status),
+        },
+        SummaryRow {
+            metric: "max_connections".to_string(),
+            value: report.max_connections.to_string(),
+        },
+        SummaryRow {
+            metric: "reserved_connections".to_string(),
+            value: report.reserved_connections.to_string(),
+        },
+        SummaryRow {
+            metric: "safety_margin_connections".to_string(),
+            value: report.safety_margin_connections.to_string(),
+        },
+        SummaryRow {
+            metric: "available_connections".to_string(),
+            value: report.available_connections.to_string(),
+        },
+        SummaryRow {
+            metric: "requested_total_connections".to_string(),
+            value: report.requested_total_connections.to_string(),
+        },
+        SummaryRow {
+            metric: "allocated_total_connections".to_string(),
+            value: report.allocated_total_connections.to_string(),
+        },
+        SummaryRow {
+            metric: "unused_connections".to_string(),
+            value: report.unused_connections.to_string(),
+        },
+        SummaryRow {
+            metric: "over_budget_connections".to_string(),
+            value: report.over_budget_connections.to_string(),
+        },
+    ];
+    let mut summary_table = Table::new(summary);
+    summary_table.with(Style::rounded());
+    println!("{summary_table}");
+
+    let rows: Vec<BudgetServiceTableRow> = report
+        .services
+        .iter()
+        .map(|service| BudgetServiceTableRow {
+            service: service.name.clone(),
+            replicas: service.replicas,
+            priority: service.priority,
+            current: service
+                .current_pool_size
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            recommended: service.recommended_pool_size,
+            allocated: service.allocated_pool_size,
+            total_connections: service.allocated_total_connections,
+            delta: service
+                .pool_size_delta_from_current
+                .map(|value| format!("{value:+}"))
+                .unwrap_or_else(|| "-".to_string()),
+            reduction: service.reduction_from_recommended,
+            minimum_ok: service.meets_minimum.to_string(),
+        })
+        .collect();
+    let mut service_table = Table::new(rows);
+    service_table.with(Style::psql());
+    println!("{service_table}");
+
+    if !report.warnings.is_empty() {
+        eprintln!("warnings:");
+        for warning in &report.warnings {
+            eprintln!("- {warning}");
+        }
+    }
+
     Ok(())
 }
 
@@ -688,6 +782,35 @@ mod tests {
         }
     }
 
+    fn sample_budget_report() -> crate::budget::BudgetPlanReport {
+        crate::budget::build_budget_plan_report(crate::config::BudgetPlanInput {
+            max_connections: 120,
+            reserved_connections: 20,
+            safety_margin_connections: 10,
+            services: vec![
+                crate::config::BudgetServiceInput {
+                    name: "checkout-api".to_string(),
+                    replicas: 6,
+                    current_pool_size: Some(8),
+                    min_pool_size: 4,
+                    max_pool_size: Some(12),
+                    recommended_pool_size: 10,
+                    priority: Some(5),
+                },
+                crate::config::BudgetServiceInput {
+                    name: "billing-api".to_string(),
+                    replicas: 4,
+                    current_pool_size: Some(6),
+                    min_pool_size: 3,
+                    max_pool_size: Some(10),
+                    recommended_pool_size: 8,
+                    priority: Some(3),
+                },
+            ],
+        })
+        .expect("sample budget report should build")
+    }
+
     fn sample_scenario(name: &str, rps: f64) -> crate::config::ScenarioInput {
         crate::config::ScenarioInput {
             name: name.to_string(),
@@ -756,6 +879,7 @@ mod tests {
             .expect("comparison report should build"),
         )
         .expect("compare table should render");
+        budget(&sample_budget_report()).expect("budget table should render");
         telemetry(&sample_recommendation()).expect("telemetry table should render");
         gate(&crate::gate::build_gate_report(
             sample_recommendation(),

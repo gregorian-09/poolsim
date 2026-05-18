@@ -4,6 +4,7 @@
 #![deny(missing_docs)]
 
 mod args;
+mod budget;
 mod compare;
 mod config;
 mod config_gen;
@@ -125,6 +126,12 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
                 report.worst_saturation,
                 cli.warn_exit,
             ))
+        }
+        Commands::Budget(args) => {
+            let input = config::resolve_budget_plan_input(&args)?;
+            let report = budget::build_budget_plan_report(input)?;
+            render_budget(&report, cli.format)?;
+            Ok(exit_code_for_budget_status(report.status, cli.warn_exit))
         }
         Commands::Import(args) => match args.command {
             args::ImportCommands::Telemetry(args) => {
@@ -266,6 +273,14 @@ fn render_compare(report: &compare::ScenarioComparisonReport, format: OutputForm
     }
 }
 
+fn render_budget(report: &budget::BudgetPlanReport, format: OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Table => render::table::budget(report),
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => render::csv::budget(report),
+    }
+}
+
 fn render_telemetry(recommendation: &TelemetryRecommendation, format: OutputFormat) -> Result<()> {
     match format {
         OutputFormat::Table => render::table::telemetry(recommendation),
@@ -351,6 +366,14 @@ fn exit_code_for_worst_risk(worst: u8, warn_exit: bool) -> ExitCode {
     }
 }
 
+fn exit_code_for_budget_status(status: budget::BudgetStatus, warn_exit: bool) -> ExitCode {
+    match status {
+        budget::BudgetStatus::Critical => ExitCode::from(2),
+        budget::BudgetStatus::Warning if warn_exit => ExitCode::from(3),
+        _ => ExitCode::from(0),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -367,8 +390,8 @@ mod tests {
 
     use super::*;
     use crate::args::{
-        BatchArgs, CliConfigFramework, CommonArgs, CompareArgs, DoctorArgs, DoctorSourceCommands,
-        EvaluateArgs, GateArgs, GateSourceCommands, GenerateConfigArgs,
+        BatchArgs, BudgetArgs, CliConfigFramework, CommonArgs, CompareArgs, DoctorArgs,
+        DoctorSourceCommands, EvaluateArgs, GateArgs, GateSourceCommands, GenerateConfigArgs,
         GenerateConfigSourceCommands, GuardArgs, ImportArgs, ImportCommands, PrometheusImportArgs,
         SimulateArgs, TelemetryImportArgs,
     };
@@ -509,6 +532,46 @@ mod tests {
     "target_wait_p99_ms": 45.0,
     "max_acceptable_rho": 0.85
   }
+}
+"#
+        .to_string()
+    }
+
+    fn budget_plan_json() -> String {
+        r#"
+{
+  "max_connections": 120,
+  "reserved_connections": 20,
+  "safety_margin_connections": 10,
+  "services": [
+    {
+      "name": "checkout-api",
+      "replicas": 6,
+      "current_pool_size": 8,
+      "min_pool_size": 4,
+      "max_pool_size": 12,
+      "recommended_pool_size": 10,
+      "priority": 5
+    },
+    {
+      "name": "billing-api",
+      "replicas": 4,
+      "current_pool_size": 6,
+      "min_pool_size": 3,
+      "max_pool_size": 10,
+      "recommended_pool_size": 8,
+      "priority": 3
+    },
+    {
+      "name": "admin-api",
+      "replicas": 2,
+      "current_pool_size": 4,
+      "min_pool_size": 2,
+      "max_pool_size": 6,
+      "recommended_pool_size": 5,
+      "priority": 1
+    }
+  ]
 }
 "#
         .to_string()
@@ -672,6 +735,35 @@ mod tests {
         }
     }
 
+    fn sample_budget_report() -> budget::BudgetPlanReport {
+        budget::build_budget_plan_report(config::BudgetPlanInput {
+            max_connections: 120,
+            reserved_connections: 20,
+            safety_margin_connections: 10,
+            services: vec![
+                config::BudgetServiceInput {
+                    name: "checkout-api".to_string(),
+                    replicas: 6,
+                    current_pool_size: Some(8),
+                    min_pool_size: 4,
+                    max_pool_size: Some(12),
+                    recommended_pool_size: 10,
+                    priority: Some(5),
+                },
+                config::BudgetServiceInput {
+                    name: "billing-api".to_string(),
+                    replicas: 4,
+                    current_pool_size: Some(6),
+                    min_pool_size: 3,
+                    max_pool_size: Some(10),
+                    recommended_pool_size: 8,
+                    priority: Some(3),
+                },
+            ],
+        })
+        .expect("sample budget report should build")
+    }
+
     #[test]
     fn exit_code_helpers_map_expected_levels() {
         let _ = exit_code_for_saturation(SaturationLevel::Ok, false);
@@ -709,6 +801,10 @@ mod tests {
         let _ = exit_code_for_worst_risk(3, false);
         let _ = exit_code_for_worst_risk(2, true);
         let _ = exit_code_for_worst_risk(2, false);
+        let _ = exit_code_for_budget_status(budget::BudgetStatus::Pass, false);
+        let _ = exit_code_for_budget_status(budget::BudgetStatus::Warning, true);
+        let _ = exit_code_for_budget_status(budget::BudgetStatus::Warning, false);
+        let _ = exit_code_for_budget_status(budget::BudgetStatus::Critical, false);
     }
 
     #[test]
@@ -747,6 +843,11 @@ mod tests {
         render_compare(&compare_report, OutputFormat::Json).expect("json compare should render");
         render_compare(&compare_report, OutputFormat::Csv).expect("csv compare should render");
         render_compare(&compare_report, OutputFormat::Table).expect("table compare should render");
+
+        let budget_report = sample_budget_report();
+        render_budget(&budget_report, OutputFormat::Json).expect("json budget should render");
+        render_budget(&budget_report, OutputFormat::Csv).expect("csv budget should render");
+        render_budget(&budget_report, OutputFormat::Table).expect("table budget should render");
 
         let recommendation = sample_recommendation();
         render_telemetry(&recommendation, OutputFormat::Json)
@@ -878,6 +979,16 @@ mod tests {
             warn_exit: true,
         };
         let _ = run_with_cli(cli).expect("compare should execute");
+
+        let budget_cfg = write_temp_file("main_budget", "json", &budget_plan_json());
+        let cli = Cli {
+            command: Commands::Budget(BudgetArgs {
+                config: budget_cfg.clone(),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: true,
+        };
+        let _ = run_with_cli(cli).expect("budget should execute");
 
         let telemetry_cfg = write_temp_file("main_telemetry", "json", &telemetry_config_json());
         let cli = Cli {
@@ -1180,6 +1291,7 @@ mod tests {
         remove_if_exists(&cfg);
         remove_if_exists(&batch_cfg);
         remove_if_exists(&compare_cfg);
+        remove_if_exists(&budget_cfg);
         remove_if_exists(&telemetry_cfg);
         remove_if_exists(&prometheus_cfg);
     }

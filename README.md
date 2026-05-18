@@ -180,6 +180,13 @@ cargo run -p poolsim-cli -- --format json doctor telemetry \
   --config docs/fixtures/telemetry.json
 ```
 
+Plan a shared database connection budget across multiple services:
+
+```bash
+cargo run -p poolsim-cli -- --format json budget \
+  --config docs/fixtures/budget.json
+```
+
 Generate a runtime pool configuration snippet from the same sizing recommendation:
 
 ```bash

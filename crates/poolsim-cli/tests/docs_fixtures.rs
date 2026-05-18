@@ -134,7 +134,11 @@ fn docs_evaluate_and_sweep_examples_work() {
         String::from_utf8_lossy(&sweep_output.stderr),
     );
     let csv = stdout_utf8(&sweep_output);
-    assert!(csv.lines().next().expect("CSV should have header").contains("pool_size"));
+    assert!(csv
+        .lines()
+        .next()
+        .expect("CSV should have header")
+        .contains("pool_size"));
     assert!(csv.contains("p99_queue_wait_ms"));
 }
 
@@ -150,7 +154,13 @@ fn docs_batch_examples_work_for_json_and_toml_inputs() {
     assert_success(&batch_json_output, "batch JSON docs example");
     let batch_json: Value = serde_json::from_str(&stdout_utf8(&batch_json_output))
         .expect("batch JSON output should deserialize");
-    assert_eq!(batch_json.as_array().expect("batch output should be an array").len(), 2);
+    assert_eq!(
+        batch_json
+            .as_array()
+            .expect("batch output should be an array")
+            .len(),
+        2
+    );
 
     let batch_toml_output = run_cli(&[
         "--format",
@@ -178,7 +188,13 @@ fn docs_compare_examples_work_for_json_csv_and_toml_inputs() {
     let report: Value = serde_json::from_str(&stdout_utf8(&json_output))
         .expect("compare JSON output should deserialize");
     assert_eq!(report["baseline"], "normal");
-    assert_eq!(report["rows"].as_array().expect("rows should be an array").len(), 3);
+    assert_eq!(
+        report["rows"]
+            .as_array()
+            .expect("rows should be an array")
+            .len(),
+        3
+    );
     assert!(report["rows"][1]["pool_size_delta"].is_number());
 
     let csv_output = run_cli(&[
@@ -206,6 +222,52 @@ fn docs_compare_examples_work_for_json_csv_and_toml_inputs() {
     let table = stdout_utf8(&toml_output);
     assert!(table.contains("scenario_count"));
     assert!(table.contains("worst_saturation"));
+}
+
+#[test]
+fn docs_budget_examples_work_for_json_csv_and_toml_inputs() {
+    let json_output = run_cli(&[
+        "--format",
+        "json",
+        "budget",
+        "--config",
+        &fixture("docs/fixtures/budget.json"),
+    ]);
+    assert_success(&json_output, "budget JSON docs example");
+    let report: Value = serde_json::from_str(&stdout_utf8(&json_output))
+        .expect("budget JSON output should deserialize");
+    assert_eq!(report["status"], "Warning");
+    assert!(
+        report["services"]
+            .as_array()
+            .expect("services should be an array")
+            .len()
+            >= 3
+    );
+
+    let csv_output = run_cli(&[
+        "--format",
+        "csv",
+        "budget",
+        "--config",
+        &fixture("docs/fixtures/budget.json"),
+    ]);
+    assert_success(&csv_output, "budget CSV docs example");
+    let csv = stdout_utf8(&csv_output);
+    assert!(csv.contains("allocated_total_connections"));
+    assert!(csv.contains("checkout-api"));
+
+    let toml_output = run_cli(&[
+        "--format",
+        "table",
+        "budget",
+        "--config",
+        &fixture("docs/fixtures/budget.toml"),
+    ]);
+    assert_success(&toml_output, "budget TOML docs example");
+    let table = stdout_utf8(&toml_output);
+    assert!(table.contains("available_connections"));
+    assert!(table.contains("billing-api"));
 }
 
 #[test]
@@ -478,7 +540,10 @@ fn docs_generate_config_examples_work() {
     assert_eq!(telemetry_report["framework"], "sqlx");
     assert_eq!(telemetry_report["source"], "telemetry");
     assert!(telemetry_report["recommended_pool_size"].is_number());
-    assert!(telemetry_report["snippet"].as_str().unwrap_or_default().contains(".max_connections("));
+    assert!(telemetry_report["snippet"]
+        .as_str()
+        .unwrap_or_default()
+        .contains(".max_connections("));
 
     let prometheus_output = run_cli(&[
         "--format",
@@ -504,7 +569,10 @@ fn docs_generate_config_examples_work() {
         "--max",
         "20",
     ]);
-    assert_success(&prometheus_output, "generate-config prometheus docs example");
+    assert_success(
+        &prometheus_output,
+        "generate-config prometheus docs example",
+    );
     let prometheus_report: Value = serde_json::from_str(&stdout_utf8(&prometheus_output))
         .expect("generate-config prometheus output should deserialize");
     assert_eq!(prometheus_report["framework"], "spring-boot");

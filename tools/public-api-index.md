@@ -172,12 +172,13 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_cli::args::CliQueueModel`: CLI-facing queue-model enum.
 - `poolsim_cli::args::CliSaturationLevel`: CLI-facing saturation-level enum.
 - `poolsim_cli::args::Cli`: top-level clap parser type defined in the `args` module.
-- `poolsim_cli::args::Commands`: subcommand enum for `simulate`, `evaluate`, `sweep`, `batch`, `compare`, `import`, `gate`, `guard`, `doctor`, and `generate-config`.
+- `poolsim_cli::args::Commands`: subcommand enum for `simulate`, `evaluate`, `sweep`, `batch`, `compare`, `budget`, `import`, `gate`, `guard`, `doctor`, and `generate-config`.
 - `poolsim_cli::args::SimulateArgs`: argument model for the `simulate` subcommand.
 - `poolsim_cli::args::CommonArgs`: shared argument model for simulation-style commands.
 - `poolsim_cli::args::EvaluateArgs`: argument model for the `evaluate` subcommand.
 - `poolsim_cli::args::BatchArgs`: argument model for the `batch` subcommand.
 - `poolsim_cli::args::CompareArgs`: argument model for the `compare` subcommand.
+- `poolsim_cli::args::BudgetArgs`: argument model for the `budget` subcommand.
 - `poolsim_cli::args::ImportArgs`: argument model for the `import` subcommand.
 - `poolsim_cli::args::ImportCommands`: nested import subcommand enum.
 - `poolsim_cli::args::GateArgs`: argument model for the `gate` subcommand.
@@ -199,12 +200,15 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_cli::config::BatchSimulationInput`: resolved batch input bundle.
 - `poolsim_cli::config::ScenarioInput`: one named scenario input for scenario comparison.
 - `poolsim_cli::config::ScenarioComparisonInput`: resolved named-scenario comparison input bundle.
+- `poolsim_cli::config::BudgetPlanInput`: resolved database connection budget input bundle.
+- `poolsim_cli::config::BudgetServiceInput`: one service entry in a database connection budget plan.
 - `poolsim_cli::config::TelemetryInput`: resolved telemetry import input bundle.
 - `poolsim_cli::config::resolve_simulation_input`: builds a simulation input from config files and CLI overrides.
 - `poolsim_cli::config::resolve_evaluate_input`: builds an evaluation input from config files and CLI overrides.
 - `poolsim_cli::config::resolve_sweep_input`: builds a sweep input from config files and CLI overrides.
 - `poolsim_cli::config::resolve_batch_input`: builds a batch input from JSON or TOML batch files.
 - `poolsim_cli::config::resolve_scenario_comparison_input`: builds named scenario comparison input from JSON or TOML files.
+- `poolsim_cli::config::resolve_budget_plan_input`: builds a database connection budget plan input from JSON or TOML files.
 - `poolsim_cli::config::resolve_telemetry_input`: builds a telemetry input from JSON or TOML telemetry files.
 
 ### `poolsim_cli::render`
@@ -215,6 +219,7 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_cli::render::csv::sweep`: renders a sensitivity sweep as CSV.
 - `poolsim_cli::render::csv::batch`: renders a batch result as CSV.
 - `poolsim_cli::render::csv::compare`: renders a scenario comparison report as CSV.
+- `poolsim_cli::render::csv::budget`: renders a database connection budget report as CSV.
 - `poolsim_cli::render::csv::telemetry`: renders telemetry recommendation diff as CSV.
 - `poolsim_cli::render::csv::gate`: renders a capacity gate report as CSV.
 - `poolsim_cli::render::csv::guard`: renders a deployment guard report as CSV.
@@ -228,6 +233,7 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_cli::render::table::sweep`: renders a sensitivity sweep as a table.
 - `poolsim_cli::render::table::batch`: renders a batch result as a table.
 - `poolsim_cli::render::table::compare`: renders a scenario comparison report as a table.
+- `poolsim_cli::render::table::budget`: renders a database connection budget report as a table.
 - `poolsim_cli::render::table::telemetry`: renders telemetry recommendation diff as a table.
 - `poolsim_cli::render::table::gate`: renders a capacity gate report as a table.
 - `poolsim_cli::render::table::guard`: renders a deployment guard report as a table.

@@ -64,6 +64,7 @@ pub enum Commands {
     Sweep(CommonArgs),
     Batch(BatchArgs),
     Compare(CompareArgs),
+    Budget(BudgetArgs),
     Import(ImportArgs),
     Gate(GateArgs),
     Guard(GuardArgs),
@@ -157,6 +158,12 @@ pub struct CompareArgs {
 
     #[arg(long)]
     pub baseline: Option<String>,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct BudgetArgs {
+    #[arg(long)]
+    pub config: PathBuf,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -580,6 +587,26 @@ mod tests {
                 assert_eq!(args.baseline.as_deref(), Some("normal"));
             }
             _ => panic!("expected compare command"),
+        }
+    }
+
+    #[test]
+    fn parser_handles_budget_subcommand() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "--format",
+            "csv",
+            "budget",
+            "--config",
+            "budget.json",
+        ])
+        .expect("budget args should parse");
+
+        match cli.command {
+            Commands::Budget(args) => {
+                assert_eq!(args.config, PathBuf::from("budget.json"));
+            }
+            _ => panic!("expected budget command"),
         }
     }
 

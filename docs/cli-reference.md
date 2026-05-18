@@ -12,6 +12,7 @@ It covers:
 - JSON and TOML config formats
 - Batch input formats
 - Telemetry import and recommendation diff
+- Database connection budget planning
 - Sample-file input
 - Output formats
 - Exit-code behavior
@@ -26,6 +27,8 @@ Checked-in runnable fixture files live under `docs/fixtures/`:
 - `docs/fixtures/batch.toml`
 - `docs/fixtures/scenarios.json`
 - `docs/fixtures/scenarios.toml`
+- `docs/fixtures/budget.json`
+- `docs/fixtures/budget.toml`
 - `docs/fixtures/telemetry.json`
 - `docs/fixtures/prometheus-responses.json`
 - `docs/fixtures/gate-policy.toml`
@@ -40,6 +43,7 @@ Available subcommands:
 - `sweep`
 - `batch`
 - `compare`
+- `budget`
 - `import telemetry`
 - `import prometheus`
 - `gate telemetry`
@@ -275,6 +279,119 @@ Required path to a JSON or TOML scenario comparison file.
 #### `--baseline <name>`
 
 Optional scenario name to use as the delta baseline.
+
+## `budget`
+
+### Purpose
+
+Allocates a shared database `max_connections` budget across multiple services.
+
+Use `budget` after generating service-level recommendations when the database has one global connection cap but several applications, workers, or replicas compete for it. The command keeps each service at or above its declared minimum when possible, honors service-level maximums, and distributes remaining capacity by priority and replica count.
+
+The JSON output is a `BudgetPlanReport`:
+
+- `status`: `Pass`, `Warning`, or `Critical`
+- `max_connections`: database connection ceiling
+- `reserved_connections`: connections reserved for maintenance, migrations, consoles, or other non-service use
+- `safety_margin_connections`: extra capacity intentionally left unused
+- `available_connections`: connections available for listed services after reservations
+- `current_total_connections`: total current demand when every service provides `current_pool_size`
+- `requested_total_connections`: total demand if every service uses its recommended or capped desired size
+- `min_required_connections`: total demand for all service minimums
+- `allocated_total_connections`: final planner allocation
+- `unused_connections`: remaining unallocated budget
+- `over_budget_connections`: requested demand above available budget
+- `services`: one allocation row per service
+- `warnings`: operational explanations for capped or reduced plans
+
+Each service allocation includes:
+
+- `name`: service name
+- `replicas`: number of running replicas
+- `priority`: relative allocation priority; higher values receive scarce capacity first
+- `current_pool_size`: current configured per-replica pool size, when known
+- `min_pool_size`: smallest acceptable per-replica pool size
+- `max_pool_size`: optional service-specific upper bound
+- `recommended_pool_size`: per-replica recommendation from `simulate`, telemetry import, or another sizing source
+- `desired_pool_size`: recommendation after applying `max_pool_size`
+- `allocated_pool_size`: final per-replica pool size to configure
+- `current_total_connections`: current per-service total, when known
+- `requested_total_connections`: desired per-service total
+- `allocated_total_connections`: final per-service total
+- `pool_size_delta_from_current`: per-replica change from the current value, when known
+- `reduction_from_recommended`: per-replica reduction when budget pressure prevents the recommendation
+- `capped_by_service_max`: whether `max_pool_size` capped the recommendation
+- `meets_minimum`: whether the final allocation satisfies `min_pool_size`
+
+### JSON budget example
+
+```bash
+poolsim --format json budget --config docs/fixtures/budget.json
+```
+
+### CSV budget example
+
+```bash
+poolsim --format csv budget --config docs/fixtures/budget.json
+```
+
+### TOML budget example
+
+```bash
+poolsim --format table budget --config docs/fixtures/budget.toml
+```
+
+### `budget` flags
+
+#### `--config <path>`
+
+Required path to a JSON or TOML budget plan file.
+
+### Budget JSON format
+
+```json
+{
+  "max_connections": 120,
+  "reserved_connections": 20,
+  "safety_margin_connections": 10,
+  "services": [
+    {
+      "name": "checkout-api",
+      "replicas": 6,
+      "current_pool_size": 8,
+      "min_pool_size": 4,
+      "max_pool_size": 12,
+      "recommended_pool_size": 10,
+      "priority": 5
+    }
+  ]
+}
+```
+
+### Budget TOML format
+
+```toml
+max_connections = 120
+reserved_connections = 20
+safety_margin_connections = 10
+
+[[services]]
+name = "checkout-api"
+replicas = 6
+current_pool_size = 8
+min_pool_size = 4
+max_pool_size = 12
+recommended_pool_size = 10
+priority = 5
+```
+
+### Budget status behavior
+
+- `Pass`: every requested service pool fits inside the available budget
+- `Warning`: minimums fit, but at least one requested pool must be reduced
+- `Critical`: service minimums do not fit inside the available budget
+
+`--warn-exit` makes `Warning` return exit code `3`. `Critical` returns exit code `2`.
 
 ## `import telemetry`
 

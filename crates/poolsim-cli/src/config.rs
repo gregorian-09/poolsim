@@ -7,7 +7,9 @@ use poolsim_core::{
 };
 use serde::Deserialize;
 
-use crate::args::{BatchArgs, CommonArgs, CompareArgs, EvaluateArgs, TelemetryImportArgs};
+use crate::args::{
+    BatchArgs, BudgetArgs, CommonArgs, CompareArgs, EvaluateArgs, TelemetryImportArgs,
+};
 
 #[derive(Debug, Clone)]
 pub struct SimulationInput {
@@ -49,6 +51,25 @@ pub struct ScenarioComparisonInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct BudgetPlanInput {
+    pub max_connections: u32,
+    pub reserved_connections: u32,
+    pub safety_margin_connections: u32,
+    pub services: Vec<BudgetServiceInput>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BudgetServiceInput {
+    pub name: String,
+    pub replicas: u32,
+    pub current_pool_size: Option<u32>,
+    pub min_pool_size: u32,
+    pub max_pool_size: Option<u32>,
+    pub recommended_pool_size: u32,
+    pub priority: Option<u32>,
+}
+
+#[derive(Debug, Clone)]
 pub struct TelemetryInput {
     pub snapshot: TelemetrySnapshot,
     pub options: SimulationOptions,
@@ -87,6 +108,16 @@ struct ScenarioRequest {
 struct ScenarioFile {
     baseline: Option<String>,
     scenarios: Vec<ScenarioRequest>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct BudgetFile {
+    max_connections: u32,
+    #[serde(default)]
+    reserved_connections: u32,
+    #[serde(default)]
+    safety_margin_connections: u32,
+    services: Vec<BudgetServiceInput>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -257,6 +288,31 @@ pub fn resolve_scenario_comparison_input(args: &CompareArgs) -> Result<ScenarioC
     Ok(ScenarioComparisonInput {
         baseline,
         scenarios,
+    })
+}
+
+pub fn resolve_budget_plan_input(args: &BudgetArgs) -> Result<BudgetPlanInput> {
+    let raw = fs::read_to_string(&args.config)
+        .with_context(|| format!("failed to read budget plan file {}", args.config.display()))?;
+
+    let parsed = match args.config.extension().and_then(|e| e.to_str()) {
+        Some("json") => serde_json::from_str::<BudgetFile>(&raw)
+            .with_context(|| format!("invalid JSON budget plan file {}", args.config.display()))?,
+        Some("toml") => toml::from_str::<BudgetFile>(&raw)
+            .with_context(|| format!("invalid TOML budget plan file {}", args.config.display()))?,
+        _ => {
+            return Err(anyhow!(
+                "unsupported budget plan extension for {} (use .json or .toml)",
+                args.config.display()
+            ))
+        }
+    };
+
+    Ok(BudgetPlanInput {
+        max_connections: parsed.max_connections,
+        reserved_connections: parsed.reserved_connections,
+        safety_margin_connections: parsed.safety_margin_connections,
+        services: parsed.services,
     })
 }
 
@@ -622,6 +678,28 @@ mod tests {
     "target_wait_p99_ms": 40.0,
     "max_acceptable_rho": 0.85
   }
+}
+"#
+        .to_string()
+    }
+
+    fn sample_budget_json() -> String {
+        r#"
+{
+  "max_connections": 120,
+  "reserved_connections": 20,
+  "safety_margin_connections": 10,
+  "services": [
+    {
+      "name": "checkout-api",
+      "replicas": 6,
+      "current_pool_size": 8,
+      "min_pool_size": 4,
+      "max_pool_size": 12,
+      "recommended_pool_size": 10,
+      "priority": 5
+    }
+  ]
 }
 "#
         .to_string()
@@ -1046,6 +1124,79 @@ max_pool_size = 30
         remove_if_exists(&duplicate);
         remove_if_exists(&empty_name);
         remove_if_exists(&missing_baseline);
+        remove_if_exists(&unsupported);
+    }
+
+    #[test]
+    fn resolve_budget_plan_input_supports_json_and_toml() {
+        let json_path = write_temp_file("budget_json", "json", &sample_budget_json());
+        let json_input = resolve_budget_plan_input(&BudgetArgs {
+            config: json_path.clone(),
+        })
+        .expect("budget JSON should parse");
+        assert_eq!(json_input.max_connections, 120);
+        assert_eq!(json_input.services.len(), 1);
+        assert_eq!(json_input.services[0].name, "checkout-api");
+
+        let toml = r#"
+max_connections = 120
+reserved_connections = 20
+safety_margin_connections = 10
+
+[[services]]
+name = "checkout-api"
+replicas = 6
+current_pool_size = 8
+min_pool_size = 4
+max_pool_size = 12
+recommended_pool_size = 10
+priority = 5
+"#;
+        let toml_path = write_temp_file("budget_toml", "toml", toml);
+        let toml_input = resolve_budget_plan_input(&BudgetArgs {
+            config: toml_path.clone(),
+        })
+        .expect("budget TOML should parse");
+        assert_eq!(toml_input.reserved_connections, 20);
+        assert_eq!(toml_input.safety_margin_connections, 10);
+        assert_eq!(toml_input.services[0].replicas, 6);
+
+        remove_if_exists(&json_path);
+        remove_if_exists(&toml_path);
+    }
+
+    #[test]
+    fn resolve_budget_plan_input_rejects_invalid_files() {
+        let missing = unique_temp_path("budget_missing", "json");
+        let err = resolve_budget_plan_input(&BudgetArgs { config: missing })
+            .expect_err("missing budget file should fail");
+        assert!(err.to_string().contains("failed to read budget plan file"));
+
+        let invalid_json = write_temp_file("budget_invalid", "json", "{");
+        let err = resolve_budget_plan_input(&BudgetArgs {
+            config: invalid_json.clone(),
+        })
+        .expect_err("invalid budget JSON should fail");
+        assert!(err.to_string().contains("invalid JSON budget plan file"));
+
+        let invalid_toml = write_temp_file("budget_invalid", "toml", "services = [");
+        let err = resolve_budget_plan_input(&BudgetArgs {
+            config: invalid_toml.clone(),
+        })
+        .expect_err("invalid budget TOML should fail");
+        assert!(err.to_string().contains("invalid TOML budget plan file"));
+
+        let unsupported = write_temp_file("budget_yaml", "yaml", "services: []");
+        let err = resolve_budget_plan_input(&BudgetArgs {
+            config: unsupported.clone(),
+        })
+        .expect_err("unsupported extension should fail");
+        assert!(err
+            .to_string()
+            .contains("unsupported budget plan extension"));
+
+        remove_if_exists(&invalid_json);
+        remove_if_exists(&invalid_toml);
         remove_if_exists(&unsupported);
     }
 

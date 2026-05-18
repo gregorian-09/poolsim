@@ -1,3 +1,4 @@
+use crate::budget::BudgetPlanReport;
 use crate::compare::ScenarioComparisonReport;
 use crate::config_gen::ConfigSnippetReport;
 use crate::doctor::DoctorReport;
@@ -173,6 +174,98 @@ pub fn compare(report: &ScenarioComparisonReport) -> Result<()> {
         ])?;
     }
 
+    wtr.flush()?;
+    Ok(())
+}
+
+pub fn budget(report: &BudgetPlanReport) -> Result<()> {
+    let mut wtr = WriterBuilder::new()
+        .flexible(true)
+        .from_writer(std::io::stdout());
+    wtr.write_record(["field", "value"])?;
+    wtr.write_record(["status", &format!("{:?}", report.status)])?;
+    wtr.write_record(["max_connections", &report.max_connections.to_string()])?;
+    wtr.write_record([
+        "reserved_connections",
+        &report.reserved_connections.to_string(),
+    ])?;
+    wtr.write_record([
+        "safety_margin_connections",
+        &report.safety_margin_connections.to_string(),
+    ])?;
+    wtr.write_record([
+        "available_connections",
+        &report.available_connections.to_string(),
+    ])?;
+    wtr.write_record([
+        "current_total_connections",
+        &report
+            .current_total_connections
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "-".to_string()),
+    ])?;
+    wtr.write_record([
+        "requested_total_connections",
+        &report.requested_total_connections.to_string(),
+    ])?;
+    wtr.write_record([
+        "min_required_connections",
+        &report.min_required_connections.to_string(),
+    ])?;
+    wtr.write_record([
+        "allocated_total_connections",
+        &report.allocated_total_connections.to_string(),
+    ])?;
+    wtr.write_record(["unused_connections", &report.unused_connections.to_string()])?;
+    wtr.write_record([
+        "over_budget_connections",
+        &report.over_budget_connections.to_string(),
+    ])?;
+    wtr.write_record(["", ""])?;
+    wtr.write_record([
+        "service",
+        "replicas",
+        "priority",
+        "current_pool_size",
+        "min_pool_size",
+        "max_pool_size",
+        "recommended_pool_size",
+        "desired_pool_size",
+        "allocated_pool_size",
+        "current_total_connections",
+        "requested_total_connections",
+        "allocated_total_connections",
+        "pool_size_delta_from_current",
+        "reduction_from_recommended",
+        "capped_by_service_max",
+        "meets_minimum",
+    ])?;
+    for service in &report.services {
+        wtr.write_record([
+            service.name.clone(),
+            service.replicas.to_string(),
+            service.priority.to_string(),
+            optional_u32(service.current_pool_size),
+            service.min_pool_size.to_string(),
+            optional_u32(service.max_pool_size),
+            service.recommended_pool_size.to_string(),
+            service.desired_pool_size.to_string(),
+            service.allocated_pool_size.to_string(),
+            optional_u32(service.current_total_connections),
+            service.requested_total_connections.to_string(),
+            service.allocated_total_connections.to_string(),
+            service
+                .pool_size_delta_from_current
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            service.reduction_from_recommended.to_string(),
+            service.capped_by_service_max.to_string(),
+            service.meets_minimum.to_string(),
+        ])?;
+    }
+    for warning in &report.warnings {
+        wtr.write_record(["warning".to_string(), warning.clone()])?;
+    }
     wtr.flush()?;
     Ok(())
 }
@@ -398,6 +491,12 @@ pub fn config_snippet(report: &ConfigSnippetReport) -> Result<()> {
     Ok(())
 }
 
+fn optional_u32(value: Option<u32>) -> String {
+    value
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "-".to_string())
+}
+
 fn write_sensitivity_row(wtr: &mut Writer<std::io::Stdout>, row: &SensitivityRow) -> Result<()> {
     wtr.write_record([
         row.pool_size.to_string(),
@@ -489,6 +588,35 @@ mod tests {
         }
     }
 
+    fn sample_budget_report() -> crate::budget::BudgetPlanReport {
+        crate::budget::build_budget_plan_report(crate::config::BudgetPlanInput {
+            max_connections: 120,
+            reserved_connections: 20,
+            safety_margin_connections: 10,
+            services: vec![
+                crate::config::BudgetServiceInput {
+                    name: "checkout-api".to_string(),
+                    replicas: 6,
+                    current_pool_size: Some(8),
+                    min_pool_size: 4,
+                    max_pool_size: Some(12),
+                    recommended_pool_size: 10,
+                    priority: Some(5),
+                },
+                crate::config::BudgetServiceInput {
+                    name: "billing-api".to_string(),
+                    replicas: 4,
+                    current_pool_size: Some(6),
+                    min_pool_size: 3,
+                    max_pool_size: Some(10),
+                    recommended_pool_size: 8,
+                    priority: Some(3),
+                },
+            ],
+        })
+        .expect("sample budget report should build")
+    }
+
     fn sample_scenario(name: &str, rps: f64) -> crate::config::ScenarioInput {
         crate::config::ScenarioInput {
             name: name.to_string(),
@@ -534,6 +662,7 @@ mod tests {
             .expect("comparison report should build"),
         )
         .expect("compare CSV render should succeed");
+        budget(&sample_budget_report()).expect("budget CSV render should succeed");
         telemetry(&sample_recommendation()).expect("telemetry CSV render should succeed");
         gate(&crate::gate::build_gate_report(
             sample_recommendation(),
