@@ -135,7 +135,7 @@ Acceptance criteria:
 
 ### Connection Overhead Profiles
 
-Status: planned.
+Status: complete for local anonymized payload generator; aggregate publication remains future work.
 
 Scope:
 
@@ -257,13 +257,14 @@ Status: planned.
 
 Scope:
 
-- Add opt-in anonymous telemetry for pool configuration statistics only.
+- Add opt-in anonymous payload generation for pool configuration statistics only.
+- Keep hosted submission and aggregate publication as future community operations.
 
 Acceptance criteria:
 
-- No application data, query text, credentials, hostnames, or private identifiers are collected.
-- Opt-in consent is explicit and documented.
-- Published aggregate data cannot identify individual services.
+- No application data, query text, credentials, hostnames, or private identifiers are exported.
+- Opt-in consent is explicit and required by the tool.
+- Tests cover consent enforcement and sensitive-key rejection.
 
 ## Quick Wins
 
