@@ -8,6 +8,7 @@ This folder contains user-facing documentation for the current Poolsim capabilit
 - [`library-api.md`](library-api.md): Exhaustive `poolsim-core` reference with examples for all exported functions, constants, modules, enums, and structs.
 - [`cli-reference.md`](cli-reference.md): Exhaustive command-line reference covering every subcommand, flag, config shape, output format, and exit-code path.
 - [`web-api.md`](web-api.md): Exhaustive REST/WebSocket reference plus embedding examples for `build_app`, `AppState`, and `RateLimitState`.
+- [`feature-roadmap.md`](feature-roadmap.md): Tracked implementation tasks and acceptance criteria for adoption, observability, deeper simulation, developer experience, and validation features.
 - [`fixtures/README.md`](fixtures/README.md): Checked-in sample inputs used by the docs and docs-validation tests.
 
 ## Scope for Current Version
