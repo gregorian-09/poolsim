@@ -86,7 +86,7 @@ Acceptance criteria:
 
 ### OpenTelemetry Native Ingestion
 
-Status: planned.
+Status: complete for response-file polling worker; direct poolsim-web scheduler remains future work.
 
 Scope:
 
@@ -120,15 +120,16 @@ Status: planned.
 
 Scope:
 
-- Let `poolsim-web` poll Prometheus or InfluxDB on a schedule.
-- Emit `PoolRecommendationDiff` events and optional webhooks for Slack or PagerDuty.
+- Let an opt-in worker poll Prometheus response-file snapshots on a schedule.
+- Emit `PoolRecommendationDiff` events and optional webhooks.
+- Keep direct `poolsim-web` Prometheus/InfluxDB scheduler mode as a future additive feature.
 
 Acceptance criteria:
 
 - Polling is opt-in and disabled by default.
 - Event payloads include stable version metadata.
 - Webhook delivery is retried with bounded backoff.
-- Tests cover scheduler behavior, diff generation, and webhook failure paths.
+- Tests cover command generation, diff generation, state persistence, and webhook invocation.
 
 ## Deeper Simulation And Sizing Tasks
 
