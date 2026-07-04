@@ -67,19 +67,20 @@ Acceptance criteria:
 
 ### Kubernetes Sidecar Or Controller
 
-Status: planned.
+Status: complete for opt-in sidecar metrics exporter; controller reconciliation remains future work.
 
 Scope:
 
-- Watch deployment annotations such as `poolsim.io/expected-rps`.
-- Expose recommendations through a metrics endpoint.
+- Read deployment annotations such as `poolsim.io/expected-rps` through the Downward API.
+- Expose recommendations through a sidecar metrics endpoint.
+- Keep controller-style reconciliation as a future additive feature.
 
 Acceptance criteria:
 
-- Annotation schema is documented and versioned.
-- Sidecar/controller does not alter runtime pool settings by default.
+- Annotation schema is documented.
+- Sidecar does not alter runtime pool settings.
 - Prometheus metrics have stable names and labels.
-- Kubernetes manifests are tested with static validation.
+- Unit tests cover command generation and metric rendering.
 
 ## Observability And Live Data Tasks
 

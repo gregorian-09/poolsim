@@ -11,6 +11,7 @@ This folder contains user-facing documentation for the current Poolsim capabilit
 - [`terraform-opentofu.md`](terraform-opentofu.md): Terraform/OpenTofu external-data adapter for connection-pool sizing as code.
 - [`language-bindings.md`](language-bindings.md): Python, TypeScript, and Go bindings that delegate to the stable CLI JSON contract.
 - [`ci-integration.md`](ci-integration.md): GitHub Action, GitLab CI, and GHCR Docker image integration guide for capacity gates and web deployment.
+- [`../integrations/kubernetes/README.md`](../integrations/kubernetes/README.md): Kubernetes sidecar pattern that exposes sizing recommendations as Prometheus metrics.
 - [`json-schema.md`](json-schema.md): JSON Schema files for documented config, telemetry, budget, scenario, batch, and gate-policy inputs.
 - [`feature-roadmap.md`](feature-roadmap.md): Tracked implementation tasks and acceptance criteria for adoption, observability, deeper simulation, developer experience, and validation features.
 - [`fixtures/README.md`](fixtures/README.md): Checked-in sample inputs used by the docs and docs-validation tests.

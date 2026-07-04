@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout-api
+  labels:
+    app.kubernetes.io/name: checkout-api
+    app.kubernetes.io/part-of: checkout
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: checkout-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: checkout-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+        poolsim.io/expected-rps: "180"
+        poolsim.io/latency-p50-ms: "8"
+        poolsim.io/latency-p95-ms: "30"
+        poolsim.io/latency-p99-ms: "70"
+        poolsim.io/current-pool-size: "8"
+        poolsim.io/max-server-connections: "100"
+        poolsim.io/min-pool-size: "2"
+        poolsim.io/max-pool-size: "20"
+        poolsim.io/connection-overhead-ms: "2"
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/example/checkout-api:latest
+          ports:
+            - name: http
+              containerPort: 8080
+        - name: poolsim-sidecar
+          image: ghcr.io/gregorian-09/poolsim-web:0.2.1
+          command: ["python3", "/opt/poolsim/integrations/kubernetes/sidecar/poolsim_sidecar.py"]
+          ports:
+            - name: poolsim
+              containerPort: 9464
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POOLSIM_SERVICE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['app.kubernetes.io/name']
+            - name: POOLSIM_EXPECTED_RPS
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['poolsim.io/expected-rps']
+            - name: POOLSIM_LATENCY_P50_MS
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['poolsim.io/latency-p50-ms']
+            - name: POOLSIM_LATENCY_P95_MS
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['poolsim.io/latency-p95-ms']
+            - name: POOLSIM_LATENCY_P99_MS
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['poolsim.io/latency-p99-ms']
+            - name: POOLSIM_CURRENT_POOL_SIZE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['poolsim.io/current-pool-size']
+            - name: POOLSIM_MAX_SERVER_CONNECTIONS
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['poolsim.io/max-server-connections']
+            - name: POOLSIM_MIN_POOL_SIZE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['poolsim.io/min-pool-size']
+            - name: POOLSIM_MAX_POOL_SIZE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['poolsim.io/max-pool-size']
+            - name: POOLSIM_CONNECTION_OVERHEAD_MS
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['poolsim.io/connection-overhead-ms']
