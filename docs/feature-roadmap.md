@@ -145,7 +145,7 @@ Acceptance criteria:
 
 ### Connection Acquisition Time Modeling
 
-Status: planned.
+Status: complete for additive core helper API.
 
 Scope:
 
@@ -159,7 +159,7 @@ Acceptance criteria:
 
 ### Transaction-Level Simulation
 
-Status: planned.
+Status: complete for additive transaction-mix aggregation API.
 
 Scope:
 
@@ -173,7 +173,7 @@ Acceptance criteria:
 
 ### Connection Leak Modeling
 
-Status: planned.
+Status: complete for additive leak simulation helper API.
 
 Scope:
 

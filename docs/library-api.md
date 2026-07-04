@@ -1242,3 +1242,73 @@ assert_eq!(ConnectionOverheadProfile::Postgres.connection_overhead_ms(), 1.5);
 ```
 
 Available variants are `Postgres`, `Mysql`, `SqlServer`, `Sqlite`, `PgBouncer`, and `RdsProxy`. Profile values are conservative sizing assumptions, not vendor guarantees. Explicit measured values should take precedence when available.
+
+## Advanced Optional Models
+
+`poolsim_core::advanced` contains additive helpers for deeper sizing questions. These APIs do not change `simulate`, `evaluate`, `sweep`, `PoolConfig`, `WorkloadConfig`, or default behavior.
+
+### Acquisition Wait Modeling
+
+Use `poolsim_core::advanced::estimate_acquisition_wait` to estimate the wait to acquire a pool slot before database service time.
+
+```rust
+use poolsim_core::{advanced::estimate_acquisition_wait, types::WorkloadConfig};
+
+let workload = WorkloadConfig {
+    requests_per_second: 100.0,
+    latency_p50_ms: 5.0,
+    latency_p95_ms: 20.0,
+    latency_p99_ms: 40.0,
+    raw_samples_ms: None,
+    step_load_profile: None,
+};
+
+let estimate = estimate_acquisition_wait(&workload, 8, 100.0)?;
+assert_eq!(estimate.pool_size(), 8);
+assert!(estimate.mean_acquisition_wait_ms() >= 0.0);
+assert!(estimate.p99_acquisition_wait_ms() >= 0.0);
+assert_eq!(estimate.acquisition_timeout_ms(), 100.0);
+let _rho = estimate.utilisation_rho();
+let _timeout_risk = estimate.timeout_risk();
+# Ok::<(), poolsim_core::error::PoolsimError>(())
+```
+
+The returned `poolsim_core::advanced::AcquisitionEstimate` exposes `pool_size`, `utilisation_rho`, `mean_acquisition_wait_ms`, `p99_acquisition_wait_ms`, `acquisition_timeout_ms`, and `timeout_risk` through getter methods.
+
+### Transaction Mix Aggregation
+
+Use `poolsim_core::advanced::TransactionClass` and `poolsim_core::advanced::TransactionMix` when a service has multiple query classes.
+
+```rust
+use poolsim_core::advanced::{TransactionClass, TransactionMix};
+
+let mix = TransactionMix::new(vec![
+    TransactionClass::new("fast-read", 80.0, 4.0, 12.0, 30.0),
+    TransactionClass::new("slow-write", 20.0, 20.0, 80.0, 160.0),
+])?;
+
+assert_eq!(mix.classes()[0].name(), "fast-read");
+assert_eq!(mix.classes()[0].requests_per_second(), 80.0);
+let workload = mix.aggregate_workload();
+assert_eq!(workload.requests_per_second, 100.0);
+# Ok::<(), poolsim_core::error::PoolsimError>(())
+```
+
+The aggregated workload can be passed to the existing `simulate`, `evaluate`, and `sweep` APIs.
+
+### Connection Leak Modeling
+
+Use `poolsim_core::advanced::simulate_connection_leak` to model gradual loss of usable pool slots.
+
+```rust
+use poolsim_core::advanced::simulate_connection_leak;
+
+let leak = simulate_connection_leak(10, 2.0, 6)?;
+assert_eq!(leak.initial_pool_size(), 10);
+assert_eq!(leak.leaked_connections(), 10);
+assert_eq!(leak.final_available_connections(), 0);
+assert_eq!(leak.minutes_to_exhaustion(), Some(5));
+# Ok::<(), poolsim_core::error::PoolsimError>(())
+```
+
+The returned `poolsim_core::advanced::LeakSimulation` exposes `initial_pool_size`, `final_available_connections`, `leaked_connections`, and `minutes_to_exhaustion` through getter methods.

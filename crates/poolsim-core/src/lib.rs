@@ -3,6 +3,8 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![deny(missing_docs)]
 
+/// Advanced optional sizing helpers.
+pub mod advanced;
 /// Distribution fitting and sampling utilities.
 pub mod distribution;
 /// Erlang-C queueing formulas.

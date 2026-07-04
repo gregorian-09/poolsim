@@ -8,6 +8,7 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 
 ### Crate Modules and Reexports
 
+- `poolsim_core::advanced`: optional advanced sizing helpers for acquisition waits, transaction mixes, and connection leaks.
 - `poolsim_core::distribution`: public distribution-fitting module; detailed usage in `docs/library-api.md`.
 - `poolsim_core::erlang`: public Erlang-C helper module; detailed usage in `docs/library-api.md`.
 - `poolsim_core::error`: public error module; detailed usage in `docs/library-api.md`.
@@ -30,6 +31,32 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_core::evaluate`: fixed-pool scoring workflow.
 - `poolsim_core::sweep`: default sensitivity-table generator.
 - `poolsim_core::sweep_with_options`: sensitivity-table generator with explicit options.
+
+
+### `poolsim_core::advanced`
+
+- `poolsim_core::advanced::AcquisitionEstimate`: acquisition wait estimate returned by `estimate_acquisition_wait`.
+- `poolsim_core::advanced::AcquisitionEstimate::pool_size`: fixed pool size used by the estimate.
+- `poolsim_core::advanced::AcquisitionEstimate::utilisation_rho`: estimated utilization ratio.
+- `poolsim_core::advanced::AcquisitionEstimate::mean_acquisition_wait_ms`: estimated mean acquisition wait in milliseconds.
+- `poolsim_core::advanced::AcquisitionEstimate::p99_acquisition_wait_ms`: estimated p99 acquisition wait in milliseconds.
+- `poolsim_core::advanced::AcquisitionEstimate::acquisition_timeout_ms`: configured acquisition timeout in milliseconds.
+- `poolsim_core::advanced::AcquisitionEstimate::timeout_risk`: whether the p99 acquisition wait reaches the timeout.
+- `poolsim_core::advanced::estimate_acquisition_wait`: estimates pool-slot acquisition wait before database service time.
+- `poolsim_core::advanced::TransactionClass`: one traffic class in a transaction-level workload mix.
+- `poolsim_core::advanced::TransactionClass::new`: constructs a transaction class.
+- `poolsim_core::advanced::TransactionClass::name`: returns the transaction class name.
+- `poolsim_core::advanced::TransactionClass::requests_per_second`: returns the transaction class request rate.
+- `poolsim_core::advanced::TransactionMix`: transaction-level workload mix.
+- `poolsim_core::advanced::TransactionMix::new`: validates and constructs a transaction mix.
+- `poolsim_core::advanced::TransactionMix::classes`: returns transaction classes in the mix.
+- `poolsim_core::advanced::TransactionMix::aggregate_workload`: aggregates transaction classes into a `WorkloadConfig`.
+- `poolsim_core::advanced::LeakSimulation`: connection leak modeling result.
+- `poolsim_core::advanced::LeakSimulation::initial_pool_size`: initial pool size before leakage.
+- `poolsim_core::advanced::LeakSimulation::final_available_connections`: available connections after modeled leakage.
+- `poolsim_core::advanced::LeakSimulation::leaked_connections`: total leaked connections.
+- `poolsim_core::advanced::LeakSimulation::minutes_to_exhaustion`: first minute where all slots are leaked.
+- `poolsim_core::advanced::simulate_connection_leak`: simulates gradual connection leakage over time.
 
 ### `poolsim_core::distribution`
 
