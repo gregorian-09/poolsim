@@ -9,6 +9,7 @@ mod compare;
 mod config;
 mod config_gen;
 mod doctor;
+mod explain;
 mod gate;
 mod guard;
 mod init;
@@ -69,16 +70,25 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
                 let input = config::resolve_sweep_input(&args.common)?;
                 let rows = sweep_with_options(&input.workload, &input.pool, &input.options)?;
                 render_sweep(&rows, cli.format)?;
+                if args.common.explain {
+                    eprintln!("{}", explain::sweep(&rows));
+                }
                 Ok(exit_code_for_worst_risk(worst_risk(&rows), cli.warn_exit))
             } else {
                 let input = config::resolve_simulation_input(&args.common)?;
                 if let Some(pool_size) = args.pool_size {
                     let result = evaluate(&input.workload, pool_size, &input.options)?;
                     render_evaluation(&result, cli.format)?;
+                    if args.common.explain {
+                        eprintln!("{}", explain::evaluation(&input.workload, &result));
+                    }
                     Ok(exit_code_for_saturation(result.saturation, cli.warn_exit))
                 } else {
                     let report = simulate(&input.workload, &input.pool, &input.options)?;
                     render_simulation(&report, cli.format)?;
+                    if args.common.explain {
+                        eprintln!("{}", explain::simulation(&input.workload, &report));
+                    }
                     Ok(exit_code_for_saturation(report.saturation, cli.warn_exit))
                 }
             }
@@ -87,12 +97,18 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
             let input = config::resolve_evaluate_input(&args)?;
             let result = evaluate(&input.workload, args.pool_size, &input.options)?;
             render_evaluation(&result, cli.format)?;
+            if args.common.explain {
+                eprintln!("{}", explain::evaluation(&input.workload, &result));
+            }
             Ok(exit_code_for_saturation(result.saturation, cli.warn_exit))
         }
         Commands::Sweep(args) => {
             let input = config::resolve_sweep_input(&args)?;
             let rows = sweep_with_options(&input.workload, &input.pool, &input.options)?;
             render_sweep(&rows, cli.format)?;
+            if args.explain {
+                eprintln!("{}", explain::sweep(&rows));
+            }
             Ok(exit_code_for_worst_risk(worst_risk(&rows), cli.warn_exit))
         }
         Commands::Batch(args) => {
@@ -681,6 +697,7 @@ mod tests {
             queue_model: None,
             target_wait_p99_ms: None,
             max_acceptable_rho: None,
+            explain: false,
         }
     }
 

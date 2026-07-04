@@ -341,3 +341,7 @@ When opening an issue, include the command, full flags with secrets removed, inp
 ## Quick Start Config Generation
 
 Create starter files with `poolsim init --framework sqlx --database postgres --expected-rps 180`. The command writes a runnable `poolsim.json` simulation config and `poolsim-gate-policy.toml` capacity-gate policy, refusing to overwrite existing files unless `--force` is passed.
+
+## Explainable Output
+
+Add `--explain` to `simulate`, `evaluate`, or `sweep` to emit prose reasoning on stderr while keeping stdout in the selected `--format`. This lets CI keep parsing JSON while humans read why a pool size is safe, close to saturation, or unsafe.

@@ -869,3 +869,56 @@ fn docs_init_example_generates_runnable_config_and_policy() {
     let _ = std::fs::remove_file(config_path);
     let _ = std::fs::remove_file(policy_path);
 }
+
+#[test]
+fn docs_explain_examples_keep_machine_stdout_parseable() {
+    let simulate_output = run_cli(&[
+        "--format",
+        "json",
+        "simulate",
+        "--config",
+        &fixture("docs/fixtures/cli-config.json"),
+        "--explain",
+    ]);
+    assert_success(&simulate_output, "simulate explain docs example");
+    let json: Value = serde_json::from_str(&stdout_utf8(&simulate_output))
+        .expect("simulate --explain JSON stdout should remain parseable");
+    assert!(json["optimal_pool_size"].is_number());
+    let stderr = String::from_utf8_lossy(&simulate_output.stderr);
+    assert!(stderr.contains("Poolsim recommends a pool"));
+    assert!(stderr.contains("rho"));
+
+    let evaluate_output = run_cli(&[
+        "--format",
+        "json",
+        "evaluate",
+        "--config",
+        &fixture("docs/fixtures/cli-config.json"),
+        "--pool-size",
+        "10",
+        "--explain",
+    ]);
+    assert_success(&evaluate_output, "evaluate explain docs example");
+    let json: Value = serde_json::from_str(&stdout_utf8(&evaluate_output))
+        .expect("evaluate --explain JSON stdout should remain parseable");
+    assert_eq!(json["pool_size"], 10);
+    assert!(String::from_utf8_lossy(&evaluate_output.stderr).contains("pool of 10"));
+
+    let sweep_output = run_cli(&[
+        "--format",
+        "json",
+        "sweep",
+        "--config",
+        &fixture("docs/fixtures/cli-config.json"),
+        "--explain",
+    ]);
+    let code = sweep_output
+        .status
+        .code()
+        .expect("sweep should exit with an integer code");
+    assert!(code == 0 || code == 2 || code == 3);
+    let json: Value = serde_json::from_str(&stdout_utf8(&sweep_output))
+        .expect("sweep --explain JSON stdout should remain parseable");
+    assert!(json.as_array().is_some_and(|rows| !rows.is_empty()));
+    assert!(String::from_utf8_lossy(&sweep_output.stderr).contains("sensitivity sweep"));
+}

@@ -593,6 +593,7 @@ mod tests {
             queue_model: None,
             target_wait_p99_ms: None,
             max_acceptable_rho: None,
+            explain: false,
         }
     }
 

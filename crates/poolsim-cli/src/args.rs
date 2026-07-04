@@ -193,6 +193,9 @@ pub struct CommonArgs {
     pub target_wait_p99_ms: Option<f64>,
     #[arg(long)]
     pub max_acceptable_rho: Option<f64>,
+
+    #[arg(long)]
+    pub explain: bool,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -473,6 +476,22 @@ mod tests {
     fn cli_queue_model_maps_to_core_enum() {
         assert_eq!(QueueModel::from(CliQueueModel::Mmc), QueueModel::MMC);
         assert_eq!(QueueModel::from(CliQueueModel::Mdc), QueueModel::MDC);
+    }
+
+    #[test]
+    fn parser_handles_explain_flag() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "simulate",
+            "--config",
+            "poolsim.json",
+            "--explain",
+        ])
+        .expect("explain flag should parse");
+        match cli.command {
+            Commands::Simulate(args) => assert!(args.common.explain),
+            _ => panic!("expected simulate command"),
+        }
     }
 
     #[test]

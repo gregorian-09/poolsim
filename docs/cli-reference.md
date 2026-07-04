@@ -220,6 +220,19 @@ Conflict rule:
 
 - `--pool-size` and `--sweep` cannot be used together.
 
+
+### Explainable Output
+
+Use `--explain` with `simulate`, `evaluate`, or `sweep` when you want prose alongside the normal machine-readable or table output. Poolsim writes the explanation to stderr so stdout remains valid JSON, CSV, table, or HTML.
+
+```bash
+poolsim --format json simulate --config docs/fixtures/cli-config.json --explain \
+  1> report.json \
+  2> explanation.txt
+```
+
+The explanation includes request rate, pool size, utilisation rho, p99 queue wait, saturation status, and step-load pressure when a step-load profile is present.
+
 ## `evaluate`
 
 ### Purpose
