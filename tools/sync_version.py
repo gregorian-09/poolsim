@@ -70,6 +70,16 @@ def main() -> int:
             f'poolsim-core = "{version}"',
         ),
         (
+            repo_root / "bindings/python/pyproject.toml",
+            r'^version = ".*"$',
+            f'version = "{version}"',
+        ),
+        (
+            repo_root / "bindings/typescript/package.json",
+            r'^  "version": ".*",$',
+            f'  "version": "{version}",',
+        ),
+        (
             repo_root / "crates/poolsim-core/src/lib.rs",
             r'^#!\[doc\(html_root_url = "https://docs\.rs/poolsim-core/.*"\)\]$',
             f'#![doc(html_root_url = "https://docs.rs/poolsim-core/{version}")]',

@@ -1,0 +1,18 @@
+{
+  "name": "poolsim",
+  "version": "0.2.1",
+  "description": "TypeScript bindings for the Poolsim connection pool sizing CLI",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test test/client.test.mjs"
+  },
+  "keywords": ["connection-pool", "capacity-planning", "sizing"],
+  "author": "Gregorian Rayne <gregorianrayne09@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
