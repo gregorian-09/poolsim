@@ -922,3 +922,31 @@ fn docs_explain_examples_keep_machine_stdout_parseable() {
     assert!(json.as_array().is_some_and(|rows| !rows.is_empty()));
     assert!(String::from_utf8_lossy(&sweep_output.stderr).contains("sensitivity sweep"));
 }
+
+#[test]
+fn docs_ci_integration_assets_are_wired_to_existing_commands() {
+    let action = std::fs::read_to_string(workspace_root().join("action.yml"))
+        .expect("GitHub action metadata should be readable");
+    assert!(action.contains("runs:"));
+    assert!(action.contains("using: composite"));
+    assert!(action.contains("cargo install poolsim-cli"));
+    assert!(action.contains("poolsim --format json gate"));
+    assert!(action.contains("telemetry"));
+    assert!(action.contains("prometheus"));
+
+    let gitlab = std::fs::read_to_string(
+        workspace_root().join("templates/gitlab/poolsim-capacity-gate.gitlab-ci.yml"),
+    )
+    .expect("GitLab capacity gate template should be readable");
+    assert!(gitlab.contains("poolsim_capacity_gate"));
+    assert!(gitlab.contains("poolsim --format json gate"));
+    assert!(gitlab.contains("$POOLSIM_POLICY"));
+
+    let docker = std::fs::read_to_string(workspace_root().join(".github/workflows/docker.yml"))
+        .expect("Docker workflow should be readable");
+    assert!(docker.contains("workflow_dispatch"));
+    assert!(docker.contains("tags:"));
+    assert!(docker.contains("actions/checkout@v6"));
+    assert!(docker.contains("docker/build-push-action@v6"));
+    assert!(!docker.contains("branches:"));
+}

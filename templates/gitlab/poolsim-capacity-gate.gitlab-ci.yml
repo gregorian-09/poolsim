@@ -1,0 +1,21 @@
+# Include this file from a GitLab pipeline to fail unsafe connection-pool changes.
+# Required runner image capability: cargo + Rust toolchain.
+
+poolsim_capacity_gate:
+  stage: test
+  image: rust:1.75
+  variables:
+    POOLSIM_VERSION: "0.2.1"
+    POOLSIM_POLICY: "docs/fixtures/gate-policy.toml"
+    POOLSIM_TELEMETRY_CONFIG: "docs/fixtures/telemetry.json"
+  before_script:
+    - cargo install poolsim-cli --version "$POOLSIM_VERSION" --locked
+  script:
+    - >
+      poolsim --format json gate
+      --policy "$POOLSIM_POLICY"
+      telemetry
+      --config "$POOLSIM_TELEMETRY_CONFIG"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

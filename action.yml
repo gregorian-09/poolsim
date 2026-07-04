@@ -1,0 +1,92 @@
+name: Poolsim Capacity Gate
+description: Run poolsim gate in CI and fail when capacity policy thresholds are exceeded.
+author: Gregorian Rayne
+branding:
+  icon: activity
+  color: green
+inputs:
+  version:
+    description: Version of poolsim-cli to install from crates.io.
+    required: false
+    default: "0.2.1"
+  policy:
+    description: Path to the poolsim gate policy TOML file.
+    required: false
+    default: docs/fixtures/gate-policy.toml
+  source:
+    description: Telemetry source kind: telemetry or prometheus.
+    required: false
+    default: telemetry
+  telemetry-config:
+    description: Path to a telemetry JSON or TOML config when source is telemetry.
+    required: false
+    default: docs/fixtures/telemetry.json
+  prometheus-response-file:
+    description: Path to captured Prometheus query responses when source is prometheus.
+    required: false
+    default: docs/fixtures/prometheus-responses.json
+  service-name:
+    description: Service name used for Prometheus-derived reports.
+    required: false
+    default: service
+  window:
+    description: Observation window label used for Prometheus-derived reports.
+    required: false
+    default: 5m
+  current-pool-size:
+    description: Current configured pool size for Prometheus-derived reports.
+    required: false
+    default: "8"
+  max-server-connections:
+    description: Database connection cap visible to this service for Prometheus-derived reports.
+    required: false
+    default: "100"
+  connection-overhead-ms:
+    description: Connection overhead assumption for Prometheus-derived reports.
+    required: false
+    default: "0"
+  min:
+    description: Minimum candidate pool size for Prometheus-derived reports.
+    required: false
+    default: "2"
+  max:
+    description: Maximum candidate pool size for Prometheus-derived reports.
+    required: false
+    default: "20"
+  extra-args:
+    description: Additional arguments appended to poolsim gate.
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Install poolsim-cli
+      shell: bash
+      run: cargo install poolsim-cli --version "${{ inputs.version }}" --locked
+    - name: Run capacity gate
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${{ inputs.source }}" = "telemetry" ]; then
+          poolsim --format json gate \
+            --policy "${{ inputs.policy }}" \
+            ${{ inputs.extra-args }} \
+            telemetry \
+            --config "${{ inputs.telemetry-config }}"
+        elif [ "${{ inputs.source }}" = "prometheus" ]; then
+          poolsim --format json gate \
+            --policy "${{ inputs.policy }}" \
+            ${{ inputs.extra-args }} \
+            prometheus \
+            --response-file "${{ inputs.prometheus-response-file }}" \
+            --service-name "${{ inputs.service-name }}" \
+            --window "${{ inputs.window }}" \
+            --current-pool-size "${{ inputs.current-pool-size }}" \
+            --max-server-connections "${{ inputs.max-server-connections }}" \
+            --connection-overhead-ms "${{ inputs.connection-overhead-ms }}" \
+            --min "${{ inputs.min }}" \
+            --max "${{ inputs.max }}"
+        else
+          echo "source must be telemetry or prometheus" >&2
+          exit 1
+        fi
