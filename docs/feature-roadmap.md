@@ -51,7 +51,7 @@ Acceptance criteria:
 
 ### GitHub Action And GitLab CI Component
 
-Status: in progress.
+Status: complete.
 
 Scope:
 
@@ -86,7 +86,7 @@ Acceptance criteria:
 
 ### OpenTelemetry Native Ingestion
 
-Status: complete for response-file polling worker; direct poolsim-web scheduler remains future work.
+Status: complete for OTLP JSON metric-export ingestion; direct OTLP receiver mode remains future work.
 
 Scope:
 
@@ -116,7 +116,7 @@ Acceptance criteria:
 
 ### Continuous Recommendation Mode
 
-Status: complete for result contract and summarizer; database-backed runners remain future work.
+Status: complete for response-file polling worker; direct poolsim-web scheduler remains future work.
 
 Scope:
 
@@ -135,7 +135,7 @@ Acceptance criteria:
 
 ### Connection Overhead Profiles
 
-Status: complete for local anonymized payload generator; aggregate publication remains future work.
+Status: complete.
 
 Scope:
 
@@ -193,7 +193,7 @@ Acceptance criteria:
 
 ### `poolsim init`
 
-Status: in progress.
+Status: complete.
 
 Scope:
 
@@ -207,7 +207,7 @@ Acceptance criteria:
 
 ### Explainable Output
 
-Status: in progress.
+Status: complete.
 
 Scope:
 
@@ -221,7 +221,7 @@ Acceptance criteria:
 
 ### Web UI
 
-Status: complete for formula template; tap publication remains release work.
+Status: complete.
 
 Scope:
 
@@ -237,7 +237,7 @@ Acceptance criteria:
 
 ### Sizing Benchmark Suite
 
-Status: planned.
+Status: complete for result contract and summarizer; database-backed runners remain future work.
 
 Scope:
 
@@ -253,7 +253,7 @@ Acceptance criteria:
 
 ### Deployed-Pool Survey
 
-Status: planned.
+Status: complete for local anonymized payload generator; aggregate publication remains future work.
 
 Scope:
 
@@ -270,7 +270,7 @@ Acceptance criteria:
 
 ### Docker Image For `poolsim-web`
 
-Status: in progress.
+Status: complete.
 
 Acceptance criteria:
 
@@ -280,7 +280,7 @@ Acceptance criteria:
 
 ### JSON Schema For Config Files
 
-Status: in progress.
+Status: complete.
 
 Acceptance criteria:
 
@@ -290,7 +290,7 @@ Acceptance criteria:
 
 ### HTML Output
 
-Status: in progress.
+Status: complete.
 
 Acceptance criteria:
 
@@ -300,7 +300,7 @@ Acceptance criteria:
 
 ### Homebrew Tap Formula
 
-Status: planned.
+Status: complete for formula template; tap publication remains release work.
 
 Acceptance criteria:
 
