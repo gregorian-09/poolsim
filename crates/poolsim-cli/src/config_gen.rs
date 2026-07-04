@@ -51,6 +51,7 @@ impl From<CliConfigFramework> for ConfigFramework {
 pub(crate) enum ConfigSourceKind {
     Telemetry,
     Prometheus,
+    Otlp,
     Simulate,
 }
 
@@ -59,6 +60,7 @@ impl ConfigSourceKind {
         match self {
             Self::Telemetry => "telemetry",
             Self::Prometheus => "prometheus",
+            Self::Otlp => "otlp",
             Self::Simulate => "simulate",
         }
     }
@@ -534,6 +536,7 @@ mod tests {
         );
         assert_eq!(ConfigSourceKind::Telemetry.as_str(), "telemetry");
         assert_eq!(ConfigSourceKind::Prometheus.as_str(), "prometheus");
+        assert_eq!(ConfigSourceKind::Otlp.as_str(), "otlp");
         assert_eq!(ConfigSourceKind::Simulate.as_str(), "simulate");
     }
 

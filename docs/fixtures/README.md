@@ -14,6 +14,7 @@ This directory contains checked-in sample inputs used by the documentation and v
 - `budget.toml`: TOML database connection budget input for `poolsim budget`
 - `telemetry.json`: telemetry import body for `poolsim import telemetry`, `poolsim gate telemetry`, `poolsim guard telemetry`, `poolsim doctor telemetry`, `poolsim generate-config telemetry`, and `POST /v1/telemetry/recommend`
 - `prometheus-responses.json`: offline Prometheus API response bundle for `poolsim import prometheus`, `poolsim gate prometheus`, `poolsim guard prometheus`, `poolsim doctor prometheus`, and `poolsim generate-config prometheus`
+- `otlp-metrics.json`: OpenTelemetry OTLP JSON metrics payload for `poolsim import otlp`, `poolsim gate otlp`, `poolsim guard otlp`, `poolsim doctor otlp`, and `poolsim generate-config otlp`
 - `gate-policy.toml`: CI capacity-gate and deployment-guard policy for `poolsim gate` and `poolsim guard`
 - `latencies.txt`: empirical latency sample file for `--samples-file`
 - `web-simulate.json`: request body for `POST /v1/simulate`

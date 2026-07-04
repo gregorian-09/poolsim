@@ -296,6 +296,7 @@ pub struct GateArgs {
 pub enum GateSourceCommands {
     Telemetry(TelemetryImportArgs),
     Prometheus(PrometheusImportArgs),
+    Otlp(OtlpImportArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -341,6 +342,7 @@ pub struct DoctorArgs {
 pub enum DoctorSourceCommands {
     Telemetry(TelemetryImportArgs),
     Prometheus(PrometheusImportArgs),
+    Otlp(OtlpImportArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -371,6 +373,7 @@ pub struct GenerateConfigArgs {
 pub enum GenerateConfigSourceCommands {
     Telemetry(TelemetryImportArgs),
     Prometheus(PrometheusImportArgs),
+    Otlp(OtlpImportArgs),
     Simulate(CommonArgs),
 }
 
@@ -396,6 +399,7 @@ impl From<CliSaturationLevel> for SaturationLevel {
 pub enum ImportCommands {
     Telemetry(TelemetryImportArgs),
     Prometheus(PrometheusImportArgs),
+    Otlp(OtlpImportArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -405,6 +409,58 @@ pub struct TelemetryImportArgs {
 
     #[arg(long)]
     pub current_pool_size: Option<u32>,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct OtlpImportArgs {
+    #[arg(long)]
+    pub config: PathBuf,
+
+    #[arg(long, default_value = "poolsim.rps")]
+    pub rps_metric: String,
+    #[arg(long, default_value = "poolsim.latency.p50_ms")]
+    pub p50_metric: String,
+    #[arg(long, default_value = "poolsim.latency.p95_ms")]
+    pub p95_metric: String,
+    #[arg(long, default_value = "poolsim.latency.p99_ms")]
+    pub p99_metric: String,
+
+    #[arg(long)]
+    pub service_name: Option<String>,
+    #[arg(long)]
+    pub window: Option<String>,
+    #[arg(long)]
+    pub observed_at: Option<String>,
+
+    #[arg(long)]
+    pub current_pool_size: u32,
+    #[arg(long)]
+    pub max_server_connections: u32,
+    #[arg(
+        long,
+        alias = "connection-establishment-overhead-ms",
+        default_value_t = 0.0
+    )]
+    pub connection_overhead_ms: f64,
+    #[arg(long)]
+    pub idle_timeout_ms: Option<u64>,
+    #[arg(long)]
+    pub min: u32,
+    #[arg(long)]
+    pub max: u32,
+
+    #[arg(long)]
+    pub iterations: Option<u32>,
+    #[arg(long)]
+    pub seed: Option<u64>,
+    #[arg(long, value_enum)]
+    pub distribution: Option<CliDistributionModel>,
+    #[arg(long, value_enum)]
+    pub queue_model: Option<CliQueueModel>,
+    #[arg(long)]
+    pub target_wait_p99_ms: Option<f64>,
+    #[arg(long)]
+    pub max_acceptable_rho: Option<f64>,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -814,9 +870,44 @@ mod tests {
                     assert_eq!(telemetry.config, PathBuf::from("telemetry.json"));
                     assert_eq!(telemetry.current_pool_size, Some(12));
                 }
-                ImportCommands::Prometheus(_) => panic!("expected telemetry import"),
+                ImportCommands::Prometheus(_) | ImportCommands::Otlp(_) => {
+                    panic!("expected telemetry import")
+                }
             },
             _ => panic!("expected import telemetry command"),
+        }
+    }
+
+    #[test]
+    fn parser_handles_import_otlp_subcommand() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "import",
+            "otlp",
+            "--config",
+            "otlp.json",
+            "--service-name",
+            "checkout-api",
+            "--current-pool-size",
+            "8",
+            "--max-server-connections",
+            "100",
+            "--min",
+            "2",
+            "--max",
+            "20",
+        ])
+        .expect("OTLP import args should parse");
+        match cli.command {
+            Commands::Import(args) => match args.command {
+                ImportCommands::Otlp(otlp) => {
+                    assert_eq!(otlp.config, PathBuf::from("otlp.json"));
+                    assert_eq!(otlp.service_name.as_deref(), Some("checkout-api"));
+                    assert_eq!(otlp.current_pool_size, 8);
+                }
+                _ => panic!("expected OTLP import"),
+            },
+            _ => panic!("expected import command"),
         }
     }
 
@@ -862,7 +953,9 @@ mod tests {
                     assert_eq!(prometheus.max_server_connections, 100);
                     assert_eq!(prometheus.header.len(), 1);
                 }
-                ImportCommands::Telemetry(_) => panic!("expected prometheus import"),
+                ImportCommands::Telemetry(_) | ImportCommands::Otlp(_) => {
+                    panic!("expected prometheus import")
+                }
             },
             _ => panic!("expected import prometheus command"),
         }
@@ -926,7 +1019,9 @@ mod tests {
                     GateSourceCommands::Telemetry(telemetry) => {
                         assert_eq!(telemetry.config, PathBuf::from("telemetry.json"));
                     }
-                    GateSourceCommands::Prometheus(_) => panic!("expected telemetry source"),
+                    GateSourceCommands::Prometheus(_) | GateSourceCommands::Otlp(_) => {
+                        panic!("expected telemetry source")
+                    }
                 }
             }
             _ => panic!("expected gate command"),
@@ -970,7 +1065,9 @@ mod tests {
                         );
                         assert_eq!(prometheus.current_pool_size, 12);
                     }
-                    GateSourceCommands::Telemetry(_) => panic!("expected prometheus source"),
+                    GateSourceCommands::Telemetry(_) | GateSourceCommands::Otlp(_) => {
+                        panic!("expected prometheus source")
+                    }
                 }
             }
             _ => panic!("expected guard command"),
@@ -1008,7 +1105,9 @@ mod tests {
                     assert_eq!(prometheus.current_pool_size, 12);
                     assert_eq!(prometheus.max_server_connections, 100);
                 }
-                DoctorSourceCommands::Telemetry(_) => panic!("expected prometheus source"),
+                DoctorSourceCommands::Telemetry(_) | DoctorSourceCommands::Otlp(_) => {
+                    panic!("expected prometheus source")
+                }
             },
             _ => panic!("expected doctor command"),
         }

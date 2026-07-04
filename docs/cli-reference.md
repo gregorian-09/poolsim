@@ -31,6 +31,7 @@ Checked-in runnable fixture files live under `docs/fixtures/`:
 - `docs/fixtures/budget.toml`
 - `docs/fixtures/telemetry.json`
 - `docs/fixtures/prometheus-responses.json`
+- `docs/fixtures/otlp-metrics.json`
 - `docs/fixtures/gate-policy.toml`
 - `docs/fixtures/latencies.txt`
 
@@ -46,14 +47,19 @@ Available subcommands:
 - `budget`
 - `import telemetry`
 - `import prometheus`
+- `import otlp`
 - `gate telemetry`
 - `gate prometheus`
+- `gate otlp`
 - `guard telemetry`
 - `guard prometheus`
+- `guard otlp`
 - `doctor telemetry`
 - `doctor prometheus`
+- `doctor otlp`
 - `generate-config telemetry`
 - `generate-config prometheus`
+- `generate-config otlp`
 - `generate-config simulate`
 - `init`
 
@@ -711,6 +717,91 @@ Optional:
 
 The output is the same `TelemetryRecommendation` JSON/table/CSV shape documented in `import telemetry`.
 
+## `import otlp`
+
+### Purpose
+
+Reads an exported OpenTelemetry OTLP JSON metrics payload, extracts request rate and latency percentile metrics, converts them into a `TelemetrySnapshot`, and returns the same `TelemetryRecommendation` diff produced by `import telemetry`.
+
+Use this command when your observability pipeline already emits OTLP metrics and you want to size pools without writing a Poolsim-specific telemetry snapshot first.
+
+### Example
+
+```bash
+poolsim import otlp \
+  --config docs/fixtures/otlp-metrics.json \
+  --service-name checkout-api \
+  --window 5m \
+  --current-pool-size 8 \
+  --max-server-connections 100 \
+  --connection-overhead-ms 2 \
+  --min 2 \
+  --max 20 \
+  --format json
+```
+
+### Metric mapping flags
+
+By default, Poolsim looks for these metric names:
+
+- `poolsim.rps`
+- `poolsim.latency.p50_ms`
+- `poolsim.latency.p95_ms`
+- `poolsim.latency.p99_ms`
+
+Override the names when your telemetry uses different conventions:
+
+```bash
+poolsim import otlp \
+  --config otlp-export.json \
+  --rps-metric http.server.request.rate \
+  --p50-metric http.server.duration.p50_ms \
+  --p95-metric http.server.duration.p95_ms \
+  --p99-metric http.server.duration.p99_ms \
+  --current-pool-size 8 \
+  --max-server-connections 100 \
+  --min 2 \
+  --max 20
+```
+
+Poolsim searches standard OTLP-style JSON nesting such as `resourceMetrics`, `scopeMetrics`, `metrics`, `sum`, `gauge`, and `dataPoints`. Each selected metric must contain a numeric datapoint through keys such as `asDouble`, `asInt`, `doubleValue`, `intValue`, or `value`.
+
+Latency metrics must be in milliseconds. If your telemetry exports seconds, convert upstream or export a millisecond recording rule before importing it.
+
+### `import otlp` flags
+
+Required:
+
+- `--config <path>`
+- `--current-pool-size`
+- `--max-server-connections`
+- `--min`
+- `--max`
+
+Metric names:
+
+- `--rps-metric`
+- `--p50-metric`
+- `--p95-metric`
+- `--p99-metric`
+
+Optional metadata, pool, and simulation-option flags:
+
+- `--service-name`
+- `--window`
+- `--observed-at`
+- `--connection-overhead-ms`
+- `--connection-establishment-overhead-ms`
+- `--idle-timeout-ms`
+- `--iterations`
+- `--seed`
+- `--distribution`
+- `--queue-model`
+- `--target-wait-p99-ms`
+- `--max-acceptable-rho`
+
+The output is the same `TelemetryRecommendation` JSON/table/CSV shape documented in `import telemetry`.
+
 ## `gate`
 
 ### Purpose
@@ -719,7 +810,7 @@ Runs a CI-friendly capacity gate against imported telemetry and exits according 
 
 Use `gate` when a deployment, pull request, or scheduled capacity job needs a hard pass/fail answer instead of only a sizing recommendation.
 
-The command reuses the same telemetry import paths as `import telemetry` and `import prometheus`, then evaluates a `GateReport`:
+The command reuses the same telemetry import paths as `import telemetry`, `import prometheus`, and `import otlp`, then evaluates a `GateReport`:
 
 - `status`: `Pass`, `Warning`, or `Critical`
 - `checks`: one row per policy rule
@@ -744,6 +835,22 @@ poolsim --format json gate \
   --policy docs/fixtures/gate-policy.toml \
   prometheus \
   --response-file docs/fixtures/prometheus-responses.json \
+  --service-name checkout-api \
+  --window 5m \
+  --current-pool-size 8 \
+  --max-server-connections 100 \
+  --connection-overhead-ms 2 \
+  --min 2 \
+  --max 20
+```
+
+### OTLP metrics gate example
+
+```bash
+poolsim --format json gate \
+  --policy docs/fixtures/gate-policy.toml \
+  otlp \
+  --config docs/fixtures/otlp-metrics.json \
   --service-name checkout-api \
   --window 5m \
   --current-pool-size 8 \
@@ -827,6 +934,17 @@ Uses the same flags as `import prometheus`:
 - `--header`
 - telemetry metadata, pool, and simulation-option flags
 
+#### `gate otlp`
+
+Uses the same flags as `import otlp`:
+
+- `--config <path>`
+- `--rps-metric`
+- `--p50-metric`
+- `--p95-metric`
+- `--p99-metric`
+- telemetry metadata, pool, and simulation-option flags
+
 ### GitHub Actions example
 
 ```yaml
@@ -894,6 +1012,24 @@ poolsim --format json guard \
   --max 20
 ```
 
+### OTLP metrics guard example
+
+```bash
+poolsim --format json guard \
+  --max-current-p99-queue-wait-ms 100 \
+  --max-current-mean-queue-wait-ms 20 \
+  --max-current-rho 0.95 \
+  otlp \
+  --config docs/fixtures/otlp-metrics.json \
+  --service-name checkout-api \
+  --window 5m \
+  --current-pool-size 8 \
+  --max-server-connections 100 \
+  --connection-overhead-ms 2 \
+  --min 2 \
+  --max 20
+```
+
 ### Failing guard example
 
 ```bash
@@ -922,6 +1058,17 @@ Uses the same flags as `import prometheus`:
 - `--p95-query`
 - `--p99-query`
 - `--header`
+- telemetry metadata, pool, and simulation-option flags
+
+#### `guard otlp`
+
+Uses the same flags as `import otlp`:
+
+- `--config <path>`
+- `--rps-metric`
+- `--p50-metric`
+- `--p95-metric`
+- `--p99-metric`
 - telemetry metadata, pool, and simulation-option flags
 
 ### GitHub Actions guard example
@@ -955,7 +1102,7 @@ Use `doctor` when you want an operational explanation instead of only a recommen
 - whether it is close to saturation
 - whether the current or recommended pool is critically saturated
 
-The command reuses the same telemetry import paths as `import telemetry`, `import prometheus`, and `gate`.
+The command reuses the same telemetry import paths as `import telemetry`, `import prometheus`, `import otlp`, and `gate`.
 
 The JSON output is a `DoctorReport`:
 
@@ -1004,6 +1151,20 @@ poolsim --format json doctor prometheus \
   --max 20
 ```
 
+### OTLP metrics doctor example
+
+```bash
+poolsim --format json doctor otlp \
+  --config docs/fixtures/otlp-metrics.json \
+  --service-name checkout-api \
+  --window 5m \
+  --current-pool-size 8 \
+  --max-server-connections 100 \
+  --connection-overhead-ms 2 \
+  --min 2 \
+  --max 20
+```
+
 ### Doctor source subcommands
 
 #### `doctor telemetry`
@@ -1025,13 +1186,24 @@ Uses the same flags as `import prometheus`:
 - `--header`
 - telemetry metadata, pool, and simulation-option flags
 
+#### `doctor otlp`
+
+Uses the same flags as `import otlp`:
+
+- `--config <path>`
+- `--rps-metric`
+- `--p50-metric`
+- `--p95-metric`
+- `--p99-metric`
+- telemetry metadata, pool, and simulation-option flags
+
 ## `generate-config`
 
 ### Purpose
 
 Generates framework-specific pool configuration snippets from a Poolsim recommendation.
 
-Use `generate-config` after `simulate`, `import telemetry`, or `import prometheus` when you want to turn the recommended pool size into copy-pasteable configuration for a real runtime pool.
+Use `generate-config` after `simulate`, `import telemetry`, `import prometheus`, or `import otlp` when you want to turn the recommended pool size into copy-pasteable configuration for a real runtime pool.
 
 Supported frameworks:
 
@@ -1062,6 +1234,23 @@ poolsim --format json generate-config \
   --framework spring-boot \
   prometheus \
   --response-file docs/fixtures/prometheus-responses.json \
+  --service-name checkout-api \
+  --window 5m \
+  --current-pool-size 8 \
+  --max-server-connections 100 \
+  --connection-overhead-ms 2 \
+  --min 2 \
+  --max 20
+```
+
+### OTLP metrics config example
+
+```bash
+poolsim --format json generate-config \
+  --framework sqlx \
+  --pool-name checkout-pool \
+  otlp \
+  --config docs/fixtures/otlp-metrics.json \
   --service-name checkout-api \
   --window 5m \
   --current-pool-size 8 \
@@ -1145,6 +1334,17 @@ Uses the same flags as `import prometheus`:
 - `--p95-query`
 - `--p99-query`
 - `--header`
+- telemetry metadata, pool, and simulation-option flags
+
+#### `generate-config otlp`
+
+Uses the same flags as `import otlp`:
+
+- `--config <path>`
+- `--rps-metric`
+- `--p50-metric`
+- `--p95-metric`
+- `--p99-metric`
 - telemetry metadata, pool, and simulation-option flags
 
 #### `generate-config simulate`

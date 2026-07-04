@@ -13,6 +13,7 @@ mod explain;
 mod gate;
 mod guard;
 mod init;
+mod otlp;
 mod prometheus;
 mod render;
 
@@ -169,6 +170,15 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
                     cli.warn_exit,
                 ))
             }
+            args::ImportCommands::Otlp(args) => {
+                let input = otlp::resolve_otlp_input(&args)?;
+                let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
+                render_telemetry(&recommendation, cli.format)?;
+                Ok(exit_code_for_saturation(
+                    recommendation.diff.worst_saturation(),
+                    cli.warn_exit,
+                ))
+            }
         },
         Commands::Gate(args) => {
             let policy = gate::policy_from_args(&args)?;
@@ -179,6 +189,7 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
                 args::GateSourceCommands::Prometheus(source) => {
                     prometheus::resolve_prometheus_input(&source)?
                 }
+                args::GateSourceCommands::Otlp(source) => otlp::resolve_otlp_input(&source)?,
             };
             let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
             let report = gate::build_gate_report(recommendation, &policy);
@@ -194,6 +205,7 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
                 args::GateSourceCommands::Prometheus(source) => {
                     prometheus::resolve_prometheus_input(&source)?
                 }
+                args::GateSourceCommands::Otlp(source) => otlp::resolve_otlp_input(&source)?,
             };
             let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
             let gate_report = gate::build_gate_report(recommendation, &policy);
@@ -209,6 +221,7 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
                 args::DoctorSourceCommands::Prometheus(source) => {
                     prometheus::resolve_prometheus_input(&source)?
                 }
+                args::DoctorSourceCommands::Otlp(source) => otlp::resolve_otlp_input(&source)?,
             };
             let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
             let report = doctor::build_doctor_report(recommendation);
@@ -238,6 +251,16 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
                     let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
                     config_gen::recommendation_from_telemetry(
                         config_gen::ConfigSourceKind::Prometheus,
+                        &recommendation,
+                        max_server_connections,
+                    )
+                }
+                args::GenerateConfigSourceCommands::Otlp(source) => {
+                    let input = otlp::resolve_otlp_input(source)?;
+                    let max_server_connections = input.snapshot.pool.max_server_connections;
+                    let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
+                    config_gen::recommendation_from_telemetry(
+                        config_gen::ConfigSourceKind::Otlp,
                         &recommendation,
                         max_server_connections,
                     )

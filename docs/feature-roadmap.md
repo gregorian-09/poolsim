@@ -17,7 +17,7 @@ Implementation work must follow these constraints:
 
 ### Language Bindings
 
-Status: planned.
+Status: complete for OTLP JSON metric-export ingestion; direct OTLP receiver mode remains future work.
 
 Scope:
 
@@ -89,13 +89,15 @@ Status: planned.
 
 Scope:
 
-- Accept OTLP traces or metrics directly instead of only JSON snapshots or Prometheus response files.
+- Accept OTLP metric-export JSON instead of only Poolsim telemetry snapshots or Prometheus response files.
+- Keep direct OTLP collector receiver mode as a future additive web/server feature.
 
 Acceptance criteria:
 
 - OTLP ingestion maps request rate and latency percentiles into `TelemetrySnapshot` without changing existing import behavior.
 - Missing metric errors are explicit and documented.
-- Tests cover metric name mapping, units, histograms, summaries, and invalid payloads.
+- Tests cover metric name mapping and invalid payloads.
+- Documentation includes runnable `import`, `gate`, `guard`, `doctor`, and `generate-config` examples.
 
 ### Grafana Plugin
 

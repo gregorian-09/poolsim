@@ -336,6 +336,38 @@ fn docs_import_prometheus_example_works() {
 }
 
 #[test]
+fn docs_import_otlp_example_works() {
+    let output = run_cli(&[
+        "--format",
+        "json",
+        "import",
+        "otlp",
+        "--config",
+        &fixture("docs/fixtures/otlp-metrics.json"),
+        "--service-name",
+        "checkout-api",
+        "--window",
+        "5m",
+        "--current-pool-size",
+        "8",
+        "--max-server-connections",
+        "100",
+        "--connection-overhead-ms",
+        "2",
+        "--min",
+        "2",
+        "--max",
+        "20",
+    ]);
+    assert_success(&output, "OTLP import docs example");
+    let recommendation: Value = serde_json::from_str(&stdout_utf8(&output))
+        .expect("OTLP recommendation output should deserialize");
+    assert_eq!(recommendation["service_name"], "checkout-api");
+    assert_eq!(recommendation["window"], "5m");
+    assert!(recommendation["diff"]["recommended_pool_size"].is_number());
+}
+
+#[test]
 fn docs_gate_examples_work() {
     let telemetry_output = run_cli(&[
         "--format",
@@ -381,6 +413,36 @@ fn docs_gate_examples_work() {
     assert_success(&prometheus_output, "gate prometheus docs example");
     let report: Value = serde_json::from_str(&stdout_utf8(&prometheus_output))
         .expect("gate prometheus output should deserialize");
+    assert_eq!(report["service_name"], "checkout-api");
+    assert_eq!(report["window"], "5m");
+
+    let otlp_output = run_cli(&[
+        "--format",
+        "json",
+        "gate",
+        "--policy",
+        &fixture("docs/fixtures/gate-policy.toml"),
+        "otlp",
+        "--config",
+        &fixture("docs/fixtures/otlp-metrics.json"),
+        "--service-name",
+        "checkout-api",
+        "--window",
+        "5m",
+        "--current-pool-size",
+        "8",
+        "--max-server-connections",
+        "100",
+        "--connection-overhead-ms",
+        "2",
+        "--min",
+        "2",
+        "--max",
+        "20",
+    ]);
+    assert_success(&otlp_output, "gate OTLP docs example");
+    let report: Value = serde_json::from_str(&stdout_utf8(&otlp_output))
+        .expect("gate OTLP output should deserialize");
     assert_eq!(report["service_name"], "checkout-api");
     assert_eq!(report["window"], "5m");
 
@@ -456,6 +518,40 @@ fn docs_guard_examples_work() {
     assert_eq!(report["gate"]["service_name"], "checkout-api");
     assert_eq!(report["gate"]["window"], "5m");
 
+    let otlp_output = run_cli(&[
+        "--format",
+        "json",
+        "guard",
+        "--max-current-p99-queue-wait-ms",
+        "100",
+        "--max-current-mean-queue-wait-ms",
+        "20",
+        "--max-current-rho",
+        "0.95",
+        "otlp",
+        "--config",
+        &fixture("docs/fixtures/otlp-metrics.json"),
+        "--service-name",
+        "checkout-api",
+        "--window",
+        "5m",
+        "--current-pool-size",
+        "8",
+        "--max-server-connections",
+        "100",
+        "--connection-overhead-ms",
+        "2",
+        "--min",
+        "2",
+        "--max",
+        "20",
+    ]);
+    assert_success(&otlp_output, "guard OTLP docs example");
+    let report: Value = serde_json::from_str(&stdout_utf8(&otlp_output))
+        .expect("guard OTLP output should deserialize");
+    assert_eq!(report["gate"]["service_name"], "checkout-api");
+    assert_eq!(report["gate"]["window"], "5m");
+
     let failing_output = run_cli(&[
         "--format",
         "json",
@@ -518,6 +614,34 @@ fn docs_doctor_examples_work() {
     assert_eq!(report["service_name"], "checkout-api");
     assert_eq!(report["window"], "5m");
     assert!(report["current_pool_size"].is_number());
+
+    let otlp_output = run_cli(&[
+        "--format",
+        "json",
+        "doctor",
+        "otlp",
+        "--config",
+        &fixture("docs/fixtures/otlp-metrics.json"),
+        "--service-name",
+        "checkout-api",
+        "--window",
+        "5m",
+        "--current-pool-size",
+        "8",
+        "--max-server-connections",
+        "100",
+        "--connection-overhead-ms",
+        "2",
+        "--min",
+        "2",
+        "--max",
+        "20",
+    ]);
+    assert_success(&otlp_output, "doctor OTLP docs example");
+    let report: Value = serde_json::from_str(&stdout_utf8(&otlp_output))
+        .expect("doctor OTLP output should deserialize");
+    assert_eq!(report["service_name"], "checkout-api");
+    assert_eq!(report["window"], "5m");
 }
 
 #[test]
@@ -581,6 +705,42 @@ fn docs_generate_config_examples_work() {
         .as_str()
         .unwrap_or_default()
         .contains("maximum-pool-size"));
+
+    let otlp_output = run_cli(&[
+        "--format",
+        "json",
+        "generate-config",
+        "--framework",
+        "sqlx",
+        "--pool-name",
+        "checkout-pool",
+        "otlp",
+        "--config",
+        &fixture("docs/fixtures/otlp-metrics.json"),
+        "--service-name",
+        "checkout-api",
+        "--window",
+        "5m",
+        "--current-pool-size",
+        "8",
+        "--max-server-connections",
+        "100",
+        "--connection-overhead-ms",
+        "2",
+        "--min",
+        "2",
+        "--max",
+        "20",
+    ]);
+    assert_success(&otlp_output, "generate-config OTLP docs example");
+    let otlp_report: Value = serde_json::from_str(&stdout_utf8(&otlp_output))
+        .expect("generate-config OTLP output should deserialize");
+    assert_eq!(otlp_report["framework"], "sqlx");
+    assert_eq!(otlp_report["source"], "otlp");
+    assert!(otlp_report["snippet"]
+        .as_str()
+        .unwrap_or_default()
+        .contains(".max_connections("));
 
     let simulate_output = run_cli(&[
         "--format",
@@ -762,6 +922,20 @@ fn docs_html_output_examples_work_for_major_commands() {
             "telemetry".to_string(),
             "--config".to_string(),
             fixture("docs/fixtures/telemetry.json"),
+        ],
+        vec![
+            "import".to_string(),
+            "otlp".to_string(),
+            "--config".to_string(),
+            fixture("docs/fixtures/otlp-metrics.json"),
+            "--current-pool-size".to_string(),
+            "8".to_string(),
+            "--max-server-connections".to_string(),
+            "100".to_string(),
+            "--min".to_string(),
+            "2".to_string(),
+            "--max".to_string(),
+            "20".to_string(),
         ],
     ];
 

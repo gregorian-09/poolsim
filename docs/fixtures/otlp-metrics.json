@@ -1,0 +1,42 @@
+{
+  "resourceMetrics": [
+    {
+      "resource": {
+        "attributes": [
+          {"key": "service.name", "value": {"stringValue": "checkout-api"}}
+        ]
+      },
+      "scopeMetrics": [
+        {
+          "scope": {"name": "poolsim.docs"},
+          "metrics": [
+            {
+              "name": "poolsim.rps",
+              "description": "Observed request rate over the sizing window.",
+              "unit": "1/s",
+              "sum": {"dataPoints": [{"asDouble": 180.0}]}
+            },
+            {
+              "name": "poolsim.latency.p50_ms",
+              "description": "Median observed request latency in milliseconds.",
+              "unit": "ms",
+              "gauge": {"dataPoints": [{"asDouble": 8.0}]}
+            },
+            {
+              "name": "poolsim.latency.p95_ms",
+              "description": "95th percentile observed request latency in milliseconds.",
+              "unit": "ms",
+              "gauge": {"dataPoints": [{"asDouble": 30.0}]}
+            },
+            {
+              "name": "poolsim.latency.p99_ms",
+              "description": "99th percentile observed request latency in milliseconds.",
+              "unit": "ms",
+              "gauge": {"dataPoints": [{"asDouble": 70.0}]}
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
