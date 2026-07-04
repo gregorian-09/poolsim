@@ -107,7 +107,8 @@ fn full_simulate_enforces_minimum_iteration_budget() {
         max_acceptable_rho: 0.85,
     };
 
-    let report = simulate(&wl, &pl, &opts).expect("simulate should succeed with low iteration request");
+    let report =
+        simulate(&wl, &pl, &opts).expect("simulate should succeed with low iteration request");
     assert!(
         report
             .warnings

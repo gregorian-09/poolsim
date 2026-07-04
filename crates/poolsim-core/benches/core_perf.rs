@@ -1,9 +1,7 @@
 use std::time::Instant;
 
 use poolsim_core::{
-    emit_performance_contract_warning,
-    erlang,
-    simulate,
+    emit_performance_contract_warning, erlang, simulate,
     types::{PoolConfig, SimulationOptions, WorkloadConfig},
 };
 

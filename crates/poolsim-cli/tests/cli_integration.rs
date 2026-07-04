@@ -25,7 +25,11 @@ fn temp_file(name: &str, contents: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("clock should be after epoch")
         .as_nanos();
-    path.push(format!("poolsim_cli_{name}_{}_{}.json", std::process::id(), ts));
+    path.push(format!(
+        "poolsim_cli_{name}_{}_{}.json",
+        std::process::id(),
+        ts
+    ));
     fs::write(&path, contents).expect("temp config should be writable");
     path
 }
@@ -74,7 +78,13 @@ fn sample_simulation_config() -> String {
 #[test]
 fn simulate_json_contains_cold_start_and_step_load_analysis() {
     let cfg = temp_file("simulate", &sample_simulation_config());
-    let output = run(&["--format", "json", "simulate", "--config", cfg.to_string_lossy().as_ref()]);
+    let output = run(&[
+        "--format",
+        "json",
+        "simulate",
+        "--config",
+        cfg.to_string_lossy().as_ref(),
+    ]);
     assert!(
         output.status.success(),
         "stderr: {}",

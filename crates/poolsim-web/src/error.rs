@@ -58,10 +58,13 @@ impl IntoResponse for AppError {
         match self {
             AppError::Core(err) => {
                 let (status, details) = match &err {
-                    PoolsimError::InvalidInput { details, .. } => (StatusCode::BAD_REQUEST, details.clone()),
-                    PoolsimError::Saturated { rho } => {
-                        (StatusCode::UNPROCESSABLE_ENTITY, Some(json!({ "rho": rho })))
+                    PoolsimError::InvalidInput { details, .. } => {
+                        (StatusCode::BAD_REQUEST, details.clone())
                     }
+                    PoolsimError::Saturated { rho } => (
+                        StatusCode::UNPROCESSABLE_ENTITY,
+                        Some(json!({ "rho": rho })),
+                    ),
                     PoolsimError::Distribution(_) | PoolsimError::Simulation(_) => {
                         (StatusCode::INTERNAL_SERVER_ERROR, err.details().cloned())
                     }
@@ -104,11 +107,7 @@ impl IntoResponse for AppError {
 
 #[cfg(test)]
 mod tests {
-    use axum::{
-        body::to_bytes,
-        http::StatusCode,
-        response::IntoResponse,
-    };
+    use axum::{body::to_bytes, http::StatusCode, response::IntoResponse};
     use serde_json::{json, Value};
 
     use super::*;

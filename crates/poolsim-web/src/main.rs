@@ -77,7 +77,9 @@ fn init_tracing() {
 
 fn configure_rayon() {
     if let Some(threads) = parse_rayon_threads(env::var("POOLSIM_RAYON_THREADS").ok()) {
-        let _ = rayon::ThreadPoolBuilder::new().num_threads(threads).build_global();
+        let _ = rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build_global();
         return;
     }
 
@@ -126,7 +128,10 @@ async fn wait_for_shutdown(shutdown_ms: Option<u64>) {
 
 #[cfg(test)]
 mod tests {
-    use std::{panic::catch_unwind, sync::{Mutex, OnceLock}};
+    use std::{
+        panic::catch_unwind,
+        sync::{Mutex, OnceLock},
+    };
 
     use super::*;
 
@@ -148,9 +153,15 @@ mod tests {
 
     #[test]
     fn parse_rate_limit_honors_primary_then_fallback_then_default() {
-        assert_eq!(parse_rate_limit_rpm(Some("99".to_string()), Some("12".to_string())), 99);
+        assert_eq!(
+            parse_rate_limit_rpm(Some("99".to_string()), Some("12".to_string())),
+            99
+        );
         assert_eq!(parse_rate_limit_rpm(None, Some("77".to_string())), 77);
-        assert_eq!(parse_rate_limit_rpm(Some("bad".to_string()), Some("65".to_string())), 60);
+        assert_eq!(
+            parse_rate_limit_rpm(Some("bad".to_string()), Some("65".to_string())),
+            60
+        );
         assert_eq!(parse_rate_limit_rpm(None, None), 60);
     }
 
@@ -212,7 +223,10 @@ mod tests {
         let _guard = env_lock().lock().expect("env lock should not be poisoned");
 
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("prebind should succeed");
-        let port = listener.local_addr().expect("prebind addr should exist").port();
+        let port = listener
+            .local_addr()
+            .expect("prebind addr should exist")
+            .port();
 
         std::env::set_var("POOLSIM_HOST", "127.0.0.1");
         std::env::set_var("POOLSIM_PORT", port.to_string());
@@ -237,7 +251,10 @@ mod tests {
         std::env::set_var("POOLSIM_TEST_SHUTDOWN_MS", "5");
 
         let panicked = catch_unwind(main).is_err();
-        assert!(!panicked, "test-mode shutdown should let main return cleanly");
+        assert!(
+            !panicked,
+            "test-mode shutdown should let main return cleanly"
+        );
 
         std::env::remove_var("POOLSIM_TEST_SHUTDOWN_MS");
     }

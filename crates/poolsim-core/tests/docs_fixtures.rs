@@ -1,24 +1,13 @@
 use std::{fs, path::PathBuf};
 
-use poolsim_core::{
-    distribution::LatencyDistribution,
-    emit_performance_contract_warning,
-    erlang,
-    error::PoolsimError,
-    monte_carlo,
-    optimizer,
-    sensitivity,
-    simulate,
-    sweep,
-    sweep_with_options,
-    DistributionModel,
-    MIN_FULL_SIMULATION_ITERATIONS,
-    PERFORMANCE_CONTRACT_WARNING,
-    QueueModel,
-    RiskLevel,
-};
 use poolsim_core::types::{
     PoolConfig, SaturationLevel, SimulationOptions, StepLoadPoint, WorkloadConfig,
+};
+use poolsim_core::{
+    distribution::LatencyDistribution, emit_performance_contract_warning, erlang,
+    error::PoolsimError, monte_carlo, optimizer, sensitivity, simulate, sweep, sweep_with_options,
+    DistributionModel, QueueModel, RiskLevel, MIN_FULL_SIMULATION_ITERATIONS,
+    PERFORMANCE_CONTRACT_WARNING,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -59,9 +48,13 @@ fn docs_core_fixture_covers_top_level_and_helper_apis() {
     );
     emit_performance_contract_warning(0, 1_000);
 
-    docs.workload.validate().expect("workload fixture should validate");
+    docs.workload
+        .validate()
+        .expect("workload fixture should validate");
     docs.pool.validate().expect("pool fixture should validate");
-    docs.options.validate().expect("options fixture should validate");
+    docs.options
+        .validate()
+        .expect("options fixture should validate");
     for point in docs
         .workload
         .step_load_profile
@@ -81,8 +74,9 @@ fn docs_core_fixture_covers_top_level_and_helper_apis() {
     assert!(report.optimal_pool_size <= docs.pool.max_pool_size);
     assert_eq!(report.step_load_analysis.len(), 2);
 
-    let evaluation = poolsim_core::evaluate(&docs.workload, report.optimal_pool_size, &docs.options)
-        .expect("docs evaluate example should succeed");
+    let evaluation =
+        poolsim_core::evaluate(&docs.workload, report.optimal_pool_size, &docs.options)
+            .expect("docs evaluate example should succeed");
     assert_eq!(evaluation.pool_size, report.optimal_pool_size);
 
     let default_sweep = sweep(&docs.workload, &docs.pool).expect("top-level sweep should succeed");
@@ -106,8 +100,13 @@ fn docs_core_fixture_covers_top_level_and_helper_apis() {
     assert!(erlang::mean_queue_wait_ms(lambda, mu, report.optimal_pool_size).is_ok());
     assert!(erlang::queue_wait_percentile_ms(lambda, mu, report.optimal_pool_size, 0.99).is_ok());
 
-    let mc = monte_carlo::run(&docs.workload, report.optimal_pool_size, &dist, &docs.options)
-        .expect("Monte Carlo run should succeed");
+    let mc = monte_carlo::run(
+        &docs.workload,
+        report.optimal_pool_size,
+        &dist,
+        &docs.options,
+    )
+    .expect("Monte Carlo run should succeed");
     assert!(!mc.wait_times_ms.is_empty());
 
     let optimal = optimizer::find_optimal(&docs.workload, &docs.pool, &dist, &docs.options)
@@ -118,15 +117,12 @@ fn docs_core_fixture_covers_top_level_and_helper_apis() {
         sensitivity::sweep(&docs.workload, &docs.pool).expect("module sweep should succeed");
     let sensitivity_target = sensitivity::sweep_with_target(&docs.workload, &docs.pool, 45.0)
         .expect("targeted sweep should succeed");
-    let sensitivity_target_model = sensitivity::sweep_with_target_and_model(
-        &docs.workload,
-        &docs.pool,
-        45.0,
-        QueueModel::MDC,
-    )
-    .expect("targeted modeled sweep should succeed");
-    let sensitivity_opts = sensitivity::sweep_with_options(&docs.workload, &docs.pool, &docs.options)
-        .expect("module sweep_with_options should succeed");
+    let sensitivity_target_model =
+        sensitivity::sweep_with_target_and_model(&docs.workload, &docs.pool, 45.0, QueueModel::MDC)
+            .expect("targeted modeled sweep should succeed");
+    let sensitivity_opts =
+        sensitivity::sweep_with_options(&docs.workload, &docs.pool, &docs.options)
+            .expect("module sweep_with_options should succeed");
     assert_eq!(sensitivity_default.len(), sensitivity_target.len());
     assert_eq!(sensitivity_target_model.len(), sensitivity_opts.len());
 
@@ -181,7 +177,9 @@ fn docs_empirical_samples_fixture_covers_empirical_distribution_path() {
         ]),
         ..docs.workload
     };
-    workload.validate().expect("empirical workload should validate");
+    workload
+        .validate()
+        .expect("empirical workload should validate");
 
     let dist = LatencyDistribution::fit(&workload, DistributionModel::Empirical)
         .expect("empirical fit should succeed");

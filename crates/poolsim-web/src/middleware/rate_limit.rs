@@ -139,7 +139,10 @@ mod tests {
         let now = Instant::now();
 
         assert_eq!(state.check_and_update(ip, now), None);
-        assert_eq!(state.check_and_update(ip, now + Duration::from_secs(1)), None);
+        assert_eq!(
+            state.check_and_update(ip, now + Duration::from_secs(1)),
+            None
+        );
 
         let retry_after = state
             .check_and_update(ip, now + Duration::from_secs(2))
