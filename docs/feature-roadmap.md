@@ -35,7 +35,7 @@ Acceptance criteria:
 
 ### Terraform And OpenTofu Provider
 
-Status: planned.
+Status: complete for external-data adapter; native provider remains future work.
 
 Scope:
 
