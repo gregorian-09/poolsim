@@ -8,6 +8,7 @@ pub enum OutputFormat {
     Table,
     Json,
     Csv,
+    Html,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -414,6 +415,20 @@ mod tests {
     fn cli_queue_model_maps_to_core_enum() {
         assert_eq!(QueueModel::from(CliQueueModel::Mmc), QueueModel::MMC);
         assert_eq!(QueueModel::from(CliQueueModel::Mdc), QueueModel::MDC);
+    }
+
+    #[test]
+    fn parser_handles_html_output_format() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "--format",
+            "html",
+            "simulate",
+            "--config",
+            "poolsim.json",
+        ])
+        .expect("html output format should parse");
+        assert!(matches!(cli.format, OutputFormat::Html));
     }
 
     #[test]

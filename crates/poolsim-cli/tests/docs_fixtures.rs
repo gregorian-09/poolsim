@@ -691,3 +691,98 @@ fn docs_json_schemas_are_valid_json_and_match_fixture_shapes() {
         .expect("gate policy fixture should parse as TOML");
     assert!(gate_policy.get("max_saturation").is_some());
 }
+
+#[test]
+fn docs_html_output_examples_work_for_major_commands() {
+    let commands: Vec<Vec<String>> = vec![
+        vec![
+            "simulate".to_string(),
+            "--config".to_string(),
+            fixture("docs/fixtures/cli-config.json"),
+        ],
+        vec![
+            "evaluate".to_string(),
+            "--config".to_string(),
+            fixture("docs/fixtures/cli-config.json"),
+            "--pool-size".to_string(),
+            "10".to_string(),
+        ],
+        vec![
+            "sweep".to_string(),
+            "--config".to_string(),
+            fixture("docs/fixtures/cli-config.json"),
+        ],
+        vec![
+            "batch".to_string(),
+            "--config".to_string(),
+            fixture("docs/fixtures/batch.json"),
+        ],
+        vec![
+            "compare".to_string(),
+            "--config".to_string(),
+            fixture("docs/fixtures/scenarios.json"),
+        ],
+        vec![
+            "budget".to_string(),
+            "--config".to_string(),
+            fixture("docs/fixtures/budget.json"),
+        ],
+        vec![
+            "import".to_string(),
+            "telemetry".to_string(),
+            "--config".to_string(),
+            fixture("docs/fixtures/telemetry.json"),
+        ],
+        vec![
+            "gate".to_string(),
+            "--policy".to_string(),
+            fixture("docs/fixtures/gate-policy.toml"),
+            "telemetry".to_string(),
+            "--config".to_string(),
+            fixture("docs/fixtures/telemetry.json"),
+        ],
+        vec![
+            "guard".to_string(),
+            "--policy".to_string(),
+            fixture("docs/fixtures/gate-policy.toml"),
+            "telemetry".to_string(),
+            "--config".to_string(),
+            fixture("docs/fixtures/telemetry.json"),
+        ],
+        vec![
+            "doctor".to_string(),
+            "telemetry".to_string(),
+            "--config".to_string(),
+            fixture("docs/fixtures/telemetry.json"),
+        ],
+        vec![
+            "generate-config".to_string(),
+            "--framework".to_string(),
+            "sqlx".to_string(),
+            "telemetry".to_string(),
+            "--config".to_string(),
+            fixture("docs/fixtures/telemetry.json"),
+        ],
+    ];
+
+    for command in commands {
+        let mut args = vec!["--format".to_string(), "html".to_string()];
+        args.extend(command);
+        let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
+        let output = run_cli(&borrowed);
+        let code = output
+            .status
+            .code()
+            .expect("HTML command should exit with an integer status code");
+        assert!(
+            code == 0 || code == 2 || code == 3,
+            "HTML command produced an unexpected exit code {code}\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        let html = stdout_utf8(&output);
+        assert!(html.starts_with("<!doctype html>"));
+        assert!(html.contains("Poolsim report"));
+        assert!(html.contains("Raw JSON"));
+    }
+}

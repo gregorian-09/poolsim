@@ -58,7 +58,7 @@ Available subcommands:
 
 Global flags:
 
-- `--format <table|json|csv>`
+- `--format <table|json|csv|html>`
 - `--warn-exit`
 
 ## Global Options
@@ -72,6 +72,7 @@ Supported values:
 - `table`
 - `json`
 - `csv`
+- `html`
 
 Examples:
 
@@ -80,6 +81,10 @@ poolsim --format table simulate --config docs/fixtures/cli-config.toml
 poolsim --format json evaluate --config docs/fixtures/cli-config.json --pool-size 12
 poolsim --format csv sweep --config docs/fixtures/cli-config.json
 ```
+poolsim --format html simulate --config docs/fixtures/cli-config.json > poolsim-report.html
+```
+
+Use `html` when you need a self-contained report that can be shared in review comments, artifacts, or incident notes. The HTML report includes a summary plus the raw JSON payload so machine-readable values remain visible.
 
 ### `--warn-exit`
 

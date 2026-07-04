@@ -238,6 +238,7 @@ fn render_simulation(report: &SimulationReport, format: OutputFormat) -> Result<
         OutputFormat::Table => render::table::simulation(report),
         OutputFormat::Json => render::json::print(report),
         OutputFormat::Csv => render::csv::simulation(report),
+        OutputFormat::Html => render::html::print("Poolsim simulation report", report),
     }
 }
 
@@ -246,6 +247,7 @@ fn render_evaluation(result: &EvaluationResult, format: OutputFormat) -> Result<
         OutputFormat::Table => render::table::evaluation(result),
         OutputFormat::Json => render::json::print(result),
         OutputFormat::Csv => render::csv::evaluation(result),
+        OutputFormat::Html => render::html::print("Poolsim evaluation report", result),
     }
 }
 
@@ -254,6 +256,7 @@ fn render_sweep(rows: &[SensitivityRow], format: OutputFormat) -> Result<()> {
         OutputFormat::Table => render::table::sweep(rows),
         OutputFormat::Json => render::json::print(rows),
         OutputFormat::Csv => render::csv::sweep(rows),
+        OutputFormat::Html => render::html::print("Poolsim sensitivity report", rows),
     }
 }
 
@@ -262,6 +265,7 @@ fn render_batch(reports: &[SimulationReport], format: OutputFormat) -> Result<()
         OutputFormat::Table => render::table::batch(reports),
         OutputFormat::Json => render::json::print(reports),
         OutputFormat::Csv => render::csv::batch(reports),
+        OutputFormat::Html => render::html::print("Poolsim batch report", reports),
     }
 }
 
@@ -270,6 +274,7 @@ fn render_compare(report: &compare::ScenarioComparisonReport, format: OutputForm
         OutputFormat::Table => render::table::compare(report),
         OutputFormat::Json => render::json::print(report),
         OutputFormat::Csv => render::csv::compare(report),
+        OutputFormat::Html => render::html::print("Poolsim scenario comparison report", report),
     }
 }
 
@@ -278,6 +283,7 @@ fn render_budget(report: &budget::BudgetPlanReport, format: OutputFormat) -> Res
         OutputFormat::Table => render::table::budget(report),
         OutputFormat::Json => render::json::print(report),
         OutputFormat::Csv => render::csv::budget(report),
+        OutputFormat::Html => render::html::print("Poolsim database budget report", report),
     }
 }
 
@@ -286,6 +292,9 @@ fn render_telemetry(recommendation: &TelemetryRecommendation, format: OutputForm
         OutputFormat::Table => render::table::telemetry(recommendation),
         OutputFormat::Json => render::json::print(recommendation),
         OutputFormat::Csv => render::csv::telemetry(recommendation),
+        OutputFormat::Html => {
+            render::html::print("Poolsim telemetry recommendation report", recommendation)
+        }
     }
 }
 
@@ -294,6 +303,7 @@ fn render_gate(report: &gate::GateReport, format: OutputFormat) -> Result<()> {
         OutputFormat::Table => render::table::gate(report),
         OutputFormat::Json => render::json::print(report),
         OutputFormat::Csv => render::csv::gate(report),
+        OutputFormat::Html => render::html::print("Poolsim capacity gate report", report),
     }
 }
 
@@ -302,6 +312,7 @@ fn render_guard(report: &guard::GuardReport, format: OutputFormat) -> Result<()>
         OutputFormat::Table => render::table::guard(report),
         OutputFormat::Json => render::json::print(report),
         OutputFormat::Csv => render::csv::guard(report),
+        OutputFormat::Html => render::html::print("Poolsim deployment guard report", report),
     }
 }
 
@@ -310,6 +321,7 @@ fn render_doctor(report: &doctor::DoctorReport, format: OutputFormat) -> Result<
         OutputFormat::Table => render::table::doctor(report),
         OutputFormat::Json => render::json::print(report),
         OutputFormat::Csv => render::csv::doctor(report),
+        OutputFormat::Html => render::html::print("Poolsim doctor report", report),
     }
 }
 
@@ -321,6 +333,7 @@ fn render_config_snippet(
         OutputFormat::Table => render::table::config_snippet(report),
         OutputFormat::Json => render::json::print(report),
         OutputFormat::Csv => render::csv::config_snippet(report),
+        OutputFormat::Html => render::html::print("Poolsim generated config report", report),
     }
 }
 

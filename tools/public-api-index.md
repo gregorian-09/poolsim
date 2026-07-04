@@ -160,7 +160,7 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 ### Binary Surface
 
 - `poolsim_cli::Cli`: top-level clap parser type for the `poolsim` binary.
-- `poolsim_cli::OutputFormat`: output-format enum for `table`, `json`, and `csv`.
+- `poolsim_cli::OutputFormat`: output-format enum for `table`, `json`, `csv`, and `html`.
 - `poolsim_cli::Command`: CLI subcommand enum.
 - `poolsim_cli::ConfigFormat`: config-format enum for `json` and `toml`.
 - `poolsim_cli::main`: binary entrypoint.
@@ -214,6 +214,8 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 ### `poolsim_cli::render`
 
 - `poolsim_cli::render::csv`: CSV rendering module.
+- `poolsim_cli::render::html`: HTML rendering module.
+- `poolsim_cli::render::html::print`: renders any serializable CLI payload as a self-contained HTML report.
 - `poolsim_cli::render::csv::simulation`: renders a simulation result as CSV.
 - `poolsim_cli::render::csv::evaluation`: renders an evaluation result as CSV.
 - `poolsim_cli::render::csv::sweep`: renders a sensitivity sweep as CSV.
