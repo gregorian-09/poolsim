@@ -20,6 +20,7 @@ The format is based on Keep a Changelog, and this project uses Semantic Versioni
 - Terraform/OpenTofu external-data adapter docs for managing pool sizing as infrastructure data.
 - Python, TypeScript, and Go binding docs that delegate to the stable CLI JSON contract for non-Rust teams.
 - PyPI publishing automation for the Python `poolsim` package using the `PYPI_API_TOKEN` repository secret.
+- npm publishing automation for the TypeScript `poolsim` package using the `NPM_TOKEN` repository secret.
 - Homebrew formula template with a real GitHub release tarball checksum.
 - GHCR Docker image and CI integration documentation for web deployment and capacity-gate adoption.
 

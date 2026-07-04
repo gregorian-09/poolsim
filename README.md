@@ -341,20 +341,23 @@ Release process:
 - [.github/release-checklist.md](.github/release-checklist.md)
 - [.github/workflows/publish.yml](.github/workflows/publish.yml)
 - [.github/workflows/publish-python.yml](.github/workflows/publish-python.yml)
+- [.github/workflows/publish-node.yml](.github/workflows/publish-node.yml)
 
 GitHub Actions publish workflow usage:
 
 1. update `VERSION`, sync metadata, and commit the release changes
 2. create and push a tag like `v0.2.1`
-3. the `Publish` workflow runs automatically on that tag for crates.io and PyPI
+3. the `Publish` workflow runs automatically on that tag for crates.io, PyPI, and npm
 4. use `workflow_dispatch` only when you want a manual dry-run or a controlled fallback publish
 
 Required release secrets:
 
 - `CARGO_REGISTRY_TOKEN`
 - `PYPI_API_TOKEN`
+- `NPM_TOKEN`
 
 Use `Publish Python` when only the PyPI package needs to be published without republishing Rust crates.
+Use `Publish Node` when only the npm package needs to be published without republishing Rust crates.
 
 ## Repository
 

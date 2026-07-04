@@ -1,0 +1,73 @@
+name: Publish Node
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version from the root VERSION file to publish
+        required: true
+        type: string
+      dry_run:
+        description: Build and validate without publishing to npm
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-node-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-node:
+    runs-on: ubuntu-latest
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Verify requested version matches VERSION
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_version="$(tr -d '[:space:]' < VERSION)"
+          requested_version="${{ inputs.version }}"
+          if [[ "$requested_version" != "$expected_version" ]]; then
+            echo "workflow input version '$requested_version' does not match VERSION '$expected_version'" >&2
+            exit 1
+          fi
+
+      - name: Validate version sync
+        run: python3 tools/sync_version.py --check
+
+      - name: Build and validate TypeScript package
+        working-directory: bindings/typescript
+        run: |
+          npm ci
+          npm test
+          npm pack --dry-run
+
+      - name: Verify npm token is configured
+        if: ${{ inputs.dry_run != true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
+            echo "NPM_TOKEN is not configured" >&2
+            exit 1
+          fi
+
+      - name: Publish TypeScript package to npm
+        if: ${{ inputs.dry_run != true }}
+        working-directory: bindings/typescript
+        run: npm publish --access public

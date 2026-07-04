@@ -2,6 +2,24 @@
 
 TypeScript bindings call the stable `poolsim` CLI JSON interface.
 
+## Install
+
+```bash
+npm install poolsim
+```
+
+The package is a thin wrapper around the Rust CLI. Install the `poolsim`
+executable separately and ensure it is available on `PATH`:
+
+```bash
+cargo install poolsim-cli
+poolsim --version
+```
+
+Use `new PoolsimClient('/path/to/poolsim')` when the binary is not on `PATH`.
+
+## Example
+
 ```ts
 import { PoolsimClient } from 'poolsim';
 
@@ -10,4 +28,5 @@ const report = client.simulate('docs/fixtures/cli-config.json');
 console.log(report.optimal_pool_size);
 ```
 
-Install from a future package with `npm install poolsim`, then ensure the Rust `poolsim` executable is available on `PATH`.
+Available methods include `simulate`, `evaluate`, `sweep`, `batch`, `compare`,
+`budget`, `telemetryRecommend`, `doctor`, `generateConfig`, and `gate`.

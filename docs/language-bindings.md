@@ -30,6 +30,16 @@ Supported methods include `simulate`, `evaluate`, `sweep`, `batch`, `compare`, `
 
 Package source: [`../bindings/typescript`](../bindings/typescript)
 
+Install:
+
+```bash
+npm install poolsim
+cargo install poolsim-cli
+```
+
+The TypeScript package delegates to the Rust `poolsim` executable. Keep the binary on
+`PATH`, or pass its absolute path to `PoolsimClient`.
+
 ```ts
 import { PoolsimClient } from 'poolsim';
 

@@ -20,6 +20,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
       - name: Basic Checks
         run: |
           cargo check --workspace
@@ -45,6 +50,13 @@ jobs:
           PYTHONPATH=bindings/python python3 -m unittest discover -s bindings/python/tests
           python3 -m build bindings/python
           python3 -m twine check bindings/python/dist/*
+
+      - name: TypeScript Binding Package
+        run: |
+          cd bindings/typescript
+          npm ci
+          npm test
+          npm pack --dry-run
 
       - name: Docs API Coverage
         run: python3 tools/check_docs_api_coverage.py --docs-dir docs

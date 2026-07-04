@@ -11,3 +11,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+bindings/typescript/dist/
+bindings/typescript/.tmp-tests/
+bindings/typescript/*.tgz
+bindings/typescript/node_modules/

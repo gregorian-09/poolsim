@@ -5,14 +5,34 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "test": "node --test test/client.test.mjs"
+    "clean": "node -e \"import('node:fs').then(fs => fs.rmSync('dist', { recursive: true, force: true }))\"",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "test": "npm run build && node --test test/client.test.mjs",
+    "prepack": "npm run build"
   },
-  "keywords": ["connection-pool", "capacity-planning", "sizing"],
+  "keywords": [
+    "connection-pool",
+    "capacity-planning",
+    "sizing"
+  ],
   "author": "Gregorian Rayne <gregorianrayne09@gmail.com>",
   "license": "MIT",
+  "homepage": "https://github.com/gregorian-09/poolsim#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gregorian-09/poolsim.git",
+    "directory": "bindings/typescript"
+  },
+  "bugs": {
+    "url": "https://github.com/gregorian-09/poolsim/issues"
+  },
   "devDependencies": {
+    "@types/node": "^26.1.0",
     "typescript": "^5.0.0"
   }
 }
