@@ -1,0 +1,19 @@
+{
+  "name": "@poolsim/grafana-panel",
+  "version": "0.2.1",
+  "private": true,
+  "description": "Grafana panel for Poolsim sensitivity heatmaps.",
+  "scripts": {
+    "test": "python3 ../tests/validate_grafana_plugin.py"
+  },
+  "dependencies": {
+    "@grafana/data": "latest",
+    "@grafana/runtime": "latest",
+    "@grafana/ui": "latest",
+    "react": "latest"
+  },
+  "devDependencies": {
+    "@grafana/create-plugin": "latest",
+    "typescript": "latest"
+  }
+}

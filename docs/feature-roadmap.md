@@ -102,17 +102,17 @@ Acceptance criteria:
 
 ### Grafana Plugin
 
-Status: planned.
+Status: complete for minimal panel package; signed distribution remains future work.
 
 Scope:
 
-- Provide a Grafana panel that queries `poolsim-web` and renders the sensitivity table as a heatmap with current pool size overlaid.
+- Provide a Grafana panel package that queries `poolsim-web` and renders the sensitivity table as a heatmap with current pool size overlaid.
 
 Acceptance criteria:
 
-- Plugin uses existing REST endpoints unless a new endpoint is strictly additive.
-- Build and test scripts validate the panel package.
-- Documentation includes datasource setup and screenshots.
+- Plugin uses existing REST endpoints.
+- Static validation checks the plugin manifest, package metadata, and panel source.
+- Documentation includes setup flow and validation command.
 
 ### Continuous Recommendation Mode
 

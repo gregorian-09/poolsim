@@ -1,0 +1,34 @@
+{
+  "$schema": "https://raw.githubusercontent.com/grafana/grafana/main/docs/sources/developers/plugins/plugin.schema.json",
+  "type": "panel",
+  "name": "Poolsim Sensitivity Heatmap",
+  "id": "gregorianrayne-poolsim-panel",
+  "info": {
+    "description": "Render Poolsim pool-size sensitivity rows from poolsim-web as a heatmap.",
+    "author": {
+      "name": "Gregorian Rayne",
+      "url": "https://github.com/gregorian-09"
+    },
+    "keywords": ["poolsim", "connection-pool", "capacity", "sizing"],
+    "logos": {
+      "small": "img/logo.svg",
+      "large": "img/logo.svg"
+    },
+    "links": [
+      {
+        "name": "Repository",
+        "url": "https://github.com/gregorian-09/poolsim"
+      },
+      {
+        "name": "Issues",
+        "url": "https://github.com/gregorian-09/poolsim/issues"
+      }
+    ],
+    "version": "0.2.1",
+    "updated": "2026-07-04"
+  },
+  "dependencies": {
+    "grafanaDependency": ">=10.0.0",
+    "plugins": []
+  }
+}
