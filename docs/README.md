@@ -14,6 +14,7 @@ This folder contains user-facing documentation for the current Poolsim capabilit
 - [`../integrations/kubernetes/README.md`](../integrations/kubernetes/README.md): Kubernetes sidecar pattern that exposes sizing recommendations as Prometheus metrics.
 - [`continuous-recommendations.md`](continuous-recommendations.md): Opt-in worker for repeated recommendation diff events and webhook delivery.
 - [`../integrations/grafana/README.md`](../integrations/grafana/README.md): Grafana panel package for rendering `poolsim-web` sensitivity rows as a heatmap.
+- [`../benchmarks/README.md`](../benchmarks/README.md): Benchmark result contract and summarizer for comparing Poolsim predictions to real pool runs.
 - [`json-schema.md`](json-schema.md): JSON Schema files for documented config, telemetry, budget, scenario, batch, and gate-policy inputs.
 - [`feature-roadmap.md`](feature-roadmap.md): Tracked implementation tasks and acceptance criteria for adoption, observability, deeper simulation, developer experience, and validation features.
 - [`fixtures/README.md`](fixtures/README.md): Checked-in sample inputs used by the docs and docs-validation tests.

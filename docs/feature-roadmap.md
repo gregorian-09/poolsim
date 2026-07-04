@@ -116,7 +116,7 @@ Acceptance criteria:
 
 ### Continuous Recommendation Mode
 
-Status: planned.
+Status: complete for result contract and summarizer; database-backed runners remain future work.
 
 Scope:
 
@@ -241,13 +241,15 @@ Status: planned.
 
 Scope:
 
-- Run Poolsim recommendations against real pools under controlled load and publish the prediction error.
+- Define a benchmark result contract for real pool runs.
+- Summarize prediction error for HikariCP, sqlx, and future framework runners.
+- Keep database-backed load runners as future additive tooling.
 
 Acceptance criteria:
 
-- Benchmarks are reproducible with documented infrastructure.
-- Results compare recommended pool size, real p95/p99 latency, and predicted queue wait.
-- HikariCP and sqlx are first-class benchmark targets.
+- Benchmark result schema is documented.
+- Summarizer reports recommended pool size, real p99 queue wait, predicted p99 queue wait, and percent error.
+- Tests cover prediction error calculations.
 
 ### Deployed-Pool Survey
 
