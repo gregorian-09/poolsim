@@ -786,3 +786,86 @@ fn docs_html_output_examples_work_for_major_commands() {
         assert!(html.contains("Raw JSON"));
     }
 }
+
+#[test]
+fn docs_init_example_generates_runnable_config_and_policy() {
+    let unique = format!(
+        "{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock should be after epoch")
+            .as_nanos()
+    );
+    let config_path = std::env::temp_dir().join(format!("poolsim_init_docs_{unique}.json"));
+    let policy_path = std::env::temp_dir().join(format!("poolsim_init_docs_{unique}.toml"));
+
+    let output = run_cli(&[
+        "--format",
+        "json",
+        "init",
+        "--framework",
+        "sqlx",
+        "--database",
+        "postgres",
+        "--expected-rps",
+        "180",
+        "--p50",
+        "8",
+        "--p95",
+        "30",
+        "--p99",
+        "70",
+        "--max-server-connections",
+        "100",
+        "--connection-overhead-ms",
+        "2",
+        "--min",
+        "2",
+        "--max",
+        "20",
+        "--output",
+        config_path.to_str().expect("config path should be UTF-8"),
+        "--policy-output",
+        policy_path.to_str().expect("policy path should be UTF-8"),
+    ]);
+    assert_success(&output, "init docs example");
+    let report: Value =
+        serde_json::from_str(&stdout_utf8(&output)).expect("init JSON output should deserialize");
+    assert_eq!(report["framework"], "sqlx");
+    assert_eq!(report["database"], "postgres");
+
+    let generated_config: Value = serde_json::from_str(
+        &std::fs::read_to_string(&config_path).expect("generated config should be readable"),
+    )
+    .expect("generated config should parse as JSON");
+    assert_eq!(generated_config["workload"]["requests_per_second"], 180.0);
+
+    let generated_policy: toml::Value = std::fs::read_to_string(&policy_path)
+        .expect("generated policy should be readable")
+        .parse()
+        .expect("generated policy should parse as TOML");
+    assert_eq!(generated_policy["max_saturation"].as_str(), Some("Warning"));
+
+    let simulate_output = run_cli(&[
+        "--format",
+        "json",
+        "simulate",
+        "--config",
+        config_path.to_str().expect("config path should be UTF-8"),
+    ]);
+    assert_success(&simulate_output, "generated init config simulate example");
+
+    let overwrite_output = run_cli(&[
+        "init",
+        "--output",
+        config_path.to_str().expect("config path should be UTF-8"),
+        "--policy-output",
+        policy_path.to_str().expect("policy path should be UTF-8"),
+    ]);
+    assert_eq!(overwrite_output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&overwrite_output.stderr).contains("refusing to overwrite"));
+
+    let _ = std::fs::remove_file(config_path);
+    let _ = std::fs::remove_file(policy_path);
+}

@@ -25,6 +25,7 @@ New and expanded workflows include:
 - `gate`: fail CI when new assumptions exceed safety policy.
 - `guard`: deployment-safe wrapper around gate output for CI/CD systems.
 - `doctor`: diagnose whether a pool is too small, too large, close to saturation, or healthy.
+- `init`
 - `generate-config`: generate runtime config snippets for HikariCP, Spring Boot, SQLAlchemy, Prisma, node-postgres, sqlx, and deadpool.
 - Expanded JSON, CSV, and table output coverage across command workflows.
 - Comprehensive executable docs fixtures and `100%` workspace line coverage enforcement.
@@ -336,3 +337,7 @@ The upstream repository currently enforces:
 - Changelog: <https://github.com/gregorian-09/poolsim/blob/main/CHANGELOG.md>
 
 When opening an issue, include the command, full flags with secrets removed, input file shape, CLI version, operating system, expected output, actual output, and exit code.
+
+## Quick Start Config Generation
+
+Create starter files with `poolsim init --framework sqlx --database postgres --expected-rps 180`. The command writes a runnable `poolsim.json` simulation config and `poolsim-gate-policy.toml` capacity-gate policy, refusing to overwrite existing files unless `--force` is passed.

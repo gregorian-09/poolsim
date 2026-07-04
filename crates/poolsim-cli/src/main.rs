@@ -11,6 +11,7 @@ mod config_gen;
 mod doctor;
 mod gate;
 mod guard;
+mod init;
 mod prometheus;
 mod render;
 
@@ -198,6 +199,11 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
             render_doctor(&report, cli.format)?;
             Ok(report.status.exit_code(cli.warn_exit))
         }
+        Commands::Init(args) => {
+            let report = init::run(&args)?;
+            render_init(&report, cli.format)?;
+            Ok(ExitCode::from(0))
+        }
         Commands::GenerateConfig(args) => {
             let recommendation = match &args.source {
                 args::GenerateConfigSourceCommands::Telemetry(source) => {
@@ -322,6 +328,28 @@ fn render_doctor(report: &doctor::DoctorReport, format: OutputFormat) -> Result<
         OutputFormat::Json => render::json::print(report),
         OutputFormat::Csv => render::csv::doctor(report),
         OutputFormat::Html => render::html::print("Poolsim doctor report", report),
+    }
+}
+
+fn render_init(report: &init::InitReport, format: OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Table => {
+            println!("framework: {}", report.framework);
+            println!("database: {}", report.database);
+            println!("config_path: {}", report.config_path);
+            println!("policy_path: {}", report.policy_path);
+            Ok(())
+        }
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => {
+            println!("field,value");
+            println!("framework,{}", report.framework);
+            println!("database,{}", report.database);
+            println!("config_path,{}", report.config_path);
+            println!("policy_path,{}", report.policy_path);
+            Ok(())
+        }
+        OutputFormat::Html => render::html::print("Poolsim init report", report),
     }
 }
 

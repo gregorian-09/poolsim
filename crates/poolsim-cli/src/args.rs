@@ -71,6 +71,7 @@ pub enum Commands {
     Guard(GuardArgs),
     Doctor(DoctorArgs),
     GenerateConfig(GenerateConfigArgs),
+    Init(InitArgs),
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -82,6 +83,63 @@ pub enum CliConfigFramework {
     NodePg,
     Sqlx,
     Deadpool,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliDatabaseKind {
+    Postgres,
+    Mysql,
+    Sqlite,
+    SqlServer,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct InitArgs {
+    #[arg(long, value_enum, default_value = "sqlx")]
+    pub framework: CliConfigFramework,
+
+    #[arg(long, value_enum, default_value = "postgres")]
+    pub database: CliDatabaseKind,
+
+    #[arg(long, default_value_t = 180.0)]
+    pub expected_rps: f64,
+    #[arg(long, default_value_t = 8.0)]
+    pub p50: f64,
+    #[arg(long, default_value_t = 30.0)]
+    pub p95: f64,
+    #[arg(long, default_value_t = 70.0)]
+    pub p99: f64,
+
+    #[arg(long, default_value_t = 100)]
+    pub max_server_connections: u32,
+    #[arg(
+        long,
+        alias = "connection-establishment-overhead-ms",
+        default_value_t = 0.0
+    )]
+    pub connection_overhead_ms: f64,
+    #[arg(long)]
+    pub idle_timeout_ms: Option<u64>,
+    #[arg(long, default_value_t = 2)]
+    pub min: u32,
+    #[arg(long, default_value_t = 20)]
+    pub max: u32,
+
+    #[arg(long, default_value_t = 10_000)]
+    pub iterations: u32,
+    #[arg(long)]
+    pub seed: Option<u64>,
+    #[arg(long, default_value_t = 45.0)]
+    pub target_wait_p99_ms: f64,
+    #[arg(long, default_value_t = 0.85)]
+    pub max_acceptable_rho: f64,
+
+    #[arg(long, default_value = "poolsim.json")]
+    pub output: PathBuf,
+    #[arg(long, default_value = "poolsim-gate-policy.toml")]
+    pub policy_output: PathBuf,
+    #[arg(long)]
+    pub force: bool,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -445,6 +503,38 @@ mod tests {
             SaturationLevel::from(CliSaturationLevel::Critical),
             SaturationLevel::Critical
         );
+    }
+
+    #[test]
+    fn parser_handles_init_subcommand() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "init",
+            "--framework",
+            "spring-boot",
+            "--database",
+            "mysql",
+            "--expected-rps",
+            "250",
+            "--output",
+            "poolsim.json",
+            "--policy-output",
+            "gate.toml",
+            "--force",
+        ])
+        .expect("init args should parse");
+
+        match cli.command {
+            Commands::Init(args) => {
+                assert!(matches!(args.framework, CliConfigFramework::SpringBoot));
+                assert!(matches!(args.database, CliDatabaseKind::Mysql));
+                assert_eq!(args.expected_rps, 250.0);
+                assert_eq!(args.output, PathBuf::from("poolsim.json"));
+                assert_eq!(args.policy_output, PathBuf::from("gate.toml"));
+                assert!(args.force);
+            }
+            _ => panic!("expected init command"),
+        }
     }
 
     #[test]

@@ -55,6 +55,7 @@ Available subcommands:
 - `generate-config telemetry`
 - `generate-config prometheus`
 - `generate-config simulate`
+- `init`
 
 Global flags:
 
@@ -95,6 +96,62 @@ Example:
 ```bash
 poolsim --warn-exit simulate --config docs/fixtures/cli-config.json
 ```
+
+
+## `init`
+
+### Purpose
+
+Creates a starter simulation config and capacity-gate policy using the same field names consumed by the existing `simulate`, `gate`, and `guard` commands. This is the fastest way to add Poolsim to a service repository without hand-writing the first config file.
+
+The command is additive and automation-safe:
+
+- It writes `poolsim.json` and `poolsim-gate-policy.toml` by default.
+- It refuses to overwrite existing files unless `--force` is passed.
+- It supports `--format table`, `--format json`, `--format csv`, and `--format html` for the generation report.
+
+### Example
+
+```bash
+poolsim --format json init \
+  --framework sqlx \
+  --database postgres \
+  --expected-rps 180 \
+  --p50 8 \
+  --p95 30 \
+  --p99 70 \
+  --max-server-connections 100 \
+  --connection-overhead-ms 2 \
+  --min 2 \
+  --max 20 \
+  --output poolsim.json \
+  --policy-output poolsim-gate-policy.toml
+```
+
+Then run the generated config:
+
+```bash
+poolsim simulate --config poolsim.json
+poolsim gate --policy poolsim-gate-policy.toml telemetry --config docs/fixtures/telemetry.json
+```
+
+### Flags
+
+- `--framework <hikaricp|spring-boot|sqlalchemy|prisma|node-pg|sqlx|deadpool>`: target framework for future config generation defaults. Defaults to `sqlx`.
+- `--database <postgres|mysql|sqlite|sql-server>`: database family for the starter assumptions. Defaults to `postgres`.
+- `--expected-rps <number>`: expected request rate. Defaults to `180`.
+- `--p50 <ms>`, `--p95 <ms>`, `--p99 <ms>`: latency percentiles in milliseconds. Defaults to `8`, `30`, and `70`.
+- `--max-server-connections <integer>`: database connection budget visible to this service. Defaults to `100`.
+- `--connection-overhead-ms <number>`: per-connection overhead assumption. Defaults to `0`.
+- `--idle-timeout-ms <integer>`: optional idle timeout written into the pool config.
+- `--min <integer>` and `--max <integer>`: candidate pool-size bounds. Defaults to `2` and `20`.
+- `--iterations <integer>`: simulation iteration count. Defaults to `10000`.
+- `--seed <integer>`: optional deterministic simulation seed.
+- `--target-wait-p99-ms <number>`: target p99 queue wait and gate threshold seed. Defaults to `45`.
+- `--max-acceptable-rho <number>`: target utilisation ceiling. Defaults to `0.85`.
+- `--output <path>`: generated simulation config path. Defaults to `poolsim.json`.
+- `--policy-output <path>`: generated gate policy path. Defaults to `poolsim-gate-policy.toml`.
+- `--force`: overwrite existing output files.
 
 ## `simulate`
 
