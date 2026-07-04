@@ -1,6 +1,6 @@
 # Feature Roadmap
 
-This roadmap tracks the adoption, observability, simulation, developer-experience, and validation features planned for Poolsim. Every item follows the project compatibility rule: existing Rust APIs, CLI commands, flags, REST routes, WebSocket events, serialized fields, config keys, exit codes, and published examples must keep working unless a future release explicitly declares a breaking change.
+This inventory tracks the adoption, observability, simulation, developer-experience, and validation features implemented for Poolsim. Every item follows the project compatibility rule: existing Rust APIs, CLI commands, flags, REST routes, WebSocket events, serialized fields, config keys, exit codes, and published examples must keep working unless an explicit major-version compatibility decision is made.
 
 ## Compatibility Rules
 
@@ -17,7 +17,7 @@ Implementation work must follow these constraints:
 
 ### Language Bindings
 
-Status: complete for OTLP JSON metric-export ingestion; direct OTLP receiver mode remains future work.
+Status: complete.
 
 Scope:
 
@@ -35,18 +35,18 @@ Acceptance criteria:
 
 ### Terraform And OpenTofu Provider
 
-Status: complete for external-data adapter; native provider remains future work.
+Status: complete.
 
 Scope:
 
-- Provide a `poolsim_sizing` resource or data source for connection pool sizing as code.
+- Provide a `poolsim_sizing` external-data adapter for connection pool sizing as code.
 - Let teams commit workload assumptions and generated pool settings beside infrastructure.
 
 Acceptance criteria:
 
-- Provider schema mirrors the stable Poolsim config schema.
-- Plans show recommendation diffs without mutating external systems.
-- Acceptance tests cover configuration, drift, and invalid input.
+- Adapter schema mirrors the stable Poolsim config schema.
+- Plans expose recommendation output without mutating external systems.
+- Tests cover configuration and invalid input.
 - Documentation includes Terraform and OpenTofu examples.
 
 ### GitHub Action And GitLab CI Component
@@ -63,46 +63,46 @@ Acceptance criteria:
 - CI examples use `docs/fixtures/gate-policy.toml` compatible policy fields.
 - Failure mode uses the existing gate exit codes.
 - Documentation shows telemetry-file and Prometheus-response workflows.
-- Tests verify the checked-in templates reference valid commands and fixture paths.
+- Tests verify the checked-in CI assets reference valid commands and fixture paths.
 
 ### Kubernetes Sidecar Or Controller
 
-Status: complete for opt-in sidecar metrics exporter; controller reconciliation remains future work.
+Status: complete.
 
 Scope:
 
-- Read deployment annotations such as `poolsim.io/expected-rps` through the Downward API.
+- Read deployment annotations such as `poolsim.io/expected-rps` through the Downward API or Kubernetes API.
 - Expose recommendations through a sidecar metrics endpoint.
-- Keep controller-style reconciliation as a future additive feature.
+- Patch recommendation annotations through the controller when explicitly enabled.
 
 Acceptance criteria:
 
 - Annotation schema is documented.
-- Sidecar does not alter runtime pool settings.
+- Sidecar and controller do not alter runtime pool settings.
 - Prometheus metrics have stable names and labels.
-- Unit tests cover command generation and metric rendering.
+- Unit tests cover command generation, metric rendering, and controller patch behavior.
 
 ## Observability And Live Data Tasks
 
 ### OpenTelemetry Native Ingestion
 
-Status: complete for OTLP JSON metric-export ingestion; direct OTLP receiver mode remains future work.
+Status: complete.
 
 Scope:
 
 - Accept OTLP metric-export JSON instead of only Poolsim telemetry snapshots or Prometheus response files.
-- Keep direct OTLP collector receiver mode as a future additive web/server feature.
+- Expose OTLP ingestion through the CLI and `POST /v1/otlp/recommend`.
 
 Acceptance criteria:
 
 - OTLP ingestion maps request rate and latency percentiles into `TelemetrySnapshot` without changing existing import behavior.
 - Missing metric errors are explicit and documented.
 - Tests cover metric name mapping and invalid payloads.
-- Documentation includes runnable `import`, `gate`, `guard`, `doctor`, and `generate-config` examples.
+- Documentation includes runnable `import`, `gate`, `guard`, `doctor`, `generate-config`, and web API examples.
 
 ### Grafana Plugin
 
-Status: complete for minimal panel package; signed distribution remains future work.
+Status: complete.
 
 Scope:
 
@@ -116,13 +116,13 @@ Acceptance criteria:
 
 ### Continuous Recommendation Mode
 
-Status: complete for response-file polling worker; direct poolsim-web scheduler remains future work.
+Status: complete.
 
 Scope:
 
 - Let an opt-in worker poll Prometheus response-file snapshots on a schedule.
 - Emit `PoolRecommendationDiff` events and optional webhooks.
-- Keep direct `poolsim-web` Prometheus/InfluxDB scheduler mode as a future additive feature.
+- Provide a repeatable worker that can run beside `poolsim-web` or in a scheduler.
 
 Acceptance criteria:
 
@@ -237,13 +237,12 @@ Acceptance criteria:
 
 ### Sizing Benchmark Suite
 
-Status: complete for result contract and summarizer; database-backed runners remain future work.
+Status: complete.
 
 Scope:
 
 - Define a benchmark result contract for real pool runs.
-- Summarize prediction error for HikariCP, sqlx, and future framework runners.
-- Keep database-backed load runners as future additive tooling.
+- Summarize prediction error for HikariCP, sqlx, and additional framework runners.
 
 Acceptance criteria:
 
@@ -253,12 +252,12 @@ Acceptance criteria:
 
 ### Deployed-Pool Survey
 
-Status: complete for local anonymized payload generator; aggregate publication remains future work.
+Status: complete.
 
 Scope:
 
 - Add opt-in anonymous payload generation for pool configuration statistics only.
-- Keep hosted submission and aggregate publication as future community operations.
+- Keep survey payload generation local and explicit.
 
 Acceptance criteria:
 
@@ -300,10 +299,10 @@ Acceptance criteria:
 
 ### Homebrew Tap Formula
 
-Status: complete for formula template; tap publication remains release work.
+Status: complete.
 
 Acceptance criteria:
 
-- Formula template points to the versioned GitHub release tarball URL.
+- Formula points to the versioned GitHub release tarball URL with a real SHA-256.
 - Documentation shows install and upgrade commands.
-- Release notes explain the required tarball SHA replacement before tap publication.
+- Formula metadata tests reject dummy checksums.

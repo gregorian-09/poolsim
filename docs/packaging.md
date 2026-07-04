@@ -4,22 +4,14 @@ Poolsim includes packaging assets for users who do not want to build from source
 
 ## Homebrew Tap Formula
 
-The Homebrew formula template is checked in at `packaging/homebrew/poolsim.rb`.
+The Homebrew formula is checked in at `packaging/homebrew/poolsim.rb`.
 
 It builds and installs:
 
 - `poolsim` from `crates/poolsim-cli`
 - `poolsim-web` from `crates/poolsim-web`
 
-### Release SHA Step
-
-Before publishing the formula to a tap, replace:
-
-```ruby
-sha256 "REPLACE_WITH_RELEASE_TARBALL_SHA256"
-```
-
-with the SHA-256 of the GitHub release tarball for the matching tag:
+The formula points to the GitHub release tarball for `v0.2.1` and includes the current tarball SHA-256:
 
 ```bash
 curl -L https://github.com/gregorian-09/poolsim/archive/refs/tags/v0.2.1.tar.gz -o poolsim-v0.2.1.tar.gz

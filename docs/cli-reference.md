@@ -143,7 +143,7 @@ poolsim gate --policy poolsim-gate-policy.toml telemetry --config docs/fixtures/
 
 ### Flags
 
-- `--framework <hikaricp|spring-boot|sqlalchemy|prisma|node-pg|sqlx|deadpool>`: target framework for future config generation defaults. Defaults to `sqlx`.
+- `--framework <hikaricp|spring-boot|sqlalchemy|prisma|node-pg|sqlx|deadpool>`: target framework for generated configuration defaults. Defaults to `sqlx`.
 - `--database <postgres|mysql|sqlite|sql-server>`: database family for the starter assumptions. Defaults to `postgres`.
 - `--expected-rps <number>`: expected request rate. Defaults to `180`.
 - `--p50 <ms>`, `--p95 <ms>`, `--p99 <ms>`: latency percentiles in milliseconds. Defaults to `8`, `30`, and `70`.
