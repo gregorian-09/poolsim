@@ -36,3 +36,6 @@ pub mod sensitivity;
 pub mod simulate;
 /// Telemetry recommendation endpoint.
 pub mod telemetry;
+
+/// Browser UI route for interactive sizing.
+pub mod ui;

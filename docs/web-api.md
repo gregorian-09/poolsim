@@ -26,6 +26,8 @@ Checked-in request bodies for the documented HTTP and WebSocket examples live un
 
 Available routes:
 
+- `GET /`: static browser UI that calls the existing REST API from the browser.
+
 - `GET /v1/health`
 - `GET /v1/models`
 - `POST /v1/simulate`
@@ -690,3 +692,16 @@ Variants:
 - WebSocket progress frames are best-effort; slow clients may miss intermediate ticks.
 - `POST /v1/batch` fails the whole request if any single batch item fails.
 - The rate limiter is in-memory. It is process-local, not distributed.
+
+## Browser UI
+
+`GET /` serves a built-in HTML page for interactive sizing. The page does not introduce a separate sizing backend; it submits requests to the existing `POST /v1/simulate` endpoint and renders the JSON response in the browser.
+
+Run the web server and open the root URL:
+
+```bash
+poolsim-web
+# then open http://127.0.0.1:8080/
+```
+
+The UI is intentionally additive. Existing `/v1/*` REST routes and `GET /v1/live` WebSocket behavior are unchanged.

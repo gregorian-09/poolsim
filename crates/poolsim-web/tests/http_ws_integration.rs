@@ -649,3 +649,27 @@ async fn websocket_can_recover_when_client_disconnects_before_first_frame() {
     let _ = shutdown_tx.send(());
     let _ = server.await;
 }
+
+#[tokio::test]
+async fn web_ui_route_serves_static_sizing_page() {
+    use axum::{body::Body, http::Request};
+    use tower::ServiceExt;
+
+    let app = app_with_rate_limit(60);
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .body(Body::empty())
+                .expect("request should build"),
+        )
+        .await
+        .expect("UI route should respond");
+    assert_eq!(resp.status(), axum::http::StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .expect("UI body should read");
+    let html = String::from_utf8(body.to_vec()).expect("UI should be UTF-8");
+    assert!(html.contains("Pool sizing, before production."));
+    assert!(html.contains("/v1/simulate"));
+}

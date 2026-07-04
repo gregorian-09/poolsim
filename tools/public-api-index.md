@@ -150,6 +150,8 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_web::routes::sensitivity`: module for `POST /v1/sensitivity`.
 - `poolsim_web::routes::sensitivity::handler`: handler for `POST /v1/sensitivity`.
 - `poolsim_web::routes::telemetry`: module for `POST /v1/telemetry/recommend`.
+- `poolsim_web::routes::ui`: module for `GET /` browser UI.
+- `poolsim_web::routes::ui::handler`: handler for `GET /` browser UI.
 - `poolsim_web::routes::telemetry::TelemetryRecommendationRequest`: request body for telemetry recommendation.
 - `poolsim_web::routes::telemetry::handler`: handler for `POST /v1/telemetry/recommend`.
 

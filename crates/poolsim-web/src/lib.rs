@@ -1,7 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![doc(html_root_url = "https://docs.rs/poolsim-web/0.2.1")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-
 #![deny(missing_docs)]
 
 /// Error mapping and HTTP response conversion.
@@ -26,6 +25,7 @@ use tower_http::cors::CorsLayer;
 /// Builds the application router with routes, rate-limit middleware, and CORS policy.
 pub fn build_app(state: AppState, rate_limit_state: RateLimitState, cors_origins: &str) -> Router {
     Router::new()
+        .route("/", get(routes::ui::handler))
         .route("/v1/health", get(routes::health::handler))
         .route("/v1/models", get(routes::models::handler))
         .route("/v1/simulate", post(routes::simulate::handler))
