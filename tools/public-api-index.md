@@ -18,6 +18,7 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_core::types`: public model/types module; detailed usage in `docs/library-api.md`.
 - `poolsim_core::DistributionModel`: crate-root reexport of `poolsim_core::types::DistributionModel`.
 - `poolsim_core::QueueModel`: crate-root reexport of `poolsim_core::types::QueueModel`.
+- `poolsim_core::ConnectionOverheadProfile`: crate-root reexport of `poolsim_core::types::ConnectionOverheadProfile`.
 - `poolsim_core::RiskLevel`: crate-root reexport of `poolsim_core::types::RiskLevel`.
 
 ### Crate-Level Constants and Functions
@@ -84,6 +85,9 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 
 - `poolsim_core::types::DistributionModel`: distribution model enum.
 - `poolsim_core::types::QueueModel`: queue model enum.
+- `poolsim_core::types::ConnectionOverheadProfile`: named database/proxy connection-overhead profile enum.
+- `poolsim_core::types::ConnectionOverheadProfile::connection_overhead_ms`: returns the profile overhead assumption in milliseconds.
+- `poolsim_core::types::ConnectionOverheadProfile::apply_to_pool`: returns a copy of a pool with the profile overhead applied.
 - `poolsim_core::types::RiskLevel`: risk classification enum.
 - `poolsim_core::types::SaturationLevel`: saturation classification enum.
 - `poolsim_core::types::SaturationLevel::from_rho`: maps utilization `rho` to a saturation label.
@@ -169,6 +173,7 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 
 - `poolsim_cli::args::OutputFormat`: output-format enum used by the clap parser.
 - `poolsim_cli::args::CliDistributionModel`: CLI-facing distribution-model enum.
+- `poolsim_cli::args::CliConnectionOverheadProfile`: CLI-facing connection-overhead profile enum.
 - `poolsim_cli::args::CliQueueModel`: CLI-facing queue-model enum.
 - `poolsim_cli::args::CliSaturationLevel`: CLI-facing saturation-level enum.
 - `poolsim_cli::args::Cli`: top-level clap parser type defined in the `args` module.

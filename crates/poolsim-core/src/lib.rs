@@ -28,6 +28,8 @@ use types::{
     SimulationReport, StepLoadResult, WorkloadConfig,
 };
 
+/// Re-exported connection-overhead profile enum.
+pub use types::ConnectionOverheadProfile;
 /// Re-exported distribution model enum.
 pub use types::DistributionModel;
 /// Re-exported queue model enum.

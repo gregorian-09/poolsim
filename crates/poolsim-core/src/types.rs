@@ -37,6 +37,51 @@ pub enum QueueModel {
     MDC,
 }
 
+/// Named connection-overhead presets for common database deployment styles.
+///
+/// Profiles are convenience assumptions only. They do not replace explicit
+/// measurement, and callers can always override the returned overhead by setting
+/// [`PoolConfig::connection_overhead_ms`] themselves.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum ConnectionOverheadProfile {
+    /// PostgreSQL-style backend process connection overhead.
+    Postgres,
+    /// MySQL-style thread-backed connection overhead.
+    Mysql,
+    /// Microsoft SQL Server connection overhead assumption.
+    SqlServer,
+    /// SQLite has no remote database connection setup in the usual embedded mode.
+    Sqlite,
+    /// PgBouncer or similar lightweight transaction/session pooling proxy.
+    PgBouncer,
+    /// AWS RDS Proxy or a similar managed database proxy.
+    RdsProxy,
+}
+
+impl ConnectionOverheadProfile {
+    /// Returns the default connection overhead assumption in milliseconds.
+    ///
+    /// These values are conservative sizing assumptions, not vendor guarantees.
+    /// Prefer measured production telemetry when available.
+    pub fn connection_overhead_ms(self) -> f64 {
+        match self {
+            Self::Postgres => 1.5,
+            Self::Mysql => 1.0,
+            Self::SqlServer => 1.2,
+            Self::Sqlite => 0.0,
+            Self::PgBouncer => 0.25,
+            Self::RdsProxy => 0.5,
+        }
+    }
+
+    /// Returns a copy of `pool` with this profile's overhead applied.
+    pub fn apply_to_pool(self, pool: &PoolConfig) -> PoolConfig {
+        let mut pool = pool.clone();
+        pool.connection_overhead_ms = self.connection_overhead_ms();
+        pool
+    }
+}
+
 /// Risk class assigned to a sensitivity candidate.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RiskLevel {

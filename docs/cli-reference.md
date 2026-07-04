@@ -233,6 +233,25 @@ poolsim --format json simulate --config docs/fixtures/cli-config.json --explain 
 
 The explanation includes request rate, pool size, utilisation rho, p99 queue wait, saturation status, and step-load pressure when a step-load profile is present.
 
+
+### Connection Overhead Profiles
+
+Use `--connection-profile` when you want a named database/proxy assumption instead of typing an overhead value by hand. Explicit `--connection-overhead-ms` wins when both are provided.
+
+```bash
+poolsim simulate \
+  --rps 180 \
+  --p50 8 \
+  --p95 30 \
+  --p99 70 \
+  --max-server-connections 100 \
+  --connection-profile rds-proxy \
+  --min 2 \
+  --max 20
+```
+
+Supported profiles are `postgres`, `mysql`, `sql-server`, `sqlite`, `pg-bouncer`, and `rds-proxy`. Treat them as starting assumptions; measured production overhead should be passed with `--connection-overhead-ms`.
+
 ## `evaluate`
 
 ### Purpose

@@ -472,6 +472,7 @@ mod tests {
                 samples_file: None,
                 max_server_connections: None,
                 connection_overhead_ms: None,
+                connection_profile: None,
                 idle_timeout_ms: None,
                 min: None,
                 max: None,

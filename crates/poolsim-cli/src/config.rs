@@ -417,12 +417,21 @@ fn apply_pool_overrides(cfg: &mut FileConfig, args: &CommonArgs) {
     if cfg.pool.is_none()
         && (args.max_server_connections.is_some()
             || args.connection_overhead_ms.is_some()
+            || args.connection_profile.is_some()
             || args.min.is_some()
             || args.max.is_some())
     {
         cfg.pool = Some(PoolConfig {
             max_server_connections: args.max_server_connections.unwrap_or_default(),
-            connection_overhead_ms: args.connection_overhead_ms.unwrap_or(0.0),
+            connection_overhead_ms: args
+                .connection_overhead_ms
+                .or_else(|| {
+                    args.connection_profile.map(|profile| {
+                        poolsim_core::ConnectionOverheadProfile::from(profile)
+                            .connection_overhead_ms()
+                    })
+                })
+                .unwrap_or(0.0),
             idle_timeout_ms: args.idle_timeout_ms,
             min_pool_size: args.min.unwrap_or_default(),
             max_pool_size: args.max.unwrap_or_default(),
@@ -432,6 +441,10 @@ fn apply_pool_overrides(cfg: &mut FileConfig, args: &CommonArgs) {
     if let Some(pool) = cfg.pool.as_mut() {
         if let Some(v) = args.max_server_connections {
             pool.max_server_connections = v;
+        }
+        if let Some(profile) = args.connection_profile {
+            pool.connection_overhead_ms =
+                poolsim_core::ConnectionOverheadProfile::from(profile).connection_overhead_ms();
         }
         if let Some(v) = args.connection_overhead_ms {
             pool.connection_overhead_ms = v;
@@ -584,6 +597,7 @@ mod tests {
             samples_file: None,
             max_server_connections: None,
             connection_overhead_ms: None,
+            connection_profile: None,
             idle_timeout_ms: None,
             min: None,
             max: None,

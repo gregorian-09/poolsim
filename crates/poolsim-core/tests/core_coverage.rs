@@ -1,11 +1,11 @@
 use poolsim_core::{
     distribution::LatencyDistribution,
-    erlang, monte_carlo, optimizer, sensitivity,
+    emit_performance_contract_warning, erlang,
     error::PoolsimError,
-    emit_performance_contract_warning, evaluate, simulate, sweep,
+    evaluate, monte_carlo, optimizer, sensitivity, simulate, sweep,
     types::{
-        DistributionModel, PoolConfig, QueueModel, SaturationLevel, SimulationOptions, StepLoadPoint,
-        WorkloadConfig,
+        DistributionModel, PoolConfig, QueueModel, SaturationLevel, SimulationOptions,
+        StepLoadPoint, WorkloadConfig,
     },
 };
 
@@ -46,7 +46,8 @@ fn distribution_models_fit_and_percentiles_work() {
     let wl = base_workload();
     let mut rng = rand::thread_rng();
 
-    let lognormal = LatencyDistribution::fit(&wl, DistributionModel::LogNormal).expect("lognormal fit");
+    let lognormal =
+        LatencyDistribution::fit(&wl, DistributionModel::LogNormal).expect("lognormal fit");
     assert!(lognormal.mean_ms() > 0.0);
     assert!(lognormal.percentile_ms(0.95).expect("p95") >= wl.latency_p50_ms);
     assert!(lognormal.sample_ms(&mut rng) > 0.0);
@@ -144,9 +145,7 @@ fn pool_and_options_validation_cover_error_codes() {
 
     let mut opts = base_options();
     opts.max_acceptable_rho = 1.2;
-    let err2 = opts
-        .validate()
-        .expect_err("rho outside [0,1) should fail");
+    let err2 = opts.validate().expect_err("rho outside [0,1) should fail");
     assert_eq!(err2.code(), "INVALID_MAX_ACCEPTABLE_RHO");
 
     let mut bad_pool = base_pool();
@@ -220,7 +219,8 @@ fn saturation_level_thresholds_match_spec() {
 
 #[test]
 fn error_code_and_details_branches_are_exercised() {
-    let invalid = PoolsimError::invalid_input("INVALID_X", "bad input", Some(serde_json::json!({"a": 1})));
+    let invalid =
+        PoolsimError::invalid_input("INVALID_X", "bad input", Some(serde_json::json!({"a": 1})));
     assert_eq!(invalid.code(), "INVALID_X");
     assert!(invalid.details().is_some());
 
@@ -319,7 +319,8 @@ fn erlang_input_validation_paths_are_covered() {
         0.0
     );
     assert_eq!(
-        erlang::queue_wait_percentile_ms(0.0, 1.0, 2, 0.95).expect("zero arrival should return zero"),
+        erlang::queue_wait_percentile_ms(0.0, 1.0, 2, 0.95)
+            .expect("zero arrival should return zero"),
         0.0
     );
     assert_eq!(
@@ -386,26 +387,25 @@ fn optimizer_and_sensitivity_paths_are_covered() {
     let fallback = optimizer::find_optimal(&wl, &pool, &dist, &fallback_opts)
         .expect("optimizer should return fallback result");
     assert_eq!(fallback.pool_size, pool.max_pool_size);
-    assert!(
-        fallback
-            .warnings
-            .iter()
-            .any(|w| w.contains("No candidate pool size met target constraints"))
-    );
+    assert!(fallback
+        .warnings
+        .iter()
+        .any(|w| w.contains("No candidate pool size met target constraints")));
 
     let mut mdc_opts = base_options();
     mdc_opts.queue_model = QueueModel::MDC;
     mdc_opts.seed = Some(123);
-    let mdc = optimizer::find_optimal(&wl, &pool, &dist, &mdc_opts).expect("mdc optimizer should run");
-    assert!(
-        mdc.warnings
-            .iter()
-            .any(|w| w.contains("MDC mode uses Monte Carlo probe estimates"))
-    );
+    let mdc =
+        optimizer::find_optimal(&wl, &pool, &dist, &mdc_opts).expect("mdc optimizer should run");
+    assert!(mdc
+        .warnings
+        .iter()
+        .any(|w| w.contains("MDC mode uses Monte Carlo probe estimates")));
 
     let rows_default = sensitivity::sweep(&wl, &pool).expect("default sweep should work");
     assert!(!rows_default.is_empty());
-    let rows_target = sensitivity::sweep_with_target(&wl, &pool, 35.0).expect("target sweep should work");
+    let rows_target =
+        sensitivity::sweep_with_target(&wl, &pool, 35.0).expect("target sweep should work");
     assert!(!rows_target.is_empty());
     let rows_model = sensitivity::sweep_with_target_and_model(&wl, &pool, 35.0, QueueModel::MDC)
         .expect("target+model sweep should work");
@@ -417,9 +417,7 @@ fn workload_validation_covers_remaining_scalar_checks() {
     let mut wl = base_workload();
     wl.requests_per_second = 0.0;
     assert_eq!(
-        wl.validate()
-            .expect_err("zero rps should fail")
-            .code(),
+        wl.validate().expect_err("zero rps should fail").code(),
         "INVALID_RPS"
     );
 
@@ -470,12 +468,34 @@ fn public_wrapper_paths_and_saturation_warning_are_covered() {
 
     let mut inf_overhead_pool = small_pool.clone();
     inf_overhead_pool.connection_overhead_ms = f64::INFINITY;
-    let report = simulate(&wl, &inf_overhead_pool, &opts).expect("infinite overhead should still simulate");
+    let report =
+        simulate(&wl, &inf_overhead_pool, &opts).expect("infinite overhead should still simulate");
     assert_eq!(
         report.cold_start_min_pool_size,
-        inf_overhead_pool.min_pool_size.min(report.optimal_pool_size)
+        inf_overhead_pool
+            .min_pool_size
+            .min(report.optimal_pool_size)
     );
 
     emit_performance_contract_warning(100, 200);
     emit_performance_contract_warning(250, 200);
+}
+
+#[test]
+fn connection_overhead_profiles_apply_named_assumptions() {
+    let pool = PoolConfig {
+        max_server_connections: 100,
+        connection_overhead_ms: 9.0,
+        idle_timeout_ms: None,
+        min_pool_size: 2,
+        max_pool_size: 20,
+    };
+
+    let profiled = poolsim_core::ConnectionOverheadProfile::RdsProxy.apply_to_pool(&pool);
+    assert_eq!(profiled.connection_overhead_ms, 0.5);
+    assert_eq!(profiled.max_pool_size, pool.max_pool_size);
+    assert_eq!(
+        poolsim_core::ConnectionOverheadProfile::Sqlite.connection_overhead_ms(),
+        0.0
+    );
 }

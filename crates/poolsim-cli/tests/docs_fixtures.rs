@@ -950,3 +950,63 @@ fn docs_ci_integration_assets_are_wired_to_existing_commands() {
     assert!(docker.contains("docker/build-push-action@v6"));
     assert!(!docker.contains("branches:"));
 }
+
+#[test]
+fn docs_connection_profile_examples_work_and_keep_explicit_overhead_precedence() {
+    let profile_output = run_cli(&[
+        "--format",
+        "json",
+        "simulate",
+        "--rps",
+        "180",
+        "--p50",
+        "8",
+        "--p95",
+        "30",
+        "--p99",
+        "70",
+        "--max-server-connections",
+        "100",
+        "--connection-profile",
+        "rds-proxy",
+        "--min",
+        "2",
+        "--max",
+        "20",
+    ]);
+    assert_success(&profile_output, "connection profile docs example");
+    let profile_json: Value =
+        serde_json::from_str(&stdout_utf8(&profile_output)).expect("profile output should be JSON");
+    assert!(profile_json["optimal_pool_size"].is_number());
+
+    let explicit_output = run_cli(&[
+        "--format",
+        "json",
+        "simulate",
+        "--rps",
+        "180",
+        "--p50",
+        "8",
+        "--p95",
+        "30",
+        "--p99",
+        "70",
+        "--max-server-connections",
+        "100",
+        "--connection-profile",
+        "rds-proxy",
+        "--connection-overhead-ms",
+        "3",
+        "--min",
+        "2",
+        "--max",
+        "20",
+    ]);
+    assert_success(
+        &explicit_output,
+        "explicit overhead precedence docs example",
+    );
+    let explicit_json: Value = serde_json::from_str(&stdout_utf8(&explicit_output))
+        .expect("explicit output should be JSON");
+    assert!(explicit_json["optimal_pool_size"].is_number());
+}

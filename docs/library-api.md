@@ -1220,3 +1220,25 @@ let report = simulate(
 assert!(report.optimal_pool_size >= 2);
 # Ok::<(), poolsim_core::error::PoolsimError>(())
 ```
+
+## Connection Overhead Profiles
+
+`poolsim_core::ConnectionOverheadProfile` provides named connection-overhead assumptions without changing `poolsim_core::types::PoolConfig`. This keeps the existing public struct stable for users who construct it with literals.
+
+```rust
+use poolsim_core::{ConnectionOverheadProfile, types::PoolConfig};
+
+let pool = PoolConfig {
+    max_server_connections: 100,
+    connection_overhead_ms: 0.0,
+    idle_timeout_ms: None,
+    min_pool_size: 2,
+    max_pool_size: 20,
+};
+
+let rds_proxy_pool = ConnectionOverheadProfile::RdsProxy.apply_to_pool(&pool);
+assert_eq!(rds_proxy_pool.connection_overhead_ms, 0.5);
+assert_eq!(ConnectionOverheadProfile::Postgres.connection_overhead_ms(), 1.5);
+```
+
+Available variants are `Postgres`, `Mysql`, `SqlServer`, `Sqlite`, `PgBouncer`, and `RdsProxy`. Profile values are conservative sizing assumptions, not vendor guarantees. Explicit measured values should take precedence when available.

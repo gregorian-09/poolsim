@@ -154,6 +154,29 @@ pub struct SimulateArgs {
     pub sweep: bool,
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliConnectionOverheadProfile {
+    Postgres,
+    Mysql,
+    SqlServer,
+    Sqlite,
+    PgBouncer,
+    RdsProxy,
+}
+
+impl From<CliConnectionOverheadProfile> for poolsim_core::ConnectionOverheadProfile {
+    fn from(value: CliConnectionOverheadProfile) -> Self {
+        match value {
+            CliConnectionOverheadProfile::Postgres => Self::Postgres,
+            CliConnectionOverheadProfile::Mysql => Self::Mysql,
+            CliConnectionOverheadProfile::SqlServer => Self::SqlServer,
+            CliConnectionOverheadProfile::Sqlite => Self::Sqlite,
+            CliConnectionOverheadProfile::PgBouncer => Self::PgBouncer,
+            CliConnectionOverheadProfile::RdsProxy => Self::RdsProxy,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Args)]
 pub struct CommonArgs {
     #[arg(long)]
@@ -174,6 +197,8 @@ pub struct CommonArgs {
     pub max_server_connections: Option<u32>,
     #[arg(long, alias = "connection-establishment-overhead-ms")]
     pub connection_overhead_ms: Option<f64>,
+    #[arg(long, value_enum)]
+    pub connection_profile: Option<CliConnectionOverheadProfile>,
     #[arg(long)]
     pub idle_timeout_ms: Option<u64>,
     #[arg(long)]
@@ -476,6 +501,40 @@ mod tests {
     fn cli_queue_model_maps_to_core_enum() {
         assert_eq!(QueueModel::from(CliQueueModel::Mmc), QueueModel::MMC);
         assert_eq!(QueueModel::from(CliQueueModel::Mdc), QueueModel::MDC);
+    }
+
+    #[test]
+    fn parser_handles_connection_profile_flag() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "simulate",
+            "--rps",
+            "180",
+            "--p50",
+            "8",
+            "--p95",
+            "30",
+            "--p99",
+            "70",
+            "--max-server-connections",
+            "100",
+            "--connection-profile",
+            "rds-proxy",
+            "--min",
+            "2",
+            "--max",
+            "20",
+        ])
+        .expect("connection profile flag should parse");
+        match cli.command {
+            Commands::Simulate(args) => {
+                assert!(matches!(
+                    args.common.connection_profile,
+                    Some(CliConnectionOverheadProfile::RdsProxy)
+                ));
+            }
+            _ => panic!("expected simulate command"),
+        }
     }
 
     #[test]
