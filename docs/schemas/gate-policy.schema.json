@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gregorian-09/poolsim/schemas/gate-policy.schema.json",
+  "title": "Poolsim capacity gate policy",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "max_saturation": { "enum": ["Ok", "Warning", "Critical"] },
+    "max_pool_increase_percent": { "type": ["number", "null"], "minimum": 0 },
+    "max_additional_connections": { "type": ["integer", "null"], "minimum": 0 },
+    "max_recommended_pool_size": { "type": ["integer", "null"], "minimum": 1 },
+    "max_recommended_p99_queue_wait_ms": { "type": ["number", "null"], "minimum": 0 },
+    "max_recommended_mean_queue_wait_ms": { "type": ["number", "null"], "minimum": 0 },
+    "max_recommended_rho": { "type": ["number", "null"], "minimum": 0 },
+    "max_current_p99_queue_wait_ms": { "type": ["number", "null"], "minimum": 0 },
+    "max_current_mean_queue_wait_ms": { "type": ["number", "null"], "minimum": 0 },
+    "max_current_rho": { "type": ["number", "null"], "minimum": 0 },
+    "expected_pool_size": { "type": ["integer", "null"], "minimum": 1 }
+  }
+}

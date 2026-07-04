@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gregorian-09/poolsim/schemas/poolsim-config.schema.json",
+  "title": "Poolsim simulation config",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["workload", "pool"],
+  "properties": {
+    "workload": { "$ref": "#/$defs/workload" },
+    "pool": { "$ref": "#/$defs/pool" },
+    "options": { "$ref": "#/$defs/options" }
+  },
+  "$defs": {
+    "workload": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["requests_per_second", "latency_p50_ms", "latency_p95_ms", "latency_p99_ms"],
+      "properties": {
+        "requests_per_second": { "type": "number", "exclusiveMinimum": 0 },
+        "latency_p50_ms": { "type": "number", "minimum": 0 },
+        "latency_p95_ms": { "type": "number", "minimum": 0 },
+        "latency_p99_ms": { "type": "number", "minimum": 0 },
+        "raw_samples_ms": {
+          "type": ["array", "null"],
+          "items": { "type": "number", "minimum": 0 }
+        },
+        "step_load_profile": {
+          "type": ["array", "null"],
+          "items": { "$ref": "#/$defs/step_load_point" }
+        }
+      }
+    },
+    "step_load_point": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["requests_per_second"],
+      "properties": {
+        "time_s": { "type": "integer", "minimum": 0 },
+        "time_seconds": { "type": "integer", "minimum": 0 },
+        "at_second": { "type": "integer", "minimum": 0 },
+        "requests_per_second": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "anyOf": [
+        { "required": ["time_s"] },
+        { "required": ["time_seconds"] },
+        { "required": ["at_second"] }
+      ]
+    },
+    "pool": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["max_server_connections", "connection_overhead_ms", "min_pool_size", "max_pool_size"],
+      "properties": {
+        "max_server_connections": { "type": "integer", "minimum": 1 },
+        "connection_overhead_ms": { "type": "number", "minimum": 0 },
+        "connection_establishment_overhead_ms": { "type": "number", "minimum": 0 },
+        "idle_timeout_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "min_pool_size": { "type": "integer", "minimum": 0 },
+        "max_pool_size": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "iterations": { "type": "integer", "minimum": 1 },
+        "seed": { "type": ["integer", "null"], "minimum": 0 },
+        "distribution": { "enum": ["LogNormal", "Exponential", "Empirical", "Gamma"] },
+        "queue_model": { "enum": ["MMC", "MDC"] },
+        "target_wait_p99_ms": { "type": "number", "minimum": 0 },
+        "max_acceptable_rho": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}

@@ -619,3 +619,75 @@ fn docs_warn_exit_example_is_stable() {
         String::from_utf8_lossy(&output.stderr),
     );
 }
+
+#[test]
+fn docs_json_schemas_are_valid_json_and_match_fixture_shapes() {
+    let schema_paths = [
+        "docs/schemas/poolsim-config.schema.json",
+        "docs/schemas/batch.schema.json",
+        "docs/schemas/scenarios.schema.json",
+        "docs/schemas/budget.schema.json",
+        "docs/schemas/telemetry.schema.json",
+        "docs/schemas/gate-policy.schema.json",
+    ];
+
+    for path in schema_paths {
+        let schema_text = std::fs::read_to_string(workspace_root().join(path))
+            .unwrap_or_else(|err| panic!("{path} should be readable: {err}"));
+        let schema: Value = serde_json::from_str(&schema_text)
+            .unwrap_or_else(|err| panic!("{path} should be valid JSON: {err}"));
+        assert_eq!(
+            schema["$schema"],
+            "https://json-schema.org/draft/2020-12/schema"
+        );
+        assert!(schema["title"].is_string(), "{path} should have a title");
+    }
+
+    let simulation: Value = serde_json::from_str(
+        &std::fs::read_to_string(workspace_root().join("docs/fixtures/cli-config.json"))
+            .expect("simulation fixture should be readable"),
+    )
+    .expect("simulation fixture should parse");
+    assert!(simulation["workload"].is_object());
+    assert!(simulation["pool"].is_object());
+
+    let batch: Value = serde_json::from_str(
+        &std::fs::read_to_string(workspace_root().join("docs/fixtures/batch.json"))
+            .expect("batch fixture should be readable"),
+    )
+    .expect("batch fixture should parse");
+    assert!(batch.as_array().is_some_and(|items| !items.is_empty()));
+
+    let scenarios: Value = serde_json::from_str(
+        &std::fs::read_to_string(workspace_root().join("docs/fixtures/scenarios.json"))
+            .expect("scenario fixture should be readable"),
+    )
+    .expect("scenario fixture should parse");
+    assert!(scenarios["scenarios"]
+        .as_array()
+        .is_some_and(|items| !items.is_empty()));
+
+    let budget: Value = serde_json::from_str(
+        &std::fs::read_to_string(workspace_root().join("docs/fixtures/budget.json"))
+            .expect("budget fixture should be readable"),
+    )
+    .expect("budget fixture should parse");
+    assert!(budget["services"]
+        .as_array()
+        .is_some_and(|items| !items.is_empty()));
+
+    let telemetry: Value = serde_json::from_str(
+        &std::fs::read_to_string(workspace_root().join("docs/fixtures/telemetry.json"))
+            .expect("telemetry fixture should be readable"),
+    )
+    .expect("telemetry fixture should parse");
+    assert!(telemetry["telemetry"].is_object());
+
+    let gate_policy_text =
+        std::fs::read_to_string(workspace_root().join("docs/fixtures/gate-policy.toml"))
+            .expect("gate policy fixture should be readable");
+    let gate_policy: toml::Value = gate_policy_text
+        .parse()
+        .expect("gate policy fixture should parse as TOML");
+    assert!(gate_policy.get("max_saturation").is_some());
+}

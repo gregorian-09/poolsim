@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gregorian-09/poolsim/schemas/scenarios.schema.json",
+  "title": "Poolsim scenario comparison config",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["scenarios"],
+  "properties": {
+    "baseline": { "type": "string", "minLength": 1 },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "allOf": [
+          { "$ref": "poolsim-config.schema.json" },
+          {
+            "type": "object",
+            "required": ["name"],
+            "properties": { "name": { "type": "string", "minLength": 1 } }
+          }
+        ]
+      }
+    }
+  }
+}

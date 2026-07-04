@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gregorian-09/poolsim/schemas/telemetry.schema.json",
+  "title": "Poolsim telemetry import config",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["telemetry"],
+  "properties": {
+    "telemetry": {
+      "allOf": [
+        { "$ref": "poolsim-config.schema.json" },
+        {
+          "type": "object",
+          "required": ["current_pool_size"],
+          "properties": {
+            "service_name": { "type": ["string", "null"] },
+            "window": { "type": ["string", "null"] },
+            "observed_at": { "type": ["string", "null"] },
+            "current_pool_size": { "type": "integer", "minimum": 1 }
+          }
+        }
+      ]
+    },
+    "options": { "$ref": "poolsim-config.schema.json#/$defs/options" }
+  }
+}
