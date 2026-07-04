@@ -24,6 +24,9 @@ This checklist is for publishing the current sizing-calculator version of `pools
 10. Run `cargo test -p poolsim-cli --test docs_fixtures`.
 11. Run `cargo test -p poolsim-web --test docs_fixtures`.
 12. Run `cargo test -p poolsim-web --test http_ws_integration`.
+13. Run `PYTHONPATH=bindings/python python3 -m unittest discover -s bindings/python/tests`.
+14. Run `python3 -m build bindings/python`.
+15. Run `python3 -m twine check bindings/python/dist/*`.
 
 ## Packaging
 
@@ -31,15 +34,26 @@ This checklist is for publishing the current sizing-calculator version of `pools
 2. Confirm the `poolsim-core` package includes its `README.md` and expected source files.
 3. Package `poolsim-cli` only after the target `poolsim-core` version exists on crates.io.
 4. Package `poolsim-web` only after the target `poolsim-core` version exists on crates.io.
+5. Build the Python package from `bindings/python` and confirm both wheel and sdist pass `twine check`.
 
 ## GitHub Actions Publish Workflow
 
 1. Confirm the repository secret `CARGO_REGISTRY_TOKEN` is present.
-2. Commit the release changes.
-3. Create a tag matching the root `VERSION` file, for example `v0.2.1`.
-4. Push the tag.
-5. Confirm the `Publish` workflow starts automatically for that tag.
-6. Use `workflow_dispatch` only when you want a manual dry-run of the core publish path or a controlled fallback publish.
+2. Confirm the repository secret `PYPI_API_TOKEN` is present for the Python package publish.
+3. Commit the release changes.
+4. Create a tag matching the root `VERSION` file, for example `v0.2.1`.
+5. Push the tag.
+6. Confirm the `Publish` workflow starts automatically for that tag.
+7. Use `workflow_dispatch` only when you want a manual dry-run of the publish path or a controlled fallback publish.
+
+## Python-Only Publish Workflow
+
+Use `.github/workflows/publish-python.yml` when the Rust crates are already published and only the Python `poolsim` package needs to be published or backfilled.
+
+1. Confirm `PYPI_API_TOKEN` is present.
+2. Run the `Publish Python` workflow with the version matching `VERSION`.
+3. Keep `dry_run=true` for package validation only.
+4. Set `dry_run=false` only when publishing to PyPI.
 
 ## Publish Order
 
@@ -50,10 +64,12 @@ This checklist is for publishing the current sizing-calculator version of `pools
    `cargo publish -p poolsim-cli`
 4. Publish `poolsim-web`:
    `cargo publish -p poolsim-web`
+5. Publish the Python `poolsim` package to PyPI from `bindings/python/dist`.
 
 ## Post-Publish
 
 1. Verify docs.rs builds succeeded.
 2. Verify `cargo install poolsim-cli` works from crates.io.
-3. Verify crate pages show the correct README, license, repository, keywords, and categories.
-4. Create or update the GitHub Release notes for the pushed version tag after crates.io publication is confirmed.
+3. Verify `pip install poolsim` works from PyPI in a clean virtual environment.
+4. Verify crate and PyPI pages show the correct README, license, repository, keywords, and categories.
+5. Create or update the GitHub Release notes for the pushed version tag after crates.io and PyPI publication are confirmed.

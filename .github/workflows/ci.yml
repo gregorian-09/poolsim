@@ -15,6 +15,11 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
       - name: Basic Checks
         run: |
           cargo check --workspace
@@ -33,6 +38,13 @@ jobs:
 
       - name: Version Sync Check
         run: python3 tools/sync_version.py --check
+
+      - name: Python Binding Package
+        run: |
+          python3 -m pip install --upgrade build twine
+          PYTHONPATH=bindings/python python3 -m unittest discover -s bindings/python/tests
+          python3 -m build bindings/python
+          python3 -m twine check bindings/python/dist/*
 
       - name: Docs API Coverage
         run: python3 tools/check_docs_api_coverage.py --docs-dir docs

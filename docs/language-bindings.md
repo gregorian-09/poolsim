@@ -6,6 +6,16 @@ Poolsim includes first-party binding packages for Python, TypeScript, and Go. Th
 
 Package source: [`../bindings/python`](../bindings/python)
 
+Install:
+
+```bash
+pip install poolsim
+cargo install poolsim-cli
+```
+
+The Python package delegates to the Rust `poolsim` executable. Keep the binary on
+`PATH`, or pass its absolute path to `PoolsimClient`.
+
 ```python
 from poolsim import PoolsimClient
 

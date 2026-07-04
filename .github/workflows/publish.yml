@@ -31,6 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
 
     steps:
       - name: Checkout
@@ -38,6 +39,11 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
 
       - name: Determine release parameters
         id: release
@@ -73,6 +79,10 @@ jobs:
           cargo check --workspace
           cargo test --workspace
           cargo package -p poolsim-core --locked
+          python3 -m pip install --upgrade build twine
+          PYTHONPATH=bindings/python python3 -m unittest discover -s bindings/python/tests
+          python3 -m build bindings/python
+          python3 -m twine check bindings/python/dist/*
 
       - name: Dry run publish order
         if: ${{ steps.release.outputs.dry_run == 'true' }}
@@ -86,6 +96,10 @@ jobs:
           set -euo pipefail
           if [[ -z "${CARGO_REGISTRY_TOKEN:-}" ]]; then
             echo "CARGO_REGISTRY_TOKEN is not configured" >&2
+            exit 1
+          fi
+          if [[ -z "${PYPI_API_TOKEN:-}" ]]; then
+            echo "PYPI_API_TOKEN is not configured" >&2
             exit 1
           fi
 
@@ -135,3 +149,11 @@ jobs:
       - name: Publish poolsim-web
         if: ${{ steps.release.outputs.dry_run != 'true' }}
         run: cargo publish -p poolsim-web --locked
+
+      - name: Publish Python package to PyPI
+        if: ${{ steps.release.outputs.dry_run != 'true' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages-dir: bindings/python/dist

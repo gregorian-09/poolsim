@@ -4,6 +4,10 @@
 /coverage
 /.tools
 /.venv
+/.idea
 /use-case.md
 /poolsim_specification.md
 __pycache__/
+*.egg-info/
+dist/
+build/

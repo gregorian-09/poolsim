@@ -2,6 +2,24 @@
 
 Python bindings call the stable `poolsim` CLI JSON interface. They do not reimplement the Rust sizing model.
 
+## Install
+
+```bash
+pip install poolsim
+```
+
+The Python package is a thin wrapper around the Rust CLI. Install the `poolsim`
+executable separately and ensure it is available on `PATH`:
+
+```bash
+cargo install poolsim-cli
+poolsim --version
+```
+
+Use `executable="/path/to/poolsim"` when the binary is not on `PATH`.
+
+## Example
+
 ```python
 from poolsim import PoolsimClient
 
@@ -10,4 +28,5 @@ report = client.simulate("docs/fixtures/cli-config.json")
 print(report["optimal_pool_size"])
 ```
 
-Install from a future package with `pip install poolsim`, then ensure the Rust `poolsim` executable is available on `PATH`.
+Available methods include `simulate`, `evaluate`, `sweep`, `batch`, `compare`,
+`budget`, `telemetry_recommend`, `doctor`, `generate_config`, and `gate`.

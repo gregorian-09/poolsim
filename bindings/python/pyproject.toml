@@ -8,14 +8,19 @@ version = "0.2.1"
 description = "Python bindings for the Poolsim connection pool sizing CLI"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = "MIT"
 authors = [{ name = "Gregorian Rayne", email = "gregorianrayne09@gmail.com" }]
 keywords = ["connection-pool", "capacity-planning", "sizing", "queueing"]
 classifiers = [
   "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License",
   "Topic :: Software Development :: Quality Assurance"
 ]
+
+[project.urls]
+Homepage = "https://github.com/gregorian-09/poolsim"
+Repository = "https://github.com/gregorian-09/poolsim"
+Documentation = "https://github.com/gregorian-09/poolsim/tree/main/docs"
+Issues = "https://github.com/gregorian-09/poolsim/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
