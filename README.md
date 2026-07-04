@@ -63,9 +63,18 @@ Given workload data, pool bounds, and simulation options, `poolsim` can:
 - compare normal, peak, and incident scenarios side by side
 - import telemetry snapshots and diff recommendations against current production settings
 - query Prometheus-compatible telemetry and diff recommendations against current production settings
+- import OpenTelemetry OTLP metric exports through the CLI and web API
 - run CI capacity gates that fail deployments when telemetry violates pool policy
 - run deployment guard checks that return CI-ready safety fields and exit codes
+- diagnose configured pools with `poolsim doctor`
+- plan a shared database connection budget across services
 - generate framework-specific pool configuration snippets from the recommendation
+- expose sizing recommendations in Kubernetes through sidecar metrics or controller annotations
+- run continuous recommendation-diff workers with optional webhook delivery
+- visualize sensitivity tables in Grafana
+- summarize benchmark results that compare predictions to real pool runs
+- generate anonymous, opt-in deployed-pool survey payloads
+- use documented Python, TypeScript, Go, Terraform/OpenTofu, Docker, GHCR, and Homebrew integration paths
 
 Current surfaces:
 

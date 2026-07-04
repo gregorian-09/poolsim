@@ -12,18 +12,19 @@
 
 Use it when you want to expose the sizing calculator to dashboards, internal developer platforms, remote CI jobs, or non-Rust services over HTTP.
 
-## What Is New In `0.2.1`
+## What Is New After `0.2.1`
 
-`0.2.1` is an API-compatible patch over the additive `0.2.0` feature release. For `poolsim-web`, it keeps the documented REST/WebSocket service surface and aligns the published crate set with the restored `poolsim-core` no-default-features WASM build.
+The next minor release remains backward-compatible and expands `poolsim-web` for observability and dashboard integrations. Existing REST routes, WebSocket behavior, JSON fields, and embedding APIs continue to work.
 
 The service release documents and validates:
 
-- REST endpoint documentation for health, models, simulate, evaluate, sensitivity, batch, and telemetry recommendation workflows.
+- REST endpoint documentation for health, models, simulate, evaluate, sensitivity, batch, telemetry recommendation, and OTLP recommendation workflows.
 - WebSocket live simulation documentation and executable fixtures.
 - Public embedding surface for `build_app`, `AppState`, and `RateLimitState`.
+- Direct `POST /v1/otlp/recommend` support for OpenTelemetry metric-export JSON.
 - CI enforcement for docs coverage, REST/WebSocket fixture execution, and `100%` workspace line coverage.
 
-The database budget planner is currently a CLI workflow in `poolsim-cli`. Use `poolsim-web` for simulation, evaluation, sensitivity, batch, telemetry recommendations, and live progress streaming.
+The database budget planner is a CLI workflow in `poolsim-cli`. Use `poolsim-web` for simulation, evaluation, sensitivity, batch, telemetry recommendations, OTLP recommendations, and live progress streaming.
 
 ## Install Or Run
 
@@ -61,6 +62,7 @@ Available REST endpoints:
 - `POST /v1/sensitivity`
 - `POST /v1/batch`
 - `POST /v1/telemetry/recommend`
+- `POST /v1/otlp/recommend`
 
 Available WebSocket endpoint:
 

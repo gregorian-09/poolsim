@@ -12,9 +12,9 @@
 
 It is built for backend engineers, platform teams, SREs, and CI pipelines that need repeatable, machine-readable pool-sizing recommendations without embedding Rust code directly.
 
-## What Is New In `0.2.1`
+## What Is New After `0.2.1`
 
-`0.2.1` is an API-compatible patch over the additive `0.2.0` feature release. It keeps the CLI operational workflows and aligns the published crate set with the restored `poolsim-core` no-default-features WASM build.
+The next minor release remains backward-compatible and expands the CLI from a sizing calculator into an adoption, observability, diagnostics, and CI toolkit. Existing commands, flags, output formats, and exit-code contracts continue to work.
 
 New and expanded workflows include:
 
@@ -22,11 +22,13 @@ New and expanded workflows include:
 - `compare`: compare normal, peak, and incident scenarios side by side.
 - `import telemetry`: load production telemetry from JSON or TOML and compute a recommendation diff.
 - `import prometheus`: use captured or live Prometheus-compatible query responses.
+- `import otlp`: convert OpenTelemetry OTLP metric-export JSON into a recommendation diff.
 - `gate`: fail CI when new assumptions exceed safety policy.
 - `guard`: deployment-safe wrapper around gate output for CI/CD systems.
 - `doctor`: diagnose whether a pool is too small, too large, close to saturation, or healthy.
-- `init`
+- `init`: generate a starting config and gate policy.
 - `generate-config`: generate runtime config snippets for HikariCP, Spring Boot, SQLAlchemy, Prisma, node-postgres, sqlx, and deadpool.
+- `--format html`: emit self-contained reports for sharing sizing decisions.
 - Expanded JSON, CSV, and table output coverage across command workflows.
 - Comprehensive executable docs fixtures and `100%` workspace line coverage enforcement.
 
@@ -65,6 +67,7 @@ Telemetry and CI commands:
 
 - `poolsim import telemetry`: recommendation diff from telemetry files.
 - `poolsim import prometheus`: recommendation diff from Prometheus-compatible data.
+- `poolsim import otlp`: recommendation diff from OpenTelemetry OTLP metric-export JSON.
 - `poolsim gate`: policy check for traffic and latency assumptions.
 - `poolsim guard`: deployment guard output for CI/CD pipelines.
 

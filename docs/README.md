@@ -11,14 +11,13 @@ This folder contains user-facing documentation for the current Poolsim capabilit
 - [`terraform-opentofu.md`](terraform-opentofu.md): Terraform/OpenTofu external-data adapter for connection-pool sizing as code.
 - [`language-bindings.md`](language-bindings.md): Python, TypeScript, and Go bindings that delegate to the stable CLI JSON contract.
 - [`ci-integration.md`](ci-integration.md): GitHub Action, GitLab CI, and GHCR Docker image integration guide for capacity gates and web deployment.
-- [`../integrations/kubernetes/README.md`](../integrations/kubernetes/README.md): Kubernetes sidecar pattern that exposes sizing recommendations as Prometheus metrics.
+- [`../integrations/kubernetes/README.md`](../integrations/kubernetes/README.md): Kubernetes sidecar and controller patterns for surfacing sizing recommendations from deployment annotations.
 - [`continuous-recommendations.md`](continuous-recommendations.md): Opt-in worker for repeated recommendation diff events and webhook delivery.
 - [`../integrations/grafana/README.md`](../integrations/grafana/README.md): Grafana panel package for rendering `poolsim-web` sensitivity rows as a heatmap.
 - [`../benchmarks/README.md`](../benchmarks/README.md): Benchmark result contract and summarizer for comparing Poolsim predictions to real pool runs.
 - [`deployed-pool-survey.md`](deployed-pool-survey.md): Opt-in anonymized survey payload generator for pool configuration statistics.
 - [`packaging.md`](packaging.md): Homebrew formula and release packaging notes.
 - [`json-schema.md`](json-schema.md): JSON Schema files for documented config, telemetry, budget, scenario, batch, and gate-policy inputs.
-- [`feature-roadmap.md`](feature-roadmap.md): Tracked implementation tasks and acceptance criteria for adoption, observability, deeper simulation, developer experience, and validation features.
 - [`fixtures/README.md`](fixtures/README.md): Checked-in sample inputs used by the docs and docs-validation tests.
 
 ## Scope for Current Version
@@ -29,4 +28,4 @@ This documentation covers the sizing calculator implemented today in:
 - `crates/poolsim-cli`
 - `crates/poolsim-web`
 
-Future runtime-enforcement documentation is intentionally out of scope for now.
+Runtime-enforcement documentation is outside this release; Poolsim remains a sizing, diagnostics, recommendation, and integration toolkit rather than a production connection-pool implementation.

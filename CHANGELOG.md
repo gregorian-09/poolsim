@@ -6,7 +6,33 @@ The format is based on Keep a Changelog, and this project uses Semantic Versioni
 
 ## [Unreleased]
 
-- No unreleased entries yet.
+### Added
+
+- OpenTelemetry OTLP JSON ingestion for recommendation workflows through `poolsim import otlp`, `poolsim gate otlp`, `poolsim guard otlp`, `poolsim doctor otlp`, and `poolsim generate-config otlp`.
+- Shared `poolsim_core::otlp` helpers so Rust users, the CLI, and the web service use one documented OTLP metric extraction implementation.
+- `POST /v1/otlp/recommend` in `poolsim-web` for direct OTLP-to-recommendation requests over HTTP.
+- Kubernetes sidecar integration that exposes pool recommendations as Prometheus metrics from deployment annotations.
+- Kubernetes controller integration that reads deployment annotations, computes recommendations with the stable CLI contract, and patches recommendation annotations only when explicitly enabled.
+- Continuous recommendation worker for repeated telemetry recommendation diffs, local state tracking, and optional webhook delivery.
+- Grafana panel package for displaying `poolsim-web` sensitivity rows as a heatmap with the current pool size overlaid.
+- Benchmark result contract and summarizer for comparing Poolsim predictions against controlled real-pool benchmark runs.
+- Opt-in deployed-pool survey payload generator for anonymous configuration-only statistics.
+- Terraform/OpenTofu external-data adapter docs for managing pool sizing as infrastructure data.
+- Python, TypeScript, and Go binding docs that delegate to the stable CLI JSON contract for non-Rust teams.
+- Homebrew formula template with a real GitHub release tarball checksum.
+- GHCR Docker image and CI integration documentation for web deployment and capacity-gate adoption.
+
+### Changed
+
+- Removed the completed feature roadmap document from `docs/`; completed work now lives in the concrete feature guides and release notes.
+- Expanded docs indexes and crate READMEs so users can discover completed adoption, observability, validation, packaging, and Kubernetes integrations directly.
+- Kept all new workflows additive: no existing Rust APIs, CLI commands, REST routes, WebSocket endpoints, serialized fields, config keys, or exit-code contracts were intentionally removed or narrowed.
+
+### Quality
+
+- Added tests and validation for OTLP ingestion, Kubernetes controller behavior, continuous recommendation events, Grafana package metadata, benchmark summarization, survey consent handling, and Homebrew formula metadata.
+- Verified public API compatibility with `cargo semver-checks check-release --workspace`.
+- Re-verified docs coverage, public API documentation coverage, examples coverage, rustdoc warnings, doctests, Clippy, formatting, and workspace tests after the feature batch.
 
 ## [0.2.1] - 2026-05-18
 

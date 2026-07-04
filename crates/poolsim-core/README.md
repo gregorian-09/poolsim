@@ -12,12 +12,13 @@
 
 Use it when you want to embed Poolsim directly inside Rust code instead of shelling out to `poolsim-cli` or running `poolsim-web`.
 
-## What Is New In `0.2.1`
+## What Is New After `0.2.1`
 
-`0.2.1` is an API-compatible patch over the additive `0.2.0` feature release. It keeps the new operational workflows and restores the documented `wasm32-unknown-unknown` build for `poolsim-core` when compiled with `--no-default-features`.
+The next minor release remains API-compatible and adds operational integration support around the stable sizing model. Existing `simulate`, `evaluate`, `sweep`, telemetry, and type APIs continue to work.
 
 For `poolsim-core`, the important user-facing capabilities are:
 
+- Shared OpenTelemetry OTLP metric extraction through `poolsim_core::otlp`.
 - Telemetry-backed recommendation diffs through `poolsim_core::telemetry::recommend_from_telemetry`.
 - Stronger docs and executable examples for the public sizing model.
 - A fully covered core source tree enforced by CI at `100%` line coverage.
@@ -66,6 +67,7 @@ Use these modules for advanced workflows:
 
 - `poolsim_core::types`: public input and output structs.
 - `poolsim_core::telemetry`: telemetry snapshots and recommendation diffs.
+- `poolsim_core::otlp`: OpenTelemetry OTLP JSON metric extraction helpers.
 - `poolsim_core::distribution`: latency distribution fitting.
 - `poolsim_core::erlang`: Erlang-C queue formulas.
 - `poolsim_core::monte_carlo`: simulation primitives.
