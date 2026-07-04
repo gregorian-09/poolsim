@@ -221,7 +221,7 @@ Acceptance criteria:
 
 ### Web UI
 
-Status: planned.
+Status: complete for formula template; tap publication remains release work.
 
 Scope:
 
@@ -304,6 +304,6 @@ Status: planned.
 
 Acceptance criteria:
 
-- Formula points to published release artifacts.
+- Formula template points to the versioned GitHub release tarball URL.
 - Documentation shows install and upgrade commands.
-- Release process explains when the tap updates.
+- Release notes explain the required tarball SHA replacement before tap publication.
