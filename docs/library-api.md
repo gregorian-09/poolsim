@@ -49,7 +49,7 @@ use poolsim_core::types::{
 Module-oriented import:
 
 ```rust
-use poolsim_core::{distribution, erlang, error, monte_carlo, optimizer, sensitivity, telemetry};
+use poolsim_core::{distribution, erlang, error, monte_carlo, optimizer, otlp, sensitivity, telemetry};
 ```
 
 Telemetry import:
@@ -64,7 +64,106 @@ use poolsim_core::telemetry::{
 };
 ```
 
+OTLP import:
+
+```rust
+use poolsim_core::otlp::{
+    metric_value,
+    workload_from_otlp_json,
+    OtlpMetricNames,
+    DEFAULT_P50_METRIC,
+    DEFAULT_P95_METRIC,
+    DEFAULT_P99_METRIC,
+    DEFAULT_RPS_METRIC,
+};
+```
+
 ## Top-Level API
+
+## OTLP API
+
+Use `poolsim_core::otlp` when production metrics are available as OpenTelemetry OTLP-style JSON and you want to convert them into a `WorkloadConfig` without duplicating metric traversal logic.
+
+Public OTLP helpers:
+
+- `poolsim_core::otlp::DEFAULT_RPS_METRIC`
+- `poolsim_core::otlp::DEFAULT_P50_METRIC`
+- `poolsim_core::otlp::DEFAULT_P95_METRIC`
+- `poolsim_core::otlp::DEFAULT_P99_METRIC`
+- `poolsim_core::otlp::OtlpMetricNames`
+- `poolsim_core::otlp::metric_value`
+- `poolsim_core::otlp::workload_from_otlp_json`
+
+```rust
+use poolsim_core::{
+    otlp::{workload_from_otlp_json, OtlpMetricNames},
+    telemetry::{recommend_from_telemetry, TelemetrySnapshot},
+    types::{PoolConfig, SimulationOptions},
+};
+
+let payload = serde_json::json!({
+    "resourceMetrics": [{
+        "scopeMetrics": [{
+            "metrics": [
+                {"name": "poolsim.rps", "sum": {"dataPoints": [{"asDouble": 180.0}]}},
+                {"name": "poolsim.latency.p50_ms", "gauge": {"dataPoints": [{"asDouble": 8.0}]}},
+                {"name": "poolsim.latency.p95_ms", "gauge": {"dataPoints": [{"asDouble": 30.0}]}},
+                {"name": "poolsim.latency.p99_ms", "gauge": {"dataPoints": [{"asDouble": 70.0}]}}
+            ]
+        }]
+    }]
+});
+
+let workload = workload_from_otlp_json(&payload, &OtlpMetricNames::default())?;
+let snapshot = TelemetrySnapshot {
+    service_name: Some("checkout-api".to_string()),
+    window: Some("5m".to_string()),
+    observed_at: None,
+    current_pool_size: 8,
+    workload,
+    pool: PoolConfig {
+        max_server_connections: 100,
+        connection_overhead_ms: 2.0,
+        idle_timeout_ms: None,
+        min_pool_size: 2,
+        max_pool_size: 20,
+    },
+};
+
+let recommendation = recommend_from_telemetry(&snapshot, &SimulationOptions::default())?;
+assert!(recommendation.diff.recommended_pool_size >= 2);
+# Ok::<(), poolsim_core::error::PoolsimError>(())
+```
+
+Use `metric_value` when you need a single named metric:
+
+```rust
+use poolsim_core::otlp::metric_value;
+
+let payload = serde_json::json!({
+    "metrics": [
+        {"name": "poolsim.rps", "sum": {"dataPoints": [{"asDouble": 180.0}]}}
+    ]
+});
+
+let rps = metric_value(&payload, "poolsim.rps")?;
+assert_eq!(rps, 180.0);
+# Ok::<(), poolsim_core::error::PoolsimError>(())
+```
+
+`OtlpMetricNames` can be customized when your telemetry pipeline uses different names:
+
+```rust
+use poolsim_core::otlp::OtlpMetricNames;
+
+let names = OtlpMetricNames {
+    rps_metric: "http.server.request.rate".to_string(),
+    p50_metric: "http.server.duration.p50_ms".to_string(),
+    p95_metric: "http.server.duration.p95_ms".to_string(),
+    p99_metric: "http.server.duration.p99_ms".to_string(),
+};
+assert_eq!(names.rps_metric, "http.server.request.rate");
+```
 
 ## Telemetry API
 

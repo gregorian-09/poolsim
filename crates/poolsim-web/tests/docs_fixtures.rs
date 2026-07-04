@@ -180,6 +180,17 @@ async fn docs_rest_fixtures_round_trip() {
     assert_eq!(telemetry_status, StatusCode::OK);
     assert_eq!(telemetry_json["service_name"], "checkout-api");
     assert!(telemetry_json["diff"]["recommended_pool_size"].is_number());
+
+    let (otlp_status, otlp_json) = json_request(
+        app.clone(),
+        "POST",
+        "/v1/otlp/recommend",
+        fixture_json("docs/fixtures/web-otlp-recommend.json"),
+    )
+    .await;
+    assert_eq!(otlp_status, StatusCode::OK);
+    assert_eq!(otlp_json["service_name"], "checkout-api");
+    assert!(otlp_json["diff"]["recommended_pool_size"].is_number());
 }
 
 #[tokio::test]

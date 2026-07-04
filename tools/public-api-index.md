@@ -14,6 +14,7 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_core::error`: public error module; detailed usage in `docs/library-api.md`.
 - `poolsim_core::monte_carlo`: public Monte Carlo module; detailed usage in `docs/library-api.md`.
 - `poolsim_core::optimizer`: public optimization module; detailed usage in `docs/library-api.md`.
+- `poolsim_core::otlp`: public OpenTelemetry metric payload module; detailed usage in `docs/library-api.md`.
 - `poolsim_core::sensitivity`: public sensitivity-analysis module; detailed usage in `docs/library-api.md`.
 - `poolsim_core::telemetry`: public telemetry import and recommendation-diff module; detailed usage in `docs/library-api.md`.
 - `poolsim_core::types`: public model/types module; detailed usage in `docs/library-api.md`.
@@ -90,6 +91,16 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 
 - `poolsim_core::optimizer::OptimalResult`: optimizer output describing the chosen pool candidate.
 - `poolsim_core::optimizer::find_optimal`: optimizer entrypoint for selecting the recommended pool size.
+
+### `poolsim_core::otlp`
+
+- `poolsim_core::otlp::DEFAULT_RPS_METRIC`: default OTLP request-rate metric name.
+- `poolsim_core::otlp::DEFAULT_P50_METRIC`: default OTLP p50 latency metric name.
+- `poolsim_core::otlp::DEFAULT_P95_METRIC`: default OTLP p95 latency metric name.
+- `poolsim_core::otlp::DEFAULT_P99_METRIC`: default OTLP p99 latency metric name.
+- `poolsim_core::otlp::OtlpMetricNames`: OTLP metric-name mapping.
+- `poolsim_core::otlp::metric_value`: extracts one named numeric OTLP metric.
+- `poolsim_core::otlp::workload_from_otlp_json`: converts OTLP JSON metrics into a `WorkloadConfig`.
 
 ### `poolsim_core::sensitivity`
 
@@ -174,6 +185,9 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_web::routes::models::WebErrorBody`: stable REST error payload.
 - `poolsim_web::routes::simulate`: module for `POST /v1/simulate`.
 - `poolsim_web::routes::simulate::handler`: handler for `POST /v1/simulate`.
+- `poolsim_web::routes::otlp`: module for `POST /v1/otlp/recommend`.
+- `poolsim_web::routes::otlp::OtlpRecommendationRequest`: request body for OTLP recommendation.
+- `poolsim_web::routes::otlp::handler`: handler for `POST /v1/otlp/recommend`.
 - `poolsim_web::routes::sensitivity`: module for `POST /v1/sensitivity`.
 - `poolsim_web::routes::sensitivity::handler`: handler for `POST /v1/sensitivity`.
 - `poolsim_web::routes::telemetry`: module for `POST /v1/telemetry/recommend`.
@@ -290,4 +304,5 @@ It is intentionally not part of the user-facing `docs/` set. The coverage checke
 - `poolsim_web::routes::models::handler`: handler for `GET /v1/models`.
 - `poolsim_web::routes::sensitivity::SensitivityRequest`: request body local to the sensitivity route.
 - `poolsim_web::routes::simulate::SimulationRequest`: request body local to the simulation route.
+- `poolsim_web::routes::otlp::OtlpRecommendationRequest`: request body local to the OTLP recommendation route.
 - `poolsim_web::routes::telemetry::TelemetryRecommendationRequest`: request body local to the telemetry recommendation route.

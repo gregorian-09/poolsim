@@ -9,6 +9,7 @@
 //! - `/v1/sensitivity`
 //! - `/v1/batch`
 //! - `/v1/telemetry/recommend`
+//! - `/v1/otlp/recommend`
 //! - `/v1/live`
 //!
 //! Request and response types live in the child modules, including:
@@ -30,6 +31,8 @@ pub mod health;
 pub mod live;
 /// Supported-models metadata endpoint.
 pub mod models;
+/// OTLP recommendation endpoint.
+pub mod otlp;
 /// Sensitivity analysis endpoint.
 pub mod sensitivity;
 /// Single simulation endpoint.

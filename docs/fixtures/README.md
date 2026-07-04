@@ -20,4 +20,5 @@ This directory contains checked-in sample inputs used by the documentation and v
 - `web-simulate.json`: request body for `POST /v1/simulate`
 - `web-evaluate.json`: request body for `POST /v1/evaluate`
 - `web-sensitivity.json`: request body for `POST /v1/sensitivity`
+- `web-otlp-recommend.json`: request body for `POST /v1/otlp/recommend`
 - `web-ws-request.json`: initial WebSocket request body for `GET /v1/live`

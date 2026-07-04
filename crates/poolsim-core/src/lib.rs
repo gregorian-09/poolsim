@@ -15,6 +15,8 @@ pub mod error;
 pub mod monte_carlo;
 /// Pool-size optimization routines.
 pub mod optimizer;
+/// OpenTelemetry metric payload helpers.
+pub mod otlp;
 /// Sensitivity analysis routines.
 pub mod sensitivity;
 /// Telemetry import and recommendation-diff routines.

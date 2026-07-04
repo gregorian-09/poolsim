@@ -70,6 +70,28 @@ fn sample_telemetry_request(iterations: u32) -> Value {
     })
 }
 
+fn sample_otlp_request(iterations: u32) -> Value {
+    json!({
+        "otlp": {
+            "resourceMetrics": [{
+                "scopeMetrics": [{
+                    "metrics": [
+                        {"name": "poolsim.rps", "sum": {"dataPoints": [{"asDouble": 180.0}]}},
+                        {"name": "poolsim.latency.p50_ms", "gauge": {"dataPoints": [{"asDouble": 8.0}]}},
+                        {"name": "poolsim.latency.p95_ms", "gauge": {"dataPoints": [{"asDouble": 30.0}]}},
+                        {"name": "poolsim.latency.p99_ms", "gauge": {"dataPoints": [{"asDouble": 70.0}]}}
+                    ]
+                }]
+            }]
+        },
+        "service_name": "checkout-api",
+        "window": "5m",
+        "current_pool_size": 8,
+        "pool": sample_request(iterations)["pool"].clone(),
+        "options": sample_request(iterations)["options"].clone(),
+    })
+}
+
 async fn json_request(app: Router, method: &str, uri: &str, payload: Value) -> (StatusCode, Value) {
     let req = Request::builder()
         .uri(uri)
@@ -212,6 +234,17 @@ async fn rest_routes_work_and_return_structured_errors() {
     assert_eq!(telemetry_json["service_name"], "checkout-api");
     assert!(telemetry_json["diff"]["recommended_pool_size"].is_number());
 
+    let (otlp_status, otlp_json) = json_request(
+        app.clone(),
+        "POST",
+        "/v1/otlp/recommend",
+        sample_otlp_request(1200),
+    )
+    .await;
+    assert_eq!(otlp_status, StatusCode::OK);
+    assert_eq!(otlp_json["service_name"], "checkout-api");
+    assert!(otlp_json["diff"]["recommended_pool_size"].is_number());
+
     let invalid = json!({
         "workload": {
             "requests_per_second": 300.0,
@@ -228,6 +261,13 @@ async fn rest_routes_work_and_return_structured_errors() {
     assert!(invalid_json["error"].is_string());
     assert!(invalid_json["code"].is_string());
     assert!(invalid_json.get("details").is_some());
+
+    let mut bad_otlp = sample_otlp_request(1_200);
+    bad_otlp["metric_names"] = json!({ "rps_metric": "missing.rps" });
+    let (bad_otlp_status, bad_otlp_json) =
+        json_request(app, "POST", "/v1/otlp/recommend", bad_otlp).await;
+    assert_eq!(bad_otlp_status, StatusCode::BAD_REQUEST);
+    assert_eq!(bad_otlp_json["code"], "OTLP_METRIC_NOT_FOUND");
 }
 
 #[tokio::test]
@@ -274,6 +314,11 @@ async fn rest_routes_return_408_when_simulation_deadline_is_zero() {
     .await;
     assert_eq!(telemetry_status, StatusCode::REQUEST_TIMEOUT);
     assert_eq!(telemetry_json["code"], "SIMULATION_TIMEOUT");
+
+    let (otlp_status, otlp_json) =
+        json_request(app, "POST", "/v1/otlp/recommend", sample_otlp_request(1200)).await;
+    assert_eq!(otlp_status, StatusCode::REQUEST_TIMEOUT);
+    assert_eq!(otlp_json["code"], "SIMULATION_TIMEOUT");
 }
 
 #[tokio::test]

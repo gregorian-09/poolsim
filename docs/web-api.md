@@ -20,6 +20,7 @@ Checked-in request bodies for the documented HTTP and WebSocket examples live un
 - `docs/fixtures/web-sensitivity.json`
 - `docs/fixtures/batch.json`
 - `docs/fixtures/telemetry.json`
+- `docs/fixtures/web-otlp-recommend.json`
 - `docs/fixtures/web-ws-request.json`
 
 ## Base Routes
@@ -35,6 +36,7 @@ Available routes:
 - `POST /v1/sensitivity`
 - `POST /v1/batch`
 - `POST /v1/telemetry/recommend`
+- `POST /v1/otlp/recommend`
 - `GET /v1/live` (WebSocket upgrade)
 
 All REST request bodies are JSON.
@@ -283,6 +285,64 @@ Response shape:
   }
 }
 ```
+
+### `POST /v1/otlp/recommend`
+
+Purpose:
+
+- accept an OTLP JSON metrics payload directly
+- map OTLP request-rate and latency percentile metrics into a Poolsim workload
+- evaluate the current production pool size
+- compute a Poolsim recommendation from the same sizing model used by the CLI and library
+
+Request model:
+
+- `OtlpRecommendationRequest.otlp`
+- `OtlpRecommendationRequest.metric_names`
+- `OtlpRecommendationRequest.service_name`
+- `OtlpRecommendationRequest.window`
+- `OtlpRecommendationRequest.observed_at`
+- `OtlpRecommendationRequest.current_pool_size`
+- `OtlpRecommendationRequest.pool`
+- `OtlpRecommendationRequest.options`
+
+Example:
+
+```bash
+curl -s \
+  -X POST http://127.0.0.1:8080/v1/otlp/recommend \
+  -H 'content-type: application/json' \
+  --data @docs/fixtures/web-otlp-recommend.json
+```
+
+Default metric names:
+
+- `poolsim.rps`
+- `poolsim.latency.p50_ms`
+- `poolsim.latency.p95_ms`
+- `poolsim.latency.p99_ms`
+
+Override `metric_names` when your OpenTelemetry export uses different names:
+
+```json
+{
+  "metric_names": {
+    "rps_metric": "http.server.request.rate",
+    "p50_metric": "http.server.duration.p50_ms",
+    "p95_metric": "http.server.duration.p95_ms",
+    "p99_metric": "http.server.duration.p99_ms"
+  }
+}
+```
+
+Response model:
+
+- `TelemetryRecommendation.service_name`
+- `TelemetryRecommendation.window`
+- `TelemetryRecommendation.observed_at`
+- `TelemetryRecommendation.diff`
+
+Missing OTLP metrics return HTTP `400` with code `OTLP_METRIC_NOT_FOUND`.
 
 ## Shared Payload Types
 

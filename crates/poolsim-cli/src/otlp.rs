@@ -1,9 +1,10 @@
 use std::fs;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use poolsim_core::{
+    otlp::{workload_from_otlp_json, OtlpMetricNames},
     telemetry::TelemetrySnapshot,
-    types::{PoolConfig, SimulationOptions, WorkloadConfig},
+    types::{PoolConfig, SimulationOptions},
 };
 use serde_json::Value;
 
@@ -15,14 +16,15 @@ pub(crate) fn resolve_otlp_input(args: &OtlpImportArgs) -> Result<TelemetryInput
     let root: Value = serde_json::from_str(&raw)
         .with_context(|| format!("invalid OTLP JSON file {}", args.config.display()))?;
 
-    let workload = WorkloadConfig {
-        requests_per_second: metric_value(&root, &args.rps_metric)?,
-        latency_p50_ms: metric_value(&root, &args.p50_metric)?,
-        latency_p95_ms: metric_value(&root, &args.p95_metric)?,
-        latency_p99_ms: metric_value(&root, &args.p99_metric)?,
-        raw_samples_ms: None,
-        step_load_profile: None,
-    };
+    let workload = workload_from_otlp_json(
+        &root,
+        &OtlpMetricNames {
+            rps_metric: args.rps_metric.clone(),
+            p50_metric: args.p50_metric.clone(),
+            p95_metric: args.p95_metric.clone(),
+            p99_metric: args.p99_metric.clone(),
+        },
+    )?;
 
     let defaults = SimulationOptions::default();
 
@@ -56,47 +58,6 @@ pub(crate) fn resolve_otlp_input(args: &OtlpImportArgs) -> Result<TelemetryInput
             max_acceptable_rho: args.max_acceptable_rho.unwrap_or(0.85),
         },
     })
-}
-
-fn metric_value(root: &Value, name: &str) -> Result<f64> {
-    find_metric(root, name)
-        .and_then(first_numeric)
-        .ok_or_else(|| anyhow!("OTLP metric {name:?} was not found or had no numeric datapoint"))
-}
-
-fn find_metric<'a>(value: &'a Value, name: &str) -> Option<&'a Value> {
-    match value {
-        Value::Object(map) => {
-            if map.get("name").and_then(Value::as_str) == Some(name) {
-                return Some(value);
-            }
-            map.values().find_map(|child| find_metric(child, name))
-        }
-        Value::Array(items) => items.iter().find_map(|child| find_metric(child, name)),
-        _ => None,
-    }
-}
-
-fn first_numeric(value: &Value) -> Option<f64> {
-    match value {
-        Value::Number(number) => number.as_f64(),
-        Value::String(text) => text.parse().ok(),
-        Value::Object(map) => {
-            for key in ["asDouble", "asInt", "doubleValue", "intValue", "value"] {
-                if let Some(number) = map.get(key).and_then(first_numeric) {
-                    return Some(number);
-                }
-            }
-            for key in ["sum", "gauge", "histogram", "dataPoints"] {
-                if let Some(number) = map.get(key).and_then(first_numeric) {
-                    return Some(number);
-                }
-            }
-            map.values().find_map(first_numeric)
-        }
-        Value::Array(items) => items.iter().find_map(first_numeric),
-        _ => None,
-    }
 }
 
 #[cfg(test)]
