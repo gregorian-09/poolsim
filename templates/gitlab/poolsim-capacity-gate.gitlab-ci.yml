@@ -3,7 +3,7 @@
 
 poolsim_capacity_gate:
   stage: test
-  image: rust:1.75
+  image: rust:1.84
   variables:
     POOLSIM_VERSION: "0.2.1"
     POOLSIM_POLICY: "docs/fixtures/gate-policy.toml"
