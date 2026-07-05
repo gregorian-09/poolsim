@@ -1,10 +1,35 @@
 # poolsim TypeScript Bindings
 
-`poolsim` is the TypeScript/Node.js binding package for the Poolsim connection-pool sizing toolkit.
+`poolsim` is the TypeScript and Node.js binding package for the Poolsim connection-pool sizing toolkit.
 
-The package intentionally delegates all sizing work to the Rust `poolsim` CLI JSON contract. It does not reimplement queueing formulas in TypeScript. That keeps JavaScript and TypeScript services aligned with the same model used by the Rust library, CLI, REST API, CI gates, docs fixtures, and release tests.
+The package intentionally delegates all sizing work to the Rust `poolsim` CLI JSON contract. It does not reimplement queueing formulas in TypeScript. That keeps JavaScript and TypeScript services aligned with the same model used by the Rust library, CLI, REST API, WebSocket API, CI gates, docs fixtures, and release tests.
 
-Use this package when a Node.js service, script, dashboard job, or CI tool wants to call Poolsim from TypeScript without manually spawning the CLI and parsing JSON.
+Use this package when a Node.js service, script, dashboard job, or CI tool wants to call Poolsim without manually spawning the CLI and parsing JSON.
+
+## What You Can Do
+
+- Run a full pool-size recommendation from a simulation config.
+- Evaluate an existing production pool size.
+- Generate sensitivity rows across candidate pool sizes.
+- Run batch sizing jobs.
+- Compare normal, peak, and incident traffic scenarios.
+- Allocate a shared database `max_connections` budget across services.
+- Import telemetry snapshots and compute recommendation diffs.
+- Diagnose whether a live pool is too small, too large, or close to saturation.
+- Generate framework-specific pool configuration snippets.
+- Run a CI capacity gate and consume the gate report as JavaScript data.
+
+## Architecture
+
+The TypeScript package calls this command shape internally:
+
+```bash
+poolsim --format json <command> ...
+```
+
+The returned value is decoded from the CLI JSON output. The wrapper deliberately keeps the payloads as JSON-like objects so new fields added by the CLI remain available without requiring a wrapper release.
+
+This is a compatibility choice: existing methods stay stable, while the Rust CLI remains the single source of truth for simulation behavior.
 
 ## Install
 
@@ -33,7 +58,7 @@ const client = new PoolsimClient('/opt/tools/poolsim');
 
 - Node.js with ECMAScript module support.
 - The `poolsim` executable from `poolsim-cli`.
-- Poolsim config files or telemetry files that match the documented CLI schemas.
+- Poolsim config, telemetry, scenario, or policy files that match the documented CLI schemas.
 
 This package has no runtime npm dependencies. `typescript` and `@types/node` are development dependencies used to build the published `dist` files.
 
@@ -47,14 +72,100 @@ import { PoolsimClient, PoolsimError } from 'poolsim';
 
 CommonJS `require('poolsim')` is not supported because the package publishes ESM output.
 
-## Basic Simulation
-
-Run a full recommendation workflow from a checked-in simulation config:
+## Quick Start
 
 ```ts
 import { PoolsimClient } from 'poolsim';
 
-const client = new PoolsimClient('poolsim');
+const client = new PoolsimClient();
+const report = client.simulate('docs/fixtures/cli-config.json');
+
+console.log('recommended pool size:', report.optimal_pool_size);
+console.log('p99 queue wait ms:', report.p99_queue_wait_ms);
+console.log('saturation:', report.saturation);
+```
+
+Equivalent CLI command:
+
+```bash
+poolsim --format json simulate --config docs/fixtures/cli-config.json
+```
+
+## Minimal Simulation Config
+
+A typical simulation config contains workload assumptions, pool limits, and sizing options:
+
+```json
+{
+  "workload": {
+    "requests_per_second": 220.0,
+    "latency_p50_ms": 8.0,
+    "latency_p95_ms": 32.0,
+    "latency_p99_ms": 85.0
+  },
+  "pool": {
+    "max_server_connections": 120,
+    "connection_overhead_ms": 2.0,
+    "idle_timeout_ms": 120000,
+    "min_pool_size": 3,
+    "max_pool_size": 24
+  },
+  "options": {
+    "iterations": 12000,
+    "seed": 7,
+    "distribution": "LogNormal",
+    "queue_model": "MMC",
+    "target_wait_p99_ms": 45.0,
+    "max_acceptable_rho": 0.85
+  }
+}
+```
+
+Keep these files in source control when you want sizing assumptions to be reviewable.
+
+## Type Model
+
+The package exports a recursive JSON value type:
+
+```ts
+export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+```
+
+Most methods return either `Record<string, JsonValue>` or `JsonValue[]`. This keeps the wrapper forward-compatible when the CLI adds fields. You can narrow the shape in your application if you want stricter local types:
+
+```ts
+type SimulationReport = {
+  optimal_pool_size?: number;
+  p99_queue_wait_ms?: number;
+  saturation?: string;
+};
+
+const report = client.simulate('docs/fixtures/cli-config.json') as SimulationReport;
+```
+
+## API Reference
+
+### `new PoolsimClient(executable = 'poolsim')`
+
+Creates a client that invokes the given executable.
+
+Use the default when `poolsim` is on `PATH`:
+
+```ts
+const client = new PoolsimClient();
+```
+
+Use an explicit path when automation installs the binary in a fixed tool directory:
+
+```ts
+const client = new PoolsimClient('/usr/local/bin/poolsim');
+```
+
+### `simulate(config)`
+
+Runs a full sizing simulation from a config file and returns a recommendation report.
+
+```ts
 const report = client.simulate('docs/fixtures/cli-config.json');
 
 console.log(report.optimal_pool_size);
@@ -63,17 +174,17 @@ console.log(report.p99_queue_wait_ms);
 console.log(report.saturation);
 ```
 
-This calls:
+Equivalent CLI command:
 
 ```bash
 poolsim --format json simulate --config docs/fixtures/cli-config.json
 ```
 
-The returned value is the parsed JSON object emitted by the CLI.
+Use `simulate` when you are choosing the pool size to deploy.
 
-## Evaluate A Fixed Pool Size
+### `evaluate(config, poolSize)`
 
-Use `evaluate` when production already has a configured pool and you want to score that exact size:
+Scores a fixed pool size against a workload config.
 
 ```ts
 const evaluation = client.evaluate('docs/fixtures/cli-config.json', 8);
@@ -84,51 +195,61 @@ console.log(evaluation.p99_queue_wait_ms);
 console.log(evaluation.saturation);
 ```
 
-This calls:
+Equivalent CLI command:
 
 ```bash
 poolsim --format json evaluate --config docs/fixtures/cli-config.json --pool-size 8
 ```
 
-## Generate Sensitivity Rows
+Use `evaluate` when production already has a configured pool and you need to know whether that exact setting is safe.
 
-Use `sweep` to inspect nearby candidate pool sizes:
+### `sweep(config)`
+
+Returns sensitivity rows for candidate pool sizes.
 
 ```ts
 const rows = client.sweep('docs/fixtures/cli-config.json');
 
 for (const row of rows) {
-  console.log(row.pool_size, row.utilisation_rho, row.risk);
+  if (typeof row === 'object' && row !== null && !Array.isArray(row)) {
+    console.log(row.pool_size, row.utilisation_rho, row.risk);
+  }
 }
 ```
 
-This calls:
+Equivalent CLI command:
 
 ```bash
 poolsim --format json sweep --config docs/fixtures/cli-config.json
 ```
 
-## Run A Batch File
+Use `sweep` to explain tradeoffs around nearby pool sizes in code review or capacity planning.
 
-Use `batch` when a file contains multiple simulation requests:
+### `batch(config)`
+
+Runs multiple simulation requests from one batch config.
 
 ```ts
 const reports = client.batch('docs/fixtures/batch.json');
 
 for (const report of reports) {
-  console.log(report.optimal_pool_size, report.saturation);
+  if (typeof report === 'object' && report !== null && !Array.isArray(report)) {
+    console.log(report.optimal_pool_size, report.saturation);
+  }
 }
 ```
 
-This calls:
+Equivalent CLI command:
 
 ```bash
 poolsim --format json batch --config docs/fixtures/batch.json
 ```
 
-## Compare Scenarios
+Use `batch` when a platform team wants to size several services in one job.
 
-Use `compare` for normal, peak, and incident traffic assumptions:
+### `compare(config)`
+
+Compares named traffic scenarios such as normal, peak, and incident load.
 
 ```ts
 const comparison = client.compare('docs/fixtures/scenarios.json');
@@ -138,15 +259,17 @@ console.log(comparison.worst_saturation);
 console.log(comparison.rows);
 ```
 
-This calls:
+Equivalent CLI command:
 
 ```bash
 poolsim --format json compare --config docs/fixtures/scenarios.json
 ```
 
-## Plan A Database Connection Budget
+Use `compare` when one pool setting must survive several traffic assumptions.
 
-Use `budget` to allocate a global database connection budget across services and replicas:
+### `budget(config)`
+
+Plans allocation of a database connection budget across services and replicas.
 
 ```ts
 const plan = client.budget('docs/fixtures/budget.json');
@@ -157,68 +280,76 @@ console.log(plan.allocated_total_connections);
 console.log(plan.services);
 ```
 
-This calls:
+Equivalent CLI command:
 
 ```bash
 poolsim --format json budget --config docs/fixtures/budget.json
 ```
 
-## Import Telemetry And Get A Recommendation Diff
+Use `budget` when the database has a shared `max_connections` limit and several services compete for it.
 
-Use `telemetryRecommend` when you have a Poolsim telemetry snapshot and a current production pool size:
+### `telemetryRecommend(config)`
+
+Imports a telemetry snapshot and returns a recommendation diff from the current pool setting.
 
 ```ts
 const recommendation = client.telemetryRecommend('docs/fixtures/telemetry.json');
+const diff = recommendation.diff as Record<string, unknown> | undefined;
 
 console.log(recommendation.service_name);
-console.log(recommendation.diff.current_pool_size);
-console.log(recommendation.diff.recommended_pool_size);
-console.log(recommendation.diff.change);
+console.log(diff?.current_pool_size);
+console.log(diff?.recommended_pool_size);
+console.log(diff?.change);
 ```
 
-This calls:
+Equivalent CLI command:
 
 ```bash
 poolsim --format json import telemetry --config docs/fixtures/telemetry.json
 ```
 
-## Diagnose A Pool With Doctor
+Use `telemetryRecommend` when you have observed production traffic and want to compare the configured pool with the recommended pool.
 
-Use `doctor` to classify the current pool as healthy, too small, too large, or close to saturation:
+### `doctor(config)`
+
+Diagnoses a telemetry snapshot and classifies risk.
 
 ```ts
 const diagnosis = client.doctor('docs/fixtures/telemetry.json');
 
 console.log(diagnosis.status);
-for (const finding of diagnosis.findings ?? []) {
-  console.log(finding.severity, finding.message, finding.action);
+for (const finding of (diagnosis.findings as unknown[] | undefined) ?? []) {
+  console.log(finding);
 }
 ```
 
-This calls:
+Equivalent CLI command:
 
 ```bash
 poolsim --format json doctor telemetry --config docs/fixtures/telemetry.json
 ```
 
-## Generate Framework Configuration
+Use `doctor` when an engineer asks: is this pool too small, too large, or close to saturation?
 
-Use `generateConfig` to create runtime pool configuration snippets from the recommendation:
+### `generateConfig(framework, config)`
+
+Generates a framework-specific runtime configuration snippet from a simulation recommendation.
 
 ```ts
 const sqlx = client.generateConfig('sqlx', 'docs/fixtures/cli-config.json');
+
 console.log(sqlx.framework);
 console.log(sqlx.recommended_pool_size);
 console.log(sqlx.snippet);
 ```
 
-This calls:
+Equivalent CLI command:
 
 ```bash
 poolsim --format json generate-config --framework sqlx simulate --config docs/fixtures/cli-config.json
 ```
 
-Supported framework names are the same as the CLI, including:
+Supported framework names follow the CLI:
 
 - `hikaricp`
 - `spring-boot`
@@ -228,9 +359,11 @@ Supported framework names are the same as the CLI, including:
 - `sqlx`
 - `deadpool`
 
-## Run A CI Gate
+Use `generateConfig` after `simulate` when you want a copy-pasteable starting point for a real runtime pool.
 
-Use `gate` to enforce a safety policy in Node-based automation:
+### `gate(policy, telemetryConfig)`
+
+Runs a capacity gate against a telemetry snapshot and policy file.
 
 ```ts
 const gate = client.gate('docs/fixtures/gate-policy.toml', 'docs/fixtures/telemetry.json');
@@ -240,13 +373,37 @@ console.log(gate.deployment_safe);
 console.log(gate.checks);
 ```
 
-This calls:
+Equivalent CLI command:
 
 ```bash
 poolsim --format json gate --policy docs/fixtures/gate-policy.toml telemetry --config docs/fixtures/telemetry.json
 ```
 
-`gate` allows CLI exit codes `0` and `2` because a failed capacity gate is a valid machine-readable result, not a wrapper error. Other exit codes still throw `PoolsimError`.
+`gate` treats CLI exit codes `0` and `2` as valid machine-readable outcomes. Exit code `2` means the capacity gate failed, not that the TypeScript wrapper failed. Other non-zero exit codes throw `PoolsimError`.
+
+## CI Usage
+
+A minimal GitHub Actions step can install both packages and fail the job when your policy says the deployment is unsafe:
+
+```yaml
+- name: Install poolsim
+  run: |
+    cargo install poolsim-cli
+    npm ci
+
+- name: Run capacity gate
+  run: |
+    node --input-type=module <<'JS'
+    import { PoolsimClient } from 'poolsim';
+
+    const client = new PoolsimClient();
+    const report = client.gate('capacity-policy.toml', 'telemetry.json');
+    console.log(report);
+    if (report.deployment_safe !== true) {
+      process.exit(1);
+    }
+    JS
+```
 
 ## Error Handling
 
@@ -273,86 +430,58 @@ try {
 }
 ```
 
-## API Reference
+The error message includes CLI stderr when the CLI provides it.
 
-### `new PoolsimClient(executable = 'poolsim')`
+## Working With Returned Data
 
-Creates a client that invokes the given executable. Use the default when `poolsim` is on `PATH`; pass an absolute path otherwise.
+Return types intentionally use generic JSON values:
 
-### `simulate(config)`
+- JSON objects become JavaScript objects.
+- JSON arrays become JavaScript arrays.
+- JSON strings, numbers, booleans, and `null` become normal JavaScript values.
 
-Runs `poolsim simulate --config <config>` and returns the recommendation report object.
-
-### `evaluate(config, poolSize)`
-
-Runs `poolsim evaluate --config <config> --pool-size <poolSize>` and returns a fixed-size evaluation object.
-
-### `sweep(config)`
-
-Runs `poolsim sweep --config <config>` and returns sensitivity rows.
-
-### `batch(config)`
-
-Runs `poolsim batch --config <config>` and returns an array of simulation reports.
-
-### `compare(config)`
-
-Runs `poolsim compare --config <config>` and returns a scenario comparison report.
-
-### `budget(config)`
-
-Runs `poolsim budget --config <config>` and returns a database budget plan.
-
-### `telemetryRecommend(config)`
-
-Runs `poolsim import telemetry --config <config>` and returns a recommendation diff.
-
-### `doctor(config)`
-
-Runs `poolsim doctor telemetry --config <config>` and returns a pool diagnosis report.
-
-### `generateConfig(framework, config)`
-
-Runs `poolsim generate-config --framework <framework> simulate --config <config>` and returns a framework config snippet report.
-
-### `gate(policy, telemetryConfig)`
-
-Runs `poolsim gate --policy <policy> telemetry --config <telemetryConfig>` and returns a gate report.
-
-## Output Types
-
-The wrapper exposes `JsonValue` as a broad JSON type:
-
-```ts
-export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
-```
-
-Most methods return `Record<string, JsonValue>` because the exact JSON shape is owned by the stable CLI contract and documented in the main Poolsim docs. `sweep` and `batch` return arrays.
-
-## Compatibility
-
-This package is a binding layer over the CLI. It does not change Rust APIs, REST routes, WebSocket events, config schemas, or serialized CLI output. Existing CLI behavior remains the source of truth.
+This keeps the binding forward-compatible when the CLI adds new output fields. For production code, define local TypeScript types around the fields your application actually consumes.
 
 ## Troubleshooting
 
 ### `spawnSync poolsim ENOENT`
 
-The executable is not on `PATH`. Install it with `cargo install poolsim-cli`, or pass an absolute executable path:
+The Rust CLI is not installed or is not on `PATH`.
+
+```bash
+cargo install poolsim-cli
+poolsim --version
+```
+
+Or pass an explicit executable path:
 
 ```ts
-const client = new PoolsimClient('/home/me/.cargo/bin/poolsim');
+const client = new PoolsimClient('/absolute/path/to/poolsim');
 ```
 
 ### `poolsim did not emit valid JSON`
 
-The wrapper always passes `--format json`. This error usually means a different executable named `poolsim` is being invoked, or the binary is too old for the command being called.
+The wrapper always passes `--format json`. This error usually means the executable path points to a different program, an older incompatible binary, or a command failed before producing JSON.
 
-### Gate failures throw in my script
+Check the CLI directly:
 
-`gate` accepts exit codes `0` and `2`. If you need warning exit code `3` behavior, call the CLI directly for now or add a wrapper method in your own code with the exit-code policy you need.
+```bash
+poolsim --format json simulate --config docs/fixtures/cli-config.json
+```
 
-## Issues
+### Gate returns a failed policy report
 
-Report bugs or documentation gaps at:
+That is expected behavior when capacity assumptions are unsafe. Inspect `status`, `deployment_safe`, and `checks` in the returned object. The wrapper will still return JSON for CLI exit code `2`.
 
-<https://github.com/gregorian-09/poolsim/issues>
+## Compatibility Notes
+
+- The TypeScript wrapper does not change CLI semantics.
+- The Rust CLI remains the source of truth for formulas, validation, and output fields.
+- Existing method names are intended to remain stable.
+- New CLI output fields can appear in returned objects without a TypeScript package change.
+
+## Support
+
+- Documentation: <https://github.com/gregorian-09/poolsim/tree/main/docs>
+- Issues: <https://github.com/gregorian-09/poolsim/issues>
+- Repository: <https://github.com/gregorian-09/poolsim>
