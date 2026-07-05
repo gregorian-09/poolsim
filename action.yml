@@ -14,7 +14,7 @@ inputs:
     required: false
     default: docs/fixtures/gate-policy.toml
   source:
-    description: Telemetry source kind: telemetry or prometheus.
+    description: "Telemetry source kind: telemetry or prometheus."
     required: false
     default: telemetry
   telemetry-config:
