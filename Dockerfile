@@ -1,4 +1,6 @@
-FROM rust:1.75-alpine AS builder
+ARG RUST_VERSION=1.84
+
+FROM rust:${RUST_VERSION}-alpine AS builder
 RUN apk add --no-cache musl-dev pkgconfig
 WORKDIR /app
 

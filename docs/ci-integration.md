@@ -71,6 +71,14 @@ The repository includes `.github/workflows/docker.yml` for publishing `poolsim-w
 
 The workflow uses maintained Docker actions and publishes `ghcr.io/<owner>/poolsim-web` from the checked-in `Dockerfile`.
 
+The Dockerfile builds with `rust:1.84-alpine` by default and exposes a `RUST_VERSION` build argument for future toolchain updates:
+
+```bash
+docker build --build-arg RUST_VERSION=1.84 -t poolsim-web:local .
+```
+
+Use the GitHub Actions Docker workflow for full image verification when local disk space is constrained.
+
 ## Compatibility
 
 These assets are wrappers around existing CLI commands. They do not change `poolsim gate`, `poolsim guard`, REST routes, config fields, or output schemas.
