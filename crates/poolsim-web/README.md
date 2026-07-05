@@ -12,19 +12,63 @@
 
 Use it when you want to expose the sizing calculator to dashboards, internal developer platforms, remote CI jobs, or non-Rust services over HTTP.
 
-## What Is New After `0.2.1`
+## What Is New In `0.3.0`
 
-The next minor release remains backward-compatible and expands `poolsim-web` for observability and dashboard integrations. Existing REST routes, WebSocket behavior, JSON fields, and embedding APIs continue to work.
+`0.3.0` is an additive web-service release for teams that want Poolsim available over HTTP, WebSocket, dashboards, and internal developer platforms. Existing REST routes, WebSocket behavior, JSON response fields, and embedding APIs remain available.
 
-The service release documents and validates:
+### Direct OTLP Recommendation Endpoint
 
-- REST endpoint documentation for health, models, simulate, evaluate, sensitivity, batch, telemetry recommendation, and OTLP recommendation workflows.
-- WebSocket live simulation documentation and executable fixtures.
-- Public embedding surface for `build_app`, `AppState`, and `RateLimitState`.
-- Direct `POST /v1/otlp/recommend` support for OpenTelemetry metric-export JSON.
-- CI enforcement for docs coverage, REST/WebSocket fixture execution, and `100%` workspace line coverage.
+The web service now documents and validates `POST /v1/otlp/recommend`, which accepts OpenTelemetry OTLP metric-export JSON and returns the same `TelemetryRecommendation` diff model used by the CLI and core library. This is useful for teams already exporting request-rate and latency metrics through OpenTelemetry collectors.
 
-The database budget planner is a CLI workflow in `poolsim-cli`. Use `poolsim-web` for simulation, evaluation, sensitivity, batch, telemetry recommendations, OTLP recommendations, and live progress streaming.
+The endpoint supports explicit metric-name mapping so callers can adapt their own metric names into Poolsim's expected workload fields:
+
+- request rate
+- p50 latency in milliseconds
+- p95 latency in milliseconds
+- p99 latency in milliseconds
+
+Missing required OTLP metrics are returned as structured HTTP errors instead of ambiguous server failures.
+
+### Dashboard And Internal Platform Support
+
+The release includes documentation and integration assets that make `poolsim-web` easier to use from dashboards:
+
+- Grafana panel package for rendering `POST /v1/sensitivity` rows as a heatmap.
+- Built-in browser UI served from `GET /` for interactive sizing experiments.
+- WebSocket live progress documentation for interactive clients and batch simulations.
+- Clear request/response fixtures for simulate, evaluate, sensitivity, batch, telemetry recommendation, OTLP recommendation, and WebSocket flows.
+
+These surfaces are intended for internal tools, not as a public unauthenticated internet service.
+
+### Stable Embedding Surface
+
+The documented embedding API remains centered on:
+
+- `build_app`
+- `AppState`
+- `RateLimitState`
+
+Use these when you want to mount the Poolsim router inside a larger Axum service while controlling timeout, version, rate-limit, and CORS behavior yourself.
+
+### Operations And Packaging
+
+`0.3.0` updates the Docker/GHCR documentation and Dockerfile toolchain so `poolsim-web` can be built as a container image in CI. The Docker workflow is intentionally not triggered on every push; it is designed for manual runs and version tags.
+
+Recommended operating posture:
+
+- run behind an internal auth gateway when exposed beyond localhost,
+- set explicit CORS origins,
+- configure simulation timeout and rate-limit values for your UI/CI budget,
+- keep request payloads free of secrets,
+- pin container and crate versions for repeatable deployments.
+
+### Compatibility And Quality Notes
+
+This release is intended to be backward-compatible with `0.2.x` web consumers. It does not intentionally remove REST routes, WebSocket frame shapes, public embedding types, or serialized response fields. CI validates REST/WebSocket docs fixtures, route behavior, public API documentation, rustdoc warnings, and workspace coverage.
+
+### When To Upgrade
+
+Upgrade to `0.3.0` if you want the OTLP recommendation endpoint, updated web API documentation, dashboard integration guidance, Docker/GHCR release metadata, and current package versions. Existing `/v1/simulate`, `/v1/evaluate`, `/v1/sensitivity`, `/v1/batch`, `/v1/telemetry/recommend`, and `/v1/live` clients should continue to work.
 
 ## Install Or Run
 
@@ -81,7 +125,7 @@ Example response:
 ```json
 {
   "status": "ok",
-  "version": "0.2.1"
+  "version": "0.3.0"
 }
 ```
 

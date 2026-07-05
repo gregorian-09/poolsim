@@ -12,25 +12,72 @@
 
 It is built for backend engineers, platform teams, SREs, and CI pipelines that need repeatable, machine-readable pool-sizing recommendations without embedding Rust code directly.
 
-## What Is New After `0.2.1`
+## What Is New In `0.3.0`
 
-The next minor release remains backward-compatible and expands the CLI from a sizing calculator into an adoption, observability, diagnostics, and CI toolkit. Existing commands, flags, output formats, and exit-code contracts continue to work.
+`0.3.0` is an additive CLI release that turns Poolsim from a local sizing calculator into a broader backend capacity-planning toolkit. Existing `simulate`, `evaluate`, `sweep`, `batch`, output formats, config-file behavior, and exit-code contracts remain available. The release adds and documents workflows for telemetry ingestion, CI safety gates, framework config generation, platform integrations, and release packaging.
 
-New and expanded workflows include:
+### Telemetry And Observability Workflows
 
-- `budget`: allocate a global database connection budget across services and replicas.
-- `compare`: compare normal, peak, and incident scenarios side by side.
-- `import telemetry`: load production telemetry from JSON or TOML and compute a recommendation diff.
-- `import prometheus`: use captured or live Prometheus-compatible query responses.
-- `import otlp`: convert OpenTelemetry OTLP metric-export JSON into a recommendation diff.
-- `gate`: fail CI when new assumptions exceed safety policy.
-- `guard`: deployment-safe wrapper around gate output for CI/CD systems.
-- `doctor`: diagnose whether a pool is too small, too large, close to saturation, or healthy.
-- `init`: generate a starting config and gate policy.
-- `generate-config`: generate runtime config snippets for HikariCP, Spring Boot, SQLAlchemy, Prisma, node-postgres, sqlx, and deadpool.
-- `--format html`: emit self-contained reports for sharing sizing decisions.
-- Expanded JSON, CSV, and table output coverage across command workflows.
-- Comprehensive executable docs fixtures and `100%` workspace line coverage enforcement.
+The CLI can now work with several production-data paths:
+
+- `poolsim import telemetry`: reads checked-in or exported telemetry JSON/TOML and computes a current-vs-recommended pool diff.
+- `poolsim import prometheus`: reads captured Prometheus response files or live Prometheus-compatible query results.
+- `poolsim import otlp`: reads OpenTelemetry OTLP metric-export JSON and maps request-rate and latency metrics into a Poolsim workload.
+
+These commands are useful when teams want recommendations based on observed traffic instead of hand-written estimates.
+
+### CI And Deployment Safety Workflows
+
+`0.3.0` documents and validates the CI-facing commands around the same sizing model:
+
+- `poolsim gate`: evaluates telemetry against a TOML policy and returns failure when thresholds are unsafe.
+- `poolsim guard`: produces deployment-friendly fields such as `deployment_safe`, `exit_code`, and `reason` for CI/CD systems.
+- `--warn-exit`: lets warning/advisory outcomes return exit code `3` when CI needs to distinguish warning from pass.
+
+The repository now includes GitHub Action, GitLab CI, Docker/GHCR, and Homebrew packaging documentation so teams can adopt these gates without writing custom glue from scratch.
+
+### Diagnostics And Explainability
+
+The release expands human-facing workflows:
+
+- `poolsim doctor` classifies a pool as healthy, too small, too large, close to saturation, or critical.
+- `--explain` emits prose reasoning while preserving machine-readable stdout for JSON/CSV/table consumers.
+- `--format html` creates self-contained shareable reports for sizing discussions and design reviews.
+
+These are intended for code review, incident follow-up, and capacity planning conversations where raw JSON is not enough.
+
+### Planning And Adoption Workflows
+
+The CLI also includes workflows for turning recommendations into operational decisions:
+
+- `poolsim budget`: allocates a shared database `max_connections` budget across services and replicas.
+- `poolsim compare`: compares normal, peak, and incident scenarios side by side.
+- `poolsim generate-config`: emits framework snippets for HikariCP, Spring Boot, SQLAlchemy, Prisma, node-postgres, `sqlx`, and `deadpool`.
+- `poolsim init`: creates starter simulation config and capacity-gate policy files.
+
+These commands keep the sizing recommendation separate from runtime enforcement. Poolsim recommends, explains, and guards; your runtime pool still enforces the actual connection limits.
+
+### Non-Rust And Platform Integrations
+
+The release documentation now covers how non-Rust users consume the CLI contract:
+
+- Python package wrapper.
+- TypeScript package wrapper.
+- Go module wrapper.
+- Terraform/OpenTofu external provider adapter.
+- Kubernetes sidecar metrics exporter and controller annotations.
+- Grafana sensitivity heatmap panel.
+- Continuous recommendation-diff worker with webhook delivery.
+
+All of these delegate to the stable CLI JSON or web API contracts instead of reimplementing queueing formulas.
+
+### Compatibility And Quality Notes
+
+This release is intended to be backward-compatible with `0.2.x` command usage. It does not intentionally remove, rename, or narrow existing commands, flags, config keys, output fields, REST routes, or exit-code semantics. The upstream repository enforces documentation coverage, executable docs, examples coverage, and `100%` workspace line coverage as part of CI.
+
+### When To Upgrade
+
+Upgrade to `0.3.0` if you want CI gates, telemetry imports, OTLP ingestion, config generation, doctor diagnostics, HTML/explainable reporting, platform integration docs, updated package metadata, and the current release automation. Existing basic sizing scripts should continue to work.
 
 ## Install
 

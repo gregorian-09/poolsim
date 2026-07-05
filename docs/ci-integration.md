@@ -4,7 +4,7 @@ Poolsim provides drop-in CI assets for teams that want connection-pool safety ch
 
 ## GitHub Action
 
-The repository root contains `action.yml`, a composite action that installs `poolsim-cli` and runs `poolsim gate`. GitHub's current composite-action model uses an action metadata file with `runs.using: composite`, so the gate can be reused from other repositories without requiring a JavaScript action bundle.
+The dedicated `gregorian-09/poolsim-capacity-gate` repository contains the Marketplace-facing composite action that installs `poolsim-cli` and runs `poolsim gate`. This repository also keeps a root `action.yml` for source-adjacent validation, but new users should prefer the standalone action repository when wiring GitHub Actions.
 
 Example workflow:
 
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: gregorian-09/poolsim@v1
+      - uses: gregorian-09/poolsim-capacity-gate@v0.3.0
         with:
           policy: docs/fixtures/gate-policy.toml
           source: telemetry
@@ -29,7 +29,7 @@ jobs:
 Prometheus response-file example:
 
 ```yaml
-- uses: gregorian-09/poolsim@v1
+- uses: gregorian-09/poolsim-capacity-gate@v0.3.0
   with:
     source: prometheus
     policy: docs/fixtures/gate-policy.toml

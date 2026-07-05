@@ -24,8 +24,8 @@
         "url": "https://github.com/gregorian-09/poolsim/issues"
       }
     ],
-    "version": "0.2.1",
-    "updated": "2026-07-04"
+    "version": "0.3.0",
+    "updated": "2026-07-05"
   },
   "dependencies": {
     "grafanaDependency": ">=10.0.0",

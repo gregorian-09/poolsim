@@ -8,7 +8,7 @@ inputs:
   version:
     description: Version of poolsim-cli to install from crates.io.
     required: false
-    default: "0.2.1"
+    default: "0.3.0"
   policy:
     description: Path to the poolsim gate policy TOML file.
     required: false

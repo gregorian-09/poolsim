@@ -12,33 +12,83 @@
 
 Use it when you want to embed Poolsim directly inside Rust code instead of shelling out to `poolsim-cli` or running `poolsim-web`.
 
-## What Is New After `0.2.1`
+## What Is New In `0.3.0`
 
-The next minor release remains API-compatible and adds operational integration support around the stable sizing model. Existing `simulate`, `evaluate`, `sweep`, telemetry, and type APIs continue to work.
+`0.3.0` is an additive minor release for the core sizing engine. Existing library entry points such as `simulate`, `evaluate`, `sweep`, `sweep_with_options`, telemetry recommendation types, and public report structures remain available. The release focuses on making the same sizing model easier to trust, automate, and integrate across production telemetry workflows.
 
-For `poolsim-core`, the important user-facing capabilities are:
+### OpenTelemetry-Native Recommendation Inputs
 
-- Shared OpenTelemetry OTLP metric extraction through `poolsim_core::otlp`.
-- Telemetry-backed recommendation diffs through `poolsim_core::telemetry::recommend_from_telemetry`.
-- Stronger docs and executable examples for the public sizing model.
-- A fully covered core source tree enforced by CI at `100%` line coverage.
-- `wasm32-unknown-unknown` compatibility for the no-default-features core build.
-- Stable typed outputs that can feed CLI workflows such as `doctor`, `gate`, `guard`, `generate-config`, and `budget`.
+`poolsim-core` now exposes shared OpenTelemetry metric extraction helpers through `poolsim_core::otlp`. This matters because many backend teams already export request-rate and latency metrics through OpenTelemetry pipelines. Instead of every caller inventing its own OTLP parsing layer, Rust callers, `poolsim-cli`, and `poolsim-web` can use the same documented extraction model.
 
-The database budget planner itself currently lives in `poolsim-cli` because it is an operational command workflow. Use `poolsim-core` to compute per-service recommendations, then use `poolsim-cli budget` to allocate a shared database connection budget across services.
+The OTLP support is designed around explicit metric names:
+
+- request rate metric
+- p50 latency metric in milliseconds
+- p95 latency metric in milliseconds
+- p99 latency metric in milliseconds
+
+When teams use different metric names, callers can provide an override mapping while preserving the same downstream `WorkloadConfig`, `PoolConfig`, and `TelemetryRecommendation` types.
+
+### Telemetry Recommendation Diffs As A First-Class Library Workflow
+
+The telemetry module remains the Rust API for comparing a current production pool setting against a model-driven recommendation. `recommend_from_telemetry` evaluates the configured pool, computes the recommended pool, and returns a diff that includes:
+
+- current pool size
+- recommended pool size
+- signed delta
+- increase/decrease/keep classification
+- additional connections required
+- removable connections
+- percent change
+- current fixed-size evaluation
+- recommended simulation report
+
+This is the same model used by the CLI `import`, `doctor`, `gate`, `guard`, and `generate-config` workflows.
+
+### Better Foundation For Non-Rust Integrations
+
+The core crate is still pure sizing logic, but `0.3.0` makes it easier for other surfaces to build on top of it. The release now has documented adoption paths for:
+
+- Python bindings that shell out to the stable CLI JSON contract.
+- TypeScript bindings for Node.js automation and dashboards.
+- Go bindings for Go services and platform tooling.
+- Terraform/OpenTofu external-data sizing.
+- Kubernetes recommendation metrics and annotations.
+- Grafana sensitivity-table visualization.
+- Continuous recommendation-diff events.
+
+Those integrations do not duplicate the Rust sizing model. They exist so teams outside Rust can still consume results produced by this crate through the CLI or web service.
+
+### Compatibility And Quality Notes
+
+This release is intended to be backward-compatible with `0.2.x` at the public API level. It does not intentionally remove, rename, or narrow public Rust APIs. The repository also keeps strict release gates around:
+
+- missing public documentation
+- rustdoc warnings
+- doctests
+- executable examples
+- workspace tests
+- `100%` workspace line coverage
+- `100%` `poolsim-core/src` line coverage
+- `100%` example-file coverage
+- `wasm32-unknown-unknown` no-default-features build checks
+
+### When To Upgrade
+
+Upgrade to `0.3.0` if you want the latest telemetry and integration documentation, OTLP helper APIs, stronger package/readme guidance, and the current release metadata used by the CLI, web service, bindings, and CI integrations. If you only use `simulate` or `evaluate`, your code should continue to compile with the same API shape.
 
 ## Install
 
 ```toml
 [dependencies]
-poolsim-core = "0.2.1"
+poolsim-core = "0.3.0"
 ```
 
 Optional default feature:
 
 ```toml
 [dependencies]
-poolsim-core = { version = "0.2.1", default-features = false }
+poolsim-core = { version = "0.3.0", default-features = false }
 ```
 
 Default features enable parallel simulation support. Disable default features when you need a smaller dependency surface or a `wasm32-unknown-unknown` build.

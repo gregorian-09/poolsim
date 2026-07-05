@@ -35,7 +35,7 @@ spec:
             - name: http
               containerPort: 8080
         - name: poolsim-sidecar
-          image: ghcr.io/gregorian-09/poolsim-web:0.2.1
+          image: ghcr.io/gregorian-09/poolsim-web:0.3.0
           command: ["python3", "/opt/poolsim/integrations/kubernetes/sidecar/poolsim_sidecar.py"]
           ports:
             - name: poolsim

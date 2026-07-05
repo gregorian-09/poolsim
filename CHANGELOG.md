@@ -6,11 +6,18 @@ The format is based on Keep a Changelog, and this project uses Semantic Versioni
 
 ## [Unreleased]
 
+No unreleased changes yet.
+
+## [0.3.0] - 2026-07-05
+
 ### Added
 
 - OpenTelemetry OTLP JSON ingestion for recommendation workflows through `poolsim import otlp`, `poolsim gate otlp`, `poolsim guard otlp`, `poolsim doctor otlp`, and `poolsim generate-config otlp`.
 - Shared `poolsim_core::otlp` helpers so Rust users, the CLI, and the web service use one documented OTLP metric extraction implementation.
 - `POST /v1/otlp/recommend` in `poolsim-web` for direct OTLP-to-recommendation requests over HTTP.
+- `poolsim init` starter workflow for generating simulation config and capacity-gate policy files.
+- `--explain` prose output for CLI sizing workflows while preserving machine-readable stdout.
+- `--format html` report rendering for shareable sizing reports.
 - Kubernetes sidecar integration that exposes pool recommendations as Prometheus metrics from deployment annotations.
 - Kubernetes controller integration that reads deployment annotations, computes recommendations with the stable CLI contract, and patches recommendation annotations only when explicitly enabled.
 - Continuous recommendation worker for repeated telemetry recommendation diffs, local state tracking, and optional webhook delivery.
@@ -18,23 +25,33 @@ The format is based on Keep a Changelog, and this project uses Semantic Versioni
 - Benchmark result contract and summarizer for comparing Poolsim predictions against controlled real-pool benchmark runs.
 - Opt-in deployed-pool survey payload generator for anonymous configuration-only statistics.
 - Terraform/OpenTofu external-data adapter docs for managing pool sizing as infrastructure data.
-- Python, TypeScript, and Go binding docs that delegate to the stable CLI JSON contract for non-Rust teams.
+- Python, TypeScript, and Go bindings that delegate to the stable CLI JSON contract for non-Rust teams.
+- Dedicated GitHub Action repository preparation for `poolsim-capacity-gate` Marketplace adoption.
 - PyPI publishing automation for the Python `poolsim` package using the `PYPI_API_TOKEN` repository secret.
 - npm publishing automation for the TypeScript `poolsim` package using the `NPM_TOKEN` repository secret.
-- Homebrew formula template with a real GitHub release tarball checksum.
-- GHCR Docker image and CI integration documentation for web deployment and capacity-gate adoption.
+- Homebrew formula template with release-checksum documentation.
+- GHCR Docker image workflow and CI integration documentation for web deployment and capacity-gate adoption.
 
 ### Changed
 
-- Removed the completed feature roadmap document from `docs/`; completed work now lives in the concrete feature guides and release notes.
-- Expanded docs indexes and crate READMEs so users can discover completed adoption, observability, validation, packaging, and Kubernetes integrations directly.
+- Bumped the workspace, Rust crates, Python package, TypeScript package, Grafana plugin metadata, GitHub Action defaults, GitLab template defaults, Docker/GHCR examples, and Kubernetes example image references to `0.3.0`.
+- Updated the `poolsim-web` Docker builder image to a configurable Rust toolchain defaulting to `rust:1.84-alpine`.
+- Updated the GitLab capacity-gate template from `rust:1.75` to `rust:1.84`.
+- Expanded the root README, integration guides, binding guides, web API guide, and crate READMEs so users can discover adoption, observability, validation, packaging, and Kubernetes workflows directly.
+- Removed the completed feature roadmap document from `docs/`; completed work now lives in concrete feature guides and release notes.
 - Kept all new workflows additive: no existing Rust APIs, CLI commands, REST routes, WebSocket endpoints, serialized fields, config keys, or exit-code contracts were intentionally removed or narrowed.
 
 ### Quality
 
-- Added tests and validation for OTLP ingestion, Kubernetes controller behavior, continuous recommendation events, Grafana package metadata, benchmark summarization, survey consent handling, and Homebrew formula metadata.
-- Verified public API compatibility with `cargo semver-checks check-release --workspace`.
-- Re-verified docs coverage, public API documentation coverage, examples coverage, rustdoc warnings, doctests, Clippy, formatting, and workspace tests after the feature batch.
+- Added tests and validation for OTLP ingestion, Kubernetes controller behavior, continuous recommendation events, Grafana package metadata, benchmark summarization, survey consent handling, Homebrew formula metadata, CLI dispatch branches, HTML rendering, init/config/explain helpers, and binding package behavior.
+- Restored CI workspace line coverage to `100%` while preserving `100%` `poolsim-core/src` coverage and `100%` example-file coverage.
+- Verified public API compatibility with `cargo semver-checks check-release --workspace` during the feature batch.
+- Re-verified docs coverage, public API documentation coverage, examples coverage, rustdoc warnings, doctests, Clippy, formatting, workspace tests, binding tests, and packaging dry-runs during release preparation.
+
+### Packaging Notes
+
+- Crates.io, PyPI, npm, Go module proxy, GitHub Marketplace, GHCR, and Homebrew publication are intentionally not performed by this changelog update.
+- The Homebrew formula cannot receive the final `v0.3.0` tarball checksum until the `v0.3.0` git tag exists; update `packaging/homebrew/poolsim.rb` immediately after tagging and before publishing the tap formula.
 
 ## [0.2.1] - 2026-05-18
 

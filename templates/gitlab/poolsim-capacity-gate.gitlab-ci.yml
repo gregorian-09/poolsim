@@ -5,7 +5,7 @@ poolsim_capacity_gate:
   stage: test
   image: rust:1.84
   variables:
-    POOLSIM_VERSION: "0.2.1"
+    POOLSIM_VERSION: "0.3.0"
     POOLSIM_POLICY: "docs/fixtures/gate-policy.toml"
     POOLSIM_TELEMETRY_CONFIG: "docs/fixtures/telemetry.json"
   before_script:

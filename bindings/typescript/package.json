@@ -1,6 +1,6 @@
 {
   "name": "poolsim",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "TypeScript bindings for the Poolsim connection pool sizing CLI",
   "type": "module",
   "main": "dist/index.js",

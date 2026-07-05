@@ -6,17 +6,17 @@ The integrations do not change the sizing model and do not mutate production con
 
 ## `action.yml` Versus `integrations/`
 
-`action.yml` is the reusable GitHub Action entrypoint for this repository. It lets another repository run Poolsim as a capacity gate with a short workflow step:
+The dedicated `gregorian-09/poolsim-capacity-gate` repository is the reusable GitHub Action entrypoint for CI users. It lets another repository run Poolsim as a capacity gate with a short workflow step:
 
 ```yaml
-- uses: gregorian-09/poolsim@v0.2.1
+- uses: gregorian-09/poolsim-capacity-gate@v0.3.0
   with:
     policy: capacity-policy.toml
     source: telemetry
     telemetry-config: telemetry.json
 ```
 
-Use `action.yml` when you want a drop-in GitHub Actions gate that installs `poolsim-cli`, runs `poolsim gate`, and fails the CI job when the configured policy is unsafe.
+Use the GitHub Action when you want a drop-in GitHub Actions gate that installs `poolsim-cli`, runs `poolsim gate`, and fails the CI job when the configured policy is unsafe. The root `action.yml` in this repository mirrors that behavior for source-adjacent validation, but the standalone action repository is the cleaner Marketplace-facing path.
 
 The `integrations/` directory is broader. It contains examples and adapters for systems that are not GitHub Actions:
 
@@ -31,7 +31,7 @@ Use GitHub Action capacity gate when:
 
 - You want CI to block unsafe pool changes or unsafe traffic assumptions.
 - You already have telemetry snapshots or captured Prometheus responses in CI.
-- You want a simple `uses: gregorian-09/poolsim@...` workflow step.
+- You want a simple `uses: gregorian-09/poolsim-capacity-gate@...` workflow step.
 
 Use Terraform/OpenTofu when:
 
