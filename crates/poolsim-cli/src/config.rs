@@ -585,7 +585,7 @@ mod tests {
     use poolsim_core::types::{DistributionModel, QueueModel};
 
     use super::*;
-    use crate::args::{CliDistributionModel, CliQueueModel};
+    use crate::args::{CliConnectionOverheadProfile, CliDistributionModel, CliQueueModel};
 
     fn empty_common_args() -> CommonArgs {
         CommonArgs {
@@ -750,6 +750,31 @@ mod tests {
         assert_eq!(resolved.options.queue_model, QueueModel::MDC);
         assert_eq!(resolved.options.target_wait_p99_ms, 55.0);
         assert_eq!(resolved.options.max_acceptable_rho, 0.8);
+    }
+
+    #[test]
+    fn connection_profile_override_builds_and_replaces_pool_overhead() {
+        let mut args = empty_common_args();
+        args.rps = Some(180.0);
+        args.p50 = Some(8.0);
+        args.p95 = Some(30.0);
+        args.p99 = Some(70.0);
+        args.max_server_connections = Some(100);
+        args.connection_profile = Some(CliConnectionOverheadProfile::PgBouncer);
+        args.min = Some(2);
+        args.max = Some(20);
+
+        let input = resolve_simulation_input(&args).expect("profile should build pool config");
+        assert_eq!(input.pool.connection_overhead_ms, 0.25);
+
+        let cfg = write_temp_file("profile_override", "json", &sample_config_json());
+        let mut args = empty_common_args();
+        args.config = Some(cfg.clone());
+        args.connection_profile = Some(CliConnectionOverheadProfile::RdsProxy);
+
+        let input = resolve_simulation_input(&args).expect("profile should override file pool");
+        assert_eq!(input.pool.connection_overhead_ms, 0.5);
+        remove_if_exists(&cfg);
     }
 
     #[test]

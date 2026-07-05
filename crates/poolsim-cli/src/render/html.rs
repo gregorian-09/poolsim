@@ -6,14 +6,14 @@ use serde_json::Value;
 pub fn print<T: Serialize + ?Sized>(title: &str, value: &T) -> Result<()> {
     let value = serde_json::to_value(value)?;
     let json = serde_json::to_string_pretty(&value)?;
-    println!(
-        "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>{}</title>\n<style>{}</style>\n</head>\n<body>\n<main>\n<header><p class=\"eyebrow\">Poolsim report</p><h1>{}</h1></header>\n{}\n<section><h2>Raw JSON</h2><pre>{}</pre></section>\n</main>\n</body>\n</html>",
-        escape_html(title),
-        STYLE,
-        escape_html(title),
-        summary_html(&value),
-        escape_html(&json)
+    let escaped_title = escape_html(title);
+    let style = STYLE;
+    let summary = summary_html(&value);
+    let escaped_json = escape_html(&json);
+    let html = format!(
+        "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>{escaped_title}</title>\n<style>{style}</style>\n</head>\n<body>\n<main>\n<header><p class=\"eyebrow\">Poolsim report</p><h1>{escaped_title}</h1></header>\n{summary}\n<section><h2>Raw JSON</h2><pre>{escaped_json}</pre></section>\n</main>\n</body>\n</html>",
     );
+    println!("{html}");
     Ok(())
 }
 
@@ -94,7 +94,17 @@ mod tests {
         assert!(object_html.contains("pool"));
         assert!(!object_html.contains("ignored"));
 
+        let no_scalar_object = serde_json::json!({"nested": {"ignored": true}});
+        assert!(summary_html(&no_scalar_object).contains("No scalar summary fields"));
+
         let array_html = summary_html(&serde_json::json!([1, 2]));
         assert!(array_html.contains("2 items"));
+
+        assert!(summary_html(&serde_json::json!(null)).contains("null"));
+        assert!(summary_html(&serde_json::json!(true)).contains("true"));
+        assert!(summary_html(&serde_json::json!("ready")).contains("ready"));
+        assert!(scalar_to_string(&serde_json::json!({"complex": true})).contains("complex"));
+        print("Poolsim <test>", &serde_json::json!({"status": "ok"}))
+            .expect("html print should render");
     }
 }

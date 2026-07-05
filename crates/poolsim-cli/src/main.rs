@@ -470,10 +470,10 @@ mod tests {
 
     use super::*;
     use crate::args::{
-        BatchArgs, BudgetArgs, CliConfigFramework, CommonArgs, CompareArgs, DoctorArgs,
-        DoctorSourceCommands, EvaluateArgs, GateArgs, GateSourceCommands, GenerateConfigArgs,
-        GenerateConfigSourceCommands, GuardArgs, ImportArgs, ImportCommands, PrometheusImportArgs,
-        SimulateArgs, TelemetryImportArgs,
+        BatchArgs, BudgetArgs, CliConfigFramework, CliDatabaseKind, CommonArgs, CompareArgs,
+        DoctorArgs, DoctorSourceCommands, EvaluateArgs, GateArgs, GateSourceCommands,
+        GenerateConfigArgs, GenerateConfigSourceCommands, GuardArgs, ImportArgs, ImportCommands,
+        InitArgs, OtlpImportArgs, PrometheusImportArgs, SimulateArgs, TelemetryImportArgs,
     };
 
     fn sample_config_json() -> String {
@@ -678,6 +678,18 @@ mod tests {
         .to_string()
     }
 
+    fn otlp_metrics_json() -> String {
+        r#"{
+  "resourceMetrics": [{"scopeMetrics": [{"metrics": [
+    {"name": "poolsim.rps", "sum": {"dataPoints": [{"asDouble": 180.0}]}},
+    {"name": "poolsim.latency.p50_ms", "gauge": {"dataPoints": [{"asDouble": 8.0}]}},
+    {"name": "poolsim.latency.p95_ms", "gauge": {"dataPoints": [{"asDouble": 30.0}]}},
+    {"name": "poolsim.latency.p99_ms", "gauge": {"dataPoints": [{"asDouble": 70.0}]}}
+  ]}]}]
+}"#
+        .to_string()
+    }
+
     fn unique_temp_path(name: &str, ext: &str) -> PathBuf {
         let ts = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -722,6 +734,37 @@ mod tests {
             target_wait_p99_ms: None,
             max_acceptable_rho: None,
             explain: false,
+        }
+    }
+
+    fn explained_common_with_config(path: &Path) -> CommonArgs {
+        let mut args = common_with_config(path);
+        args.explain = true;
+        args
+    }
+
+    fn otlp_args(path: &Path) -> OtlpImportArgs {
+        OtlpImportArgs {
+            config: path.to_path_buf(),
+            rps_metric: "poolsim.rps".to_string(),
+            p50_metric: "poolsim.latency.p50_ms".to_string(),
+            p95_metric: "poolsim.latency.p95_ms".to_string(),
+            p99_metric: "poolsim.latency.p99_ms".to_string(),
+            service_name: Some("checkout-api".to_string()),
+            window: Some("5m".to_string()),
+            observed_at: None,
+            current_pool_size: 9,
+            max_server_connections: 100,
+            connection_overhead_ms: 2.0,
+            idle_timeout_ms: None,
+            min: 2,
+            max: 20,
+            iterations: Some(1_200),
+            seed: Some(7),
+            distribution: None,
+            queue_model: None,
+            target_wait_p99_ms: Some(45.0),
+            max_acceptable_rho: Some(0.85),
         }
     }
 
@@ -899,19 +942,23 @@ mod tests {
         render_simulation(&report, OutputFormat::Json).expect("json simulation should render");
         render_simulation(&report, OutputFormat::Csv).expect("csv simulation should render");
         render_simulation(&report, OutputFormat::Table).expect("table simulation should render");
+        render_simulation(&report, OutputFormat::Html).expect("html simulation should render");
 
         render_evaluation(&evaluation, OutputFormat::Json).expect("json evaluation should render");
         render_evaluation(&evaluation, OutputFormat::Csv).expect("csv evaluation should render");
         render_evaluation(&evaluation, OutputFormat::Table)
             .expect("table evaluation should render");
+        render_evaluation(&evaluation, OutputFormat::Html).expect("html evaluation should render");
 
         render_sweep(&rows, OutputFormat::Json).expect("json sweep should render");
         render_sweep(&rows, OutputFormat::Csv).expect("csv sweep should render");
         render_sweep(&rows, OutputFormat::Table).expect("table sweep should render");
+        render_sweep(&rows, OutputFormat::Html).expect("html sweep should render");
 
         render_batch(&reports, OutputFormat::Json).expect("json batch should render");
         render_batch(&reports, OutputFormat::Csv).expect("csv batch should render");
         render_batch(&reports, OutputFormat::Table).expect("table batch should render");
+        render_batch(&reports, OutputFormat::Html).expect("html batch should render");
 
         let compare_report =
             compare::build_scenario_comparison_report(config::ScenarioComparisonInput {
@@ -925,11 +972,13 @@ mod tests {
         render_compare(&compare_report, OutputFormat::Json).expect("json compare should render");
         render_compare(&compare_report, OutputFormat::Csv).expect("csv compare should render");
         render_compare(&compare_report, OutputFormat::Table).expect("table compare should render");
+        render_compare(&compare_report, OutputFormat::Html).expect("html compare should render");
 
         let budget_report = sample_budget_report();
         render_budget(&budget_report, OutputFormat::Json).expect("json budget should render");
         render_budget(&budget_report, OutputFormat::Csv).expect("csv budget should render");
         render_budget(&budget_report, OutputFormat::Table).expect("table budget should render");
+        render_budget(&budget_report, OutputFormat::Html).expect("html budget should render");
 
         let recommendation = sample_recommendation();
         render_telemetry(&recommendation, OutputFormat::Json)
@@ -937,21 +986,45 @@ mod tests {
         render_telemetry(&recommendation, OutputFormat::Csv).expect("csv telemetry should render");
         render_telemetry(&recommendation, OutputFormat::Table)
             .expect("table telemetry should render");
+        render_telemetry(&recommendation, OutputFormat::Html)
+            .expect("html telemetry should render");
 
         let gate_report = gate::build_gate_report(recommendation, &gate::GatePolicy::default());
         render_gate(&gate_report, OutputFormat::Json).expect("json gate should render");
         render_gate(&gate_report, OutputFormat::Csv).expect("csv gate should render");
         render_gate(&gate_report, OutputFormat::Table).expect("table gate should render");
+        render_gate(&gate_report, OutputFormat::Html).expect("html gate should render");
 
         let guard_report = guard::build_guard_report(gate_report);
         render_guard(&guard_report, OutputFormat::Json).expect("json guard should render");
         render_guard(&guard_report, OutputFormat::Csv).expect("csv guard should render");
         render_guard(&guard_report, OutputFormat::Table).expect("table guard should render");
+        render_guard(&guard_report, OutputFormat::Html).expect("html guard should render");
 
         let doctor_report = doctor::build_doctor_report(sample_recommendation());
         render_doctor(&doctor_report, OutputFormat::Json).expect("json doctor should render");
         render_doctor(&doctor_report, OutputFormat::Csv).expect("csv doctor should render");
         render_doctor(&doctor_report, OutputFormat::Table).expect("table doctor should render");
+        render_doctor(&doctor_report, OutputFormat::Html).expect("html doctor should render");
+
+        let init_report = init::InitReport {
+            framework: "sqlx".to_string(),
+            database: "postgres".to_string(),
+            config_path: "poolsim.json".to_string(),
+            policy_path: "poolsim-gate-policy.toml".to_string(),
+            expected_rps: 180.0,
+            max_server_connections: 100,
+            min_pool_size: 2,
+            max_pool_size: 20,
+            files_written: vec![
+                "poolsim.json".to_string(),
+                "poolsim-gate-policy.toml".to_string(),
+            ],
+        };
+        render_init(&init_report, OutputFormat::Table).expect("table init should render");
+        render_init(&init_report, OutputFormat::Json).expect("json init should render");
+        render_init(&init_report, OutputFormat::Csv).expect("csv init should render");
+        render_init(&init_report, OutputFormat::Html).expect("html init should render");
 
         let config_report = config_gen::build_config_snippet(
             &GenerateConfigArgs {
@@ -984,6 +1057,8 @@ mod tests {
             .expect("csv config snippet should render");
         render_config_snippet(&config_report, OutputFormat::Table)
             .expect("table config snippet should render");
+        render_config_snippet(&config_report, OutputFormat::Html)
+            .expect("html config snippet should render");
     }
 
     #[test]
@@ -992,7 +1067,7 @@ mod tests {
 
         let cli = Cli {
             command: Commands::Simulate(SimulateArgs {
-                common: common_with_config(&cfg),
+                common: explained_common_with_config(&cfg),
                 pool_size: None,
                 sweep: false,
             }),
@@ -1003,7 +1078,7 @@ mod tests {
 
         let cli = Cli {
             command: Commands::Simulate(SimulateArgs {
-                common: common_with_config(&cfg),
+                common: explained_common_with_config(&cfg),
                 pool_size: Some(8),
                 sweep: false,
             }),
@@ -1014,7 +1089,7 @@ mod tests {
 
         let cli = Cli {
             command: Commands::Simulate(SimulateArgs {
-                common: common_with_config(&cfg),
+                common: explained_common_with_config(&cfg),
                 pool_size: None,
                 sweep: true,
             }),
@@ -1025,7 +1100,7 @@ mod tests {
 
         let cli = Cli {
             command: Commands::Evaluate(EvaluateArgs {
-                common: common_with_config(&cfg),
+                common: explained_common_with_config(&cfg),
                 pool_size: 9,
             }),
             format: OutputFormat::Json,
@@ -1034,7 +1109,7 @@ mod tests {
         let _ = run_with_cli(cli).expect("evaluate should execute");
 
         let cli = Cli {
-            command: Commands::Sweep(common_with_config(&cfg)),
+            command: Commands::Sweep(explained_common_with_config(&cfg)),
             format: OutputFormat::Json,
             warn_exit: true,
         };
@@ -1119,6 +1194,16 @@ mod tests {
         };
         let _ = run_with_cli(cli).expect("prometheus import should execute");
 
+        let otlp_cfg = write_temp_file("main_otlp", "json", &otlp_metrics_json());
+        let cli = Cli {
+            command: Commands::Import(ImportArgs {
+                command: ImportCommands::Otlp(otlp_args(&otlp_cfg)),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: true,
+        };
+        let _ = run_with_cli(cli).expect("otlp import should execute");
+
         let cli = Cli {
             command: Commands::Gate(GateArgs {
                 policy: None,
@@ -1186,6 +1271,27 @@ mod tests {
             warn_exit: false,
         };
         let _ = run_with_cli(cli).expect("gate prometheus should execute");
+
+        let cli = Cli {
+            command: Commands::Gate(GateArgs {
+                policy: None,
+                max_saturation: None,
+                max_pool_increase_percent: Some(100.0),
+                max_additional_connections: Some(10),
+                max_recommended_pool_size: Some(20),
+                max_recommended_p99_queue_wait_ms: Some(100.0),
+                max_recommended_mean_queue_wait_ms: Some(20.0),
+                max_recommended_rho: Some(1.0),
+                max_current_p99_queue_wait_ms: Some(100.0),
+                max_current_mean_queue_wait_ms: Some(20.0),
+                max_current_rho: Some(1.0),
+                expected_pool_size: None,
+                source: GateSourceCommands::Otlp(otlp_args(&otlp_cfg)),
+            }),
+            format: OutputFormat::Html,
+            warn_exit: false,
+        };
+        let _ = run_with_cli(cli).expect("gate otlp should execute");
 
         let cli = Cli {
             command: Commands::Guard(GuardArgs {
@@ -1256,6 +1362,27 @@ mod tests {
         let _ = run_with_cli(cli).expect("guard prometheus should execute");
 
         let cli = Cli {
+            command: Commands::Guard(GuardArgs {
+                policy: None,
+                max_saturation: None,
+                max_pool_increase_percent: Some(100.0),
+                max_additional_connections: Some(10),
+                max_recommended_pool_size: Some(20),
+                max_recommended_p99_queue_wait_ms: Some(100.0),
+                max_recommended_mean_queue_wait_ms: Some(20.0),
+                max_recommended_rho: Some(1.0),
+                max_current_p99_queue_wait_ms: Some(100.0),
+                max_current_mean_queue_wait_ms: Some(20.0),
+                max_current_rho: Some(1.0),
+                expected_pool_size: None,
+                source: GateSourceCommands::Otlp(otlp_args(&otlp_cfg)),
+            }),
+            format: OutputFormat::Html,
+            warn_exit: false,
+        };
+        let _ = run_with_cli(cli).expect("guard otlp should execute");
+
+        let cli = Cli {
             command: Commands::Doctor(DoctorArgs {
                 source: DoctorSourceCommands::Telemetry(TelemetryImportArgs {
                     config: telemetry_cfg.clone(),
@@ -1298,6 +1425,43 @@ mod tests {
             warn_exit: false,
         };
         let _ = run_with_cli(cli).expect("doctor prometheus should execute");
+
+        let cli = Cli {
+            command: Commands::Doctor(DoctorArgs {
+                source: DoctorSourceCommands::Otlp(otlp_args(&otlp_cfg)),
+            }),
+            format: OutputFormat::Html,
+            warn_exit: false,
+        };
+        let _ = run_with_cli(cli).expect("doctor otlp should execute");
+
+        let init_config = unique_temp_path("main_init_config", "json");
+        let init_policy = unique_temp_path("main_init_policy", "toml");
+        let cli = Cli {
+            command: Commands::Init(InitArgs {
+                framework: CliConfigFramework::Sqlx,
+                database: CliDatabaseKind::Postgres,
+                expected_rps: 180.0,
+                p50: 8.0,
+                p95: 30.0,
+                p99: 70.0,
+                max_server_connections: 100,
+                connection_overhead_ms: 2.0,
+                idle_timeout_ms: Some(120_000),
+                min: 2,
+                max: 20,
+                iterations: 1_200,
+                seed: Some(7),
+                target_wait_p99_ms: 45.0,
+                max_acceptable_rho: 0.85,
+                output: init_config.clone(),
+                policy_output: init_policy.clone(),
+                force: true,
+            }),
+            format: OutputFormat::Html,
+            warn_exit: false,
+        };
+        let _ = run_with_cli(cli).expect("init should execute");
 
         let cli = Cli {
             command: Commands::GenerateConfig(GenerateConfigArgs {
@@ -1357,6 +1521,21 @@ mod tests {
 
         let cli = Cli {
             command: Commands::GenerateConfig(GenerateConfigArgs {
+                framework: CliConfigFramework::Deadpool,
+                min_idle: None,
+                connection_timeout_ms: 30_000,
+                idle_timeout_ms: 600_000,
+                database_url_env: "DATABASE_URL".to_string(),
+                pool_name: "checkout-pool".to_string(),
+                source: GenerateConfigSourceCommands::Otlp(otlp_args(&otlp_cfg)),
+            }),
+            format: OutputFormat::Html,
+            warn_exit: true,
+        };
+        let _ = run_with_cli(cli).expect("generate-config otlp should execute");
+
+        let cli = Cli {
+            command: Commands::GenerateConfig(GenerateConfigArgs {
                 framework: CliConfigFramework::NodePg,
                 min_idle: None,
                 connection_timeout_ms: 30_000,
@@ -1376,6 +1555,9 @@ mod tests {
         remove_if_exists(&budget_cfg);
         remove_if_exists(&telemetry_cfg);
         remove_if_exists(&prometheus_cfg);
+        remove_if_exists(&otlp_cfg);
+        remove_if_exists(&init_config);
+        remove_if_exists(&init_policy);
     }
 
     #[test]

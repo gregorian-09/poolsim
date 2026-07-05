@@ -1,11 +1,16 @@
 use poolsim_core::{
+    advanced::{
+        estimate_acquisition_wait, simulate_connection_leak, TransactionClass, TransactionMix,
+    },
     distribution::LatencyDistribution,
     emit_performance_contract_warning, erlang,
     error::PoolsimError,
-    evaluate, monte_carlo, optimizer, sensitivity, simulate, sweep,
+    evaluate, monte_carlo, optimizer,
+    otlp::{metric_value, OtlpMetricNames},
+    sensitivity, simulate, sweep,
     types::{
-        DistributionModel, PoolConfig, QueueModel, SaturationLevel, SimulationOptions,
-        StepLoadPoint, WorkloadConfig,
+        ConnectionOverheadProfile, DistributionModel, PoolConfig, QueueModel, SaturationLevel,
+        SimulationOptions, StepLoadPoint, WorkloadConfig,
     },
 };
 
@@ -491,11 +496,110 @@ fn connection_overhead_profiles_apply_named_assumptions() {
         max_pool_size: 20,
     };
 
-    let profiled = poolsim_core::ConnectionOverheadProfile::RdsProxy.apply_to_pool(&pool);
+    assert_eq!(
+        ConnectionOverheadProfile::Postgres.connection_overhead_ms(),
+        1.5
+    );
+    assert_eq!(
+        ConnectionOverheadProfile::Mysql.connection_overhead_ms(),
+        1.0
+    );
+    assert_eq!(
+        ConnectionOverheadProfile::SqlServer.connection_overhead_ms(),
+        1.2
+    );
+    assert_eq!(
+        ConnectionOverheadProfile::PgBouncer.connection_overhead_ms(),
+        0.25
+    );
+
+    let profiled = ConnectionOverheadProfile::RdsProxy.apply_to_pool(&pool);
     assert_eq!(profiled.connection_overhead_ms, 0.5);
     assert_eq!(profiled.max_pool_size, pool.max_pool_size);
     assert_eq!(
-        poolsim_core::ConnectionOverheadProfile::Sqlite.connection_overhead_ms(),
+        ConnectionOverheadProfile::Sqlite.connection_overhead_ms(),
         0.0
     );
+}
+
+#[test]
+fn advanced_helper_getters_and_validation_edges_are_covered() {
+    let estimate = estimate_acquisition_wait(&base_workload(), 20, 250.0)
+        .expect("acquisition estimate should succeed");
+    assert_eq!(estimate.pool_size(), 20);
+    assert!(estimate.utilisation_rho().is_finite());
+    assert!(estimate.mean_acquisition_wait_ms() >= 0.0);
+    assert!(estimate.p99_acquisition_wait_ms() >= 0.0);
+    assert_eq!(estimate.acquisition_timeout_ms(), 250.0);
+    assert_eq!(
+        estimate.timeout_risk(),
+        estimate.p99_acquisition_wait_ms() >= estimate.acquisition_timeout_ms()
+    );
+
+    assert_eq!(
+        estimate_acquisition_wait(&base_workload(), 4, 0.0)
+            .expect_err("zero acquisition timeout should fail")
+            .code(),
+        "INVALID_ACQUISITION_TIMEOUT"
+    );
+
+    let read = TransactionClass::new("read", 120.0, 4.0, 14.0, 30.0);
+    assert_eq!(read.name(), "read");
+    assert_eq!(read.requests_per_second(), 120.0);
+
+    let mix = TransactionMix::new(vec![read.clone()]).expect("single-class mix should work");
+    assert_eq!(mix.classes(), &[read]);
+
+    assert_eq!(
+        TransactionMix::new(vec![TransactionClass::new("", 1.0, 1.0, 2.0, 3.0)])
+            .expect_err("empty transaction name should fail")
+            .code(),
+        "INVALID_TRANSACTION_NAME"
+    );
+
+    assert_eq!(
+        simulate_connection_leak(0, 0.0, 10)
+            .expect_err("zero initial pool should fail")
+            .code(),
+        "INVALID_POOL_SIZE"
+    );
+
+    let no_leak = simulate_connection_leak(4, 0.0, 10).expect("zero leak rate should work");
+    assert_eq!(no_leak.minutes_to_exhaustion(), None);
+}
+
+#[test]
+fn otlp_recursive_fallback_and_non_numeric_paths_are_covered() {
+    let nested = serde_json::json!({
+        "metrics": [{
+            "name": "custom.value",
+            "wrapper": {
+                "nested": ["not numeric", true, {"actual": "42.5"}]
+            }
+        }]
+    });
+    assert_eq!(
+        metric_value(&nested, "custom.value").expect("fallback recursion should find numeric"),
+        42.5
+    );
+
+    let err = metric_value(
+        &serde_json::json!({"name": "not.numeric", "value": true}),
+        "not.numeric",
+    )
+    .expect_err("bool-only metric should fail");
+    assert_eq!(err.code(), "OTLP_METRIC_NOT_FOUND");
+
+    let custom_names = serde_json::from_value::<OtlpMetricNames>(serde_json::json!({}))
+        .expect("serde defaults should populate metric names");
+    assert_eq!(custom_names, OtlpMetricNames::default());
+}
+
+#[test]
+fn workload_validation_accepts_valid_raw_samples() {
+    let mut workload = base_workload();
+    workload.raw_samples_ms = Some(vec![3.0, 5.0, 8.0]);
+    workload
+        .validate()
+        .expect("three positive raw samples should validate");
 }

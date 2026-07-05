@@ -179,4 +179,38 @@ mod tests {
         assert!(text.contains("first reaches low risk at pool size 8"));
         assert!(text.contains("highest-risk candidate"));
     }
+
+    #[test]
+    fn explanations_cover_remaining_saturation_and_risk_branches() {
+        let critical = EvaluationResult {
+            pool_size: 3,
+            utilisation_rho: 1.05,
+            mean_queue_wait_ms: 50.0,
+            p99_queue_wait_ms: 200.0,
+            saturation: SaturationLevel::Critical,
+            warnings: Vec::new(),
+        };
+        assert!(evaluation(&workload(), &critical).contains("unsafe"));
+
+        let medium_rows = vec![
+            SensitivityRow {
+                pool_size: 5,
+                utilisation_rho: 0.70,
+                mean_queue_wait_ms: 2.0,
+                p99_queue_wait_ms: 10.0,
+                risk: RiskLevel::Medium,
+            },
+            SensitivityRow {
+                pool_size: 6,
+                utilisation_rho: 0.60,
+                mean_queue_wait_ms: 1.0,
+                p99_queue_wait_ms: 5.0,
+                risk: RiskLevel::Critical,
+            },
+        ];
+        let text = sweep(&medium_rows);
+        assert!(text.contains("first reaches low risk at pool size 5"));
+        assert!(text.contains("Critical risk"));
+        assert_eq!(saturation_rank(SaturationLevel::Critical), 2);
+    }
 }

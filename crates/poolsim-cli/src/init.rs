@@ -260,4 +260,63 @@ mod tests {
         let err = run(&args).expect_err("max above server cap should fail");
         assert!(err.to_string().contains("--max cannot be greater"));
     }
+
+    #[test]
+    fn init_validation_covers_all_error_branches_and_names() {
+        let mut invalid_rps = args();
+        invalid_rps.expected_rps = 0.0;
+        assert!(run(&invalid_rps)
+            .expect_err("zero rps should fail")
+            .to_string()
+            .contains("--expected-rps"));
+
+        let mut invalid_latency = args();
+        invalid_latency.p50 = 31.0;
+        assert!(run(&invalid_latency)
+            .expect_err("latency ordering should fail")
+            .to_string()
+            .contains("latency flags"));
+
+        let mut invalid_connections = args();
+        invalid_connections.max_server_connections = 0;
+        assert!(run(&invalid_connections)
+            .expect_err("zero max connections should fail")
+            .to_string()
+            .contains("--max-server-connections"));
+
+        let mut invalid_bounds = args();
+        invalid_bounds.min = 30;
+        invalid_bounds.max = 20;
+        assert!(run(&invalid_bounds)
+            .expect_err("min greater than max should fail")
+            .to_string()
+            .contains("--min cannot be greater"));
+
+        let mut invalid_iterations = args();
+        invalid_iterations.iterations = 0;
+        assert!(run(&invalid_iterations)
+            .expect_err("zero iterations should fail")
+            .to_string()
+            .contains("--iterations"));
+
+        let mut invalid_rho = args();
+        invalid_rho.max_acceptable_rho = 1.0;
+        assert!(run(&invalid_rho)
+            .expect_err("invalid rho should fail")
+            .to_string()
+            .contains("--max-acceptable-rho"));
+
+        assert_eq!(framework_name(CliConfigFramework::Hikaricp), "hikaricp");
+        assert_eq!(
+            framework_name(CliConfigFramework::SpringBoot),
+            "spring-boot"
+        );
+        assert_eq!(framework_name(CliConfigFramework::Sqlalchemy), "sqlalchemy");
+        assert_eq!(framework_name(CliConfigFramework::Prisma), "prisma");
+        assert_eq!(framework_name(CliConfigFramework::NodePg), "node-pg");
+        assert_eq!(framework_name(CliConfigFramework::Deadpool), "deadpool");
+        assert_eq!(database_name(CliDatabaseKind::Mysql), "mysql");
+        assert_eq!(database_name(CliDatabaseKind::Sqlite), "sqlite");
+        assert_eq!(database_name(CliDatabaseKind::SqlServer), "sql-server");
+    }
 }

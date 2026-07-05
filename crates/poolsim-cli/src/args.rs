@@ -560,6 +560,34 @@ mod tests {
     }
 
     #[test]
+    fn cli_connection_profile_maps_to_core_enum() {
+        assert!(matches!(
+            poolsim_core::ConnectionOverheadProfile::from(CliConnectionOverheadProfile::Postgres),
+            poolsim_core::ConnectionOverheadProfile::Postgres
+        ));
+        assert!(matches!(
+            poolsim_core::ConnectionOverheadProfile::from(CliConnectionOverheadProfile::Mysql),
+            poolsim_core::ConnectionOverheadProfile::Mysql
+        ));
+        assert!(matches!(
+            poolsim_core::ConnectionOverheadProfile::from(CliConnectionOverheadProfile::SqlServer),
+            poolsim_core::ConnectionOverheadProfile::SqlServer
+        ));
+        assert!(matches!(
+            poolsim_core::ConnectionOverheadProfile::from(CliConnectionOverheadProfile::Sqlite),
+            poolsim_core::ConnectionOverheadProfile::Sqlite
+        ));
+        assert!(matches!(
+            poolsim_core::ConnectionOverheadProfile::from(CliConnectionOverheadProfile::PgBouncer),
+            poolsim_core::ConnectionOverheadProfile::PgBouncer
+        ));
+        assert!(matches!(
+            poolsim_core::ConnectionOverheadProfile::from(CliConnectionOverheadProfile::RdsProxy),
+            poolsim_core::ConnectionOverheadProfile::RdsProxy
+        ));
+    }
+
+    #[test]
     fn parser_handles_connection_profile_flag() {
         let cli = Cli::try_parse_from([
             "poolsim",
