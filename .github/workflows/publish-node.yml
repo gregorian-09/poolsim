@@ -61,9 +61,11 @@ jobs:
       - name: Verify npm package scope
         working-directory: bindings/typescript
         run: |
-          node -e "const pkg = require('./package.json'); if (pkg.name !== '@gregorian09/poolsim') { throw new Error(`unexpected package name: ${pkg.name}`); }"
+          node -e 'const pkg = require("./package.json"); if (pkg.name !== "@gregorian09/poolsim") { throw new Error(`unexpected package name: ${pkg.name}`); }'
 
       - name: Publish TypeScript package to npm
         if: ${{ inputs.dry_run != true }}
         working-directory: bindings/typescript
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public
