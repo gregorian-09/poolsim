@@ -44,7 +44,7 @@ This checklist is for publishing the current sizing-calculator version of `pools
 
 1. Confirm the repository secret `CARGO_REGISTRY_TOKEN` is present.
 2. Confirm the repository secret `PYPI_API_TOKEN` is present for the Python package publish.
-3. Confirm the repository secret `NPM_TOKEN` is present for the scoped TypeScript package publish.
+3. Configure npm trusted publishing for the scoped TypeScript package.
 4. Commit the release changes.
 5. Create a tag matching the root `VERSION` file, for example `v0.3.0`.
 6. Push the tag.
@@ -73,10 +73,16 @@ Use `.github/workflows/publish-python.yml` when the Rust crates are already publ
 
 Use `.github/workflows/publish-node.yml` when the Rust crates are already published and only the TypeScript `@gregorian09/poolsim` package needs to be published or backfilled.
 
-1. Confirm `NPM_TOKEN` is present.
-2. Run the `Publish Node` workflow with the version matching `VERSION`.
-3. Keep `dry_run=true` for package validation only.
-4. Set `dry_run=false` only when publishing to npm.
+1. Configure trusted publishing on npmjs.com for `@gregorian09/poolsim`.
+2. Use these GitHub Actions trusted publisher fields:
+   - Organization or user: `gregorian-09`
+   - Repository: `poolsim`
+   - Workflow filename: `publish-node.yml`
+   - Environment name: leave empty unless the workflow is changed to use a GitHub environment
+   - Allowed actions: `npm publish`
+3. Run the `Publish Node` workflow with the version matching `VERSION`.
+4. Keep `dry_run=true` for package validation only.
+5. Set `dry_run=false` only when publishing to npm.
 
 ## Go Publish Workflow
 
