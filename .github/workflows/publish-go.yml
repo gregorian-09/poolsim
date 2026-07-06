@@ -1,0 +1,87 @@
+name: Publish Go
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version from the root VERSION file to publish
+        required: true
+        type: string
+      dry_run:
+        description: Validate without pushing the Go module tag
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-go-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-go:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.22"
+
+      - name: Verify requested version matches VERSION
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_version="$(tr -d '[:space:]' < VERSION)"
+          requested_version="${{ inputs.version }}"
+          if [[ "$requested_version" != "$expected_version" ]]; then
+            echo "workflow input version '$requested_version' does not match VERSION '$expected_version'" >&2
+            exit 1
+          fi
+
+      - name: Test Go bindings
+        working-directory: bindings/go
+        run: go test ./...
+
+      - name: Publish Go module tag
+        if: ${{ inputs.dry_run != true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ inputs.version }}"
+          tag="bindings/go/v${version}"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "Go module tag ${tag} already exists" >&2
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${tag}" -m "Release Go bindings v${version}"
+          git push origin "${tag}"
+
+      - name: Verify Go module through proxy
+        if: ${{ inputs.dry_run != true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ inputs.version }}"
+          module="github.com/gregorian-09/poolsim/bindings/go"
+
+          for attempt in {1..30}; do
+            if GOPROXY=https://proxy.golang.org go list -m "${module}@v${version}"; then
+              exit 0
+            fi
+            echo "waiting for ${module}@v${version} on proxy.golang.org (attempt ${attempt}/30)"
+            sleep 10
+          done
+
+          echo "${module}@v${version} did not appear on proxy.golang.org in time" >&2
+          exit 1

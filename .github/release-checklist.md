@@ -40,16 +40,25 @@ This checklist is for publishing the current sizing-calculator version of `pools
 5. Build the Python package from `bindings/python` and confirm both wheel and sdist pass `twine check`.
 6. Build the TypeScript package from `bindings/typescript` and confirm `npm pack --dry-run` only includes the compiled package files.
 
-## GitHub Actions Publish Workflow
+## GitHub Actions Publish Workflows
 
 1. Confirm the repository secret `CARGO_REGISTRY_TOKEN` is present.
 2. Confirm the repository secret `PYPI_API_TOKEN` is present for the Python package publish.
-3. Confirm the repository secret `NPM_TOKEN` is present for the TypeScript package publish.
+3. Confirm the repository secret `NPM_TOKEN` is present for the scoped TypeScript package publish.
 4. Commit the release changes.
-5. Create a tag matching the root `VERSION` file, for example `v0.2.1`.
+5. Create a tag matching the root `VERSION` file, for example `v0.3.0`.
 6. Push the tag.
-7. Confirm the `Publish` workflow starts automatically for that tag.
-8. Use `workflow_dispatch` only when you want a manual dry-run of the publish path or a controlled fallback publish.
+7. Publish artifacts intentionally with manual `workflow_dispatch`; tag pushes do not publish packages.
+8. Run dry-run mode first when validating a publish workflow.
+
+## Rust Publish Workflow
+
+Use `.github/workflows/publish.yml` to publish the Rust crates to crates.io.
+
+1. Confirm `CARGO_REGISTRY_TOKEN` is present.
+2. Run the `Publish Rust` workflow with the version matching `VERSION`.
+3. Keep `dry_run=true` for package validation only.
+4. Set `dry_run=false` only when publishing `poolsim-core`, `poolsim-cli`, and `poolsim-web` to crates.io.
 
 ## Python-Only Publish Workflow
 
@@ -62,30 +71,34 @@ Use `.github/workflows/publish-python.yml` when the Rust crates are already publ
 
 ## Node-Only Publish Workflow
 
-Use `.github/workflows/publish-node.yml` when the Rust crates are already published and only the TypeScript `poolsim` package needs to be published or backfilled.
+Use `.github/workflows/publish-node.yml` when the Rust crates are already published and only the TypeScript `@gregorian09/poolsim` package needs to be published or backfilled.
 
 1. Confirm `NPM_TOKEN` is present.
 2. Run the `Publish Node` workflow with the version matching `VERSION`.
 3. Keep `dry_run=true` for package validation only.
 4. Set `dry_run=false` only when publishing to npm.
 
+## Go Publish Workflow
+
+Use `.github/workflows/publish-go.yml` when the Rust crates are already published and the Go binding module should be discoverable through the Go module proxy.
+
+1. Run the `Publish Go` workflow with the version matching `VERSION`.
+2. Keep `dry_run=true` for test validation only.
+3. Set `dry_run=false` only when creating and pushing the `bindings/go/vX.Y.Z` module tag.
+4. Confirm `go list -m github.com/gregorian-09/poolsim/bindings/go@vX.Y.Z` resolves through the Go proxy.
+
 ## Publish Order
 
-1. Publish `poolsim-core` first:
-   `cargo publish -p poolsim-core`
-2. Wait for crates.io index propagation.
-3. Publish `poolsim-cli`:
-   `cargo publish -p poolsim-cli`
-4. Publish `poolsim-web`:
-   `cargo publish -p poolsim-web`
-5. Publish the Python `poolsim` package to PyPI from `bindings/python/dist`.
-6. Publish the TypeScript `poolsim` package to npm from `bindings/typescript`.
+1. Run `Publish Rust` for `poolsim-core`, `poolsim-cli`, and `poolsim-web`.
+2. Run `Publish Python` for the Python `poolsim` package on PyPI.
+3. Run `Publish Go` for the `github.com/gregorian-09/poolsim/bindings/go` module tag.
+4. Run `Publish Node` for the scoped TypeScript `@gregorian09/poolsim` package on npm.
 
 ## Post-Publish
 
 1. Verify docs.rs builds succeeded.
 2. Verify `cargo install poolsim-cli` works from crates.io.
 3. Verify `pip install poolsim` works from PyPI in a clean virtual environment.
-4. Verify `npm install poolsim` works from npm in a clean temporary project.
+4. Verify `npm install @gregorian09/poolsim` works from npm in a clean temporary project.
 5. Verify crate, PyPI, and npm pages show the correct README, license, repository, keywords, and categories.
 6. Create or update the GitHub Release notes for the pushed version tag after crates.io, PyPI, and npm publication are confirmed.

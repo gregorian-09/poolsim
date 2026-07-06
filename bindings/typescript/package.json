@@ -1,5 +1,5 @@
 {
-  "name": "poolsim",
+  "name": "@gregorian09/poolsim",
   "version": "0.3.0",
   "description": "TypeScript bindings for the Poolsim connection pool sizing CLI",
   "type": "module",

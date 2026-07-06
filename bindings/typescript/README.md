@@ -1,6 +1,6 @@
 # poolsim TypeScript Bindings
 
-`poolsim` is the TypeScript and Node.js binding package for the Poolsim connection-pool sizing toolkit.
+`@gregorian09/poolsim` is the TypeScript and Node.js binding package for the Poolsim connection-pool sizing toolkit.
 
 The package intentionally delegates all sizing work to the Rust `poolsim` CLI JSON contract. It does not reimplement queueing formulas in TypeScript. That keeps JavaScript and TypeScript services aligned with the same model used by the Rust library, CLI, REST API, WebSocket API, CI gates, docs fixtures, and release tests.
 
@@ -36,7 +36,7 @@ This is a compatibility choice: existing methods stay stable, while the Rust CLI
 Install the Node package:
 
 ```bash
-npm install poolsim
+npm install @gregorian09/poolsim
 ```
 
 Install the Rust CLI executable separately:
@@ -49,7 +49,7 @@ poolsim --version
 The TypeScript package expects the `poolsim` executable to be available on `PATH` by default. If your binary is installed somewhere else, pass the absolute path to `PoolsimClient`:
 
 ```ts
-import { PoolsimClient } from 'poolsim';
+import { PoolsimClient } from '@gregorian09/poolsim';
 
 const client = new PoolsimClient('/opt/tools/poolsim');
 ```
@@ -67,15 +67,15 @@ This package has no runtime npm dependencies. `typescript` and `@types/node` are
 The package is ESM-only:
 
 ```ts
-import { PoolsimClient, PoolsimError } from 'poolsim';
+import { PoolsimClient, PoolsimError } from '@gregorian09/poolsim';
 ```
 
-CommonJS `require('poolsim')` is not supported because the package publishes ESM output.
+CommonJS `require('@gregorian09/poolsim')` is not supported because the package publishes ESM output.
 
 ## Quick Start
 
 ```ts
-import { PoolsimClient } from 'poolsim';
+import { PoolsimClient } from '@gregorian09/poolsim';
 
 const client = new PoolsimClient();
 const report = client.simulate('docs/fixtures/cli-config.json');
@@ -394,7 +394,7 @@ A minimal GitHub Actions step can install both packages and fail the job when yo
 - name: Run capacity gate
   run: |
     node --input-type=module <<'JS'
-    import { PoolsimClient } from 'poolsim';
+    import { PoolsimClient } from '@gregorian09/poolsim';
 
     const client = new PoolsimClient();
     const report = client.gate('capacity-policy.toml', 'telemetry.json');
@@ -414,7 +414,7 @@ The wrapper throws `PoolsimError` when:
 - the CLI does not emit valid JSON
 
 ```ts
-import { PoolsimClient, PoolsimError } from 'poolsim';
+import { PoolsimClient, PoolsimError } from '@gregorian09/poolsim';
 
 const client = new PoolsimClient('poolsim');
 

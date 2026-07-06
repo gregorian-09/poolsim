@@ -33,7 +33,7 @@ Package source: [`../bindings/typescript`](../bindings/typescript)
 Install:
 
 ```bash
-npm install poolsim
+npm install @gregorian09/poolsim
 cargo install poolsim-cli
 ```
 
@@ -41,7 +41,7 @@ The TypeScript package delegates to the Rust `poolsim` executable. Keep the bina
 `PATH`, or pass its absolute path to `PoolsimClient`.
 
 ```ts
-import { PoolsimClient } from 'poolsim';
+import { PoolsimClient } from '@gregorian09/poolsim';
 
 const client = new PoolsimClient('poolsim');
 const report = client.simulate('docs/fixtures/cli-config.json');

@@ -341,6 +341,7 @@ Release process:
 - [.github/release-checklist.md](.github/release-checklist.md)
 - [.github/workflows/publish.yml](.github/workflows/publish.yml)
 - [.github/workflows/publish-python.yml](.github/workflows/publish-python.yml)
+- [.github/workflows/publish-go.yml](.github/workflows/publish-go.yml)
 - [.github/workflows/publish-node.yml](.github/workflows/publish-node.yml)
 
 GitHub Actions publish workflow usage:
@@ -357,6 +358,7 @@ Required release secrets:
 - `NPM_TOKEN`
 
 Use `Publish Python` when only the PyPI package needs to be published without republishing Rust crates.
+Use `Publish Go` to publish the Go module by creating the `bindings/go/vX.Y.Z` module tag.
 Use `Publish Node` when only the npm package needs to be published without republishing Rust crates.
 
 ## Repository

@@ -35,6 +35,7 @@ jobs:
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
+          scope: "@gregorian09"
 
       - name: Verify requested version matches VERSION
         shell: bash
@@ -56,6 +57,11 @@ jobs:
           npm ci
           npm test
           npm pack --dry-run
+
+      - name: Verify npm package scope
+        working-directory: bindings/typescript
+        run: |
+          node -e "const pkg = require('./package.json'); if (pkg.name !== '@gregorian09/poolsim') { throw new Error(`unexpected package name: ${pkg.name}`); }"
 
       - name: Verify npm token is configured
         if: ${{ inputs.dry_run != true }}
