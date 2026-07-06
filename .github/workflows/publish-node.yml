@@ -66,6 +66,4 @@ jobs:
       - name: Publish TypeScript package to npm
         if: ${{ inputs.dry_run != true }}
         working-directory: bindings/typescript
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
+        run: npm publish --access public --provenance
