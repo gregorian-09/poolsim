@@ -347,8 +347,8 @@ GitHub Actions publish workflow usage:
 
 1. update `VERSION`, sync metadata, and commit the release changes
 2. create and push a tag like `v0.3.0`
-3. the `Publish` workflow runs automatically on that tag for crates.io, PyPI, and npm
-4. use `workflow_dispatch` only when you want a manual dry-run or a controlled fallback publish
+3. publish each artifact intentionally with `workflow_dispatch`
+4. use dry-run mode before any manual publish when validating release packaging
 
 Required release secrets:
 

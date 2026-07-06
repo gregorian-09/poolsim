@@ -1,9 +1,6 @@
 name: Publish
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       version:
@@ -57,13 +54,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
-            requested_version="${GITHUB_REF_NAME#v}"
-            dry_run="false"
-          else
-            requested_version="${{ inputs.version }}"
-            dry_run="${{ inputs.dry_run }}"
-          fi
+          requested_version="${{ inputs.version }}"
+          dry_run="${{ inputs.dry_run }}"
           echo "version=$requested_version" >> "$GITHUB_OUTPUT"
           echo "dry_run=$dry_run" >> "$GITHUB_OUTPUT"
 

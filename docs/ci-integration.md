@@ -64,10 +64,9 @@ variables:
 
 ## GHCR Docker Image
 
-The repository includes `.github/workflows/docker.yml` for publishing `poolsim-web` to GitHub Container Registry. It is intentionally not triggered on every push. It runs only for:
+The repository includes `.github/workflows/docker.yml` for publishing `poolsim-web` to GitHub Container Registry. It is intentionally not triggered on pushes or tags. Run it manually with:
 
 - manual `workflow_dispatch`
-- version tags matching `v*`
 
 The workflow uses maintained Docker actions and publishes `ghcr.io/<owner>/poolsim-web` from the checked-in `Dockerfile`.
 
