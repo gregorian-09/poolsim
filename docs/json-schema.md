@@ -12,6 +12,8 @@ Available schemas:
 - [`schemas/budget.schema.json`](schemas/budget.schema.json): database connection budget planner config for `poolsim budget`.
 - [`schemas/telemetry.schema.json`](schemas/telemetry.schema.json): telemetry recommendation config for `poolsim import telemetry`, `poolsim gate telemetry`, `poolsim guard telemetry`, and `poolsim doctor telemetry`.
 - [`schemas/gate-policy.schema.json`](schemas/gate-policy.schema.json): capacity gate policy for `poolsim gate` and `poolsim guard`.
+- [`schemas/endpoint-classification.schema.json`](schemas/endpoint-classification.schema.json): endpoint-classification request for `poolsim classify endpoint` and `POST /v1/classify/endpoint`.
+- [`schemas/pooler-compatibility.schema.json`](schemas/pooler-compatibility.schema.json): external-pooler compatibility request for `poolsim check pooler` and `POST /v1/check/pooler`.
 
 The schemas are forward-compatible by design: they require the fields Poolsim needs today, but allow additional properties so future optional fields do not immediately break older editor setups.
 
@@ -52,6 +54,22 @@ Telemetry config example:
 npx ajv-cli validate \
   -s docs/schemas/telemetry.schema.json \
   -d docs/fixtures/telemetry.json
+```
+
+Endpoint classification example:
+
+```bash
+npx ajv-cli validate \
+  -s docs/schemas/endpoint-classification.schema.json \
+  -d docs/fixtures/endpoint-classification.json
+```
+
+Pooler compatibility example:
+
+```bash
+npx ajv-cli validate \
+  -s docs/schemas/pooler-compatibility.schema.json \
+  -d docs/fixtures/pooler-compatibility.json
 ```
 
 Gate policy files are commonly TOML in this repository. Convert TOML to JSON before validating against `gate-policy.schema.json`, or keep a JSON policy copy for CI validation.

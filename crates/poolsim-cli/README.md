@@ -107,6 +107,8 @@ Operational commands:
 
 - `poolsim compare`: compare named traffic scenarios.
 - `poolsim budget`: allocate one database connection budget across services.
+- `poolsim classify endpoint`: identify direct, pooled, proxied, edge-managed, or unknown database endpoints and redact secrets.
+- `poolsim check pooler`: detect external-pooler/session-feature compatibility risks.
 - `poolsim doctor`: explain whether a current pool is healthy.
 - `poolsim generate-config`: produce framework-specific pool config snippets.
 
@@ -158,6 +160,28 @@ Interpret the important fields:
 - `utilisation_rho`: modeled utilization ratio.
 - `p99_queue_wait_ms`: modeled p99 wait before a connection is available.
 - `saturation`: `Ok`, `Warning`, or `Critical`.
+
+## Endpoint And Pooler Examples
+
+Classify a provider-managed pooled endpoint before using it for a workflow:
+
+```bash
+poolsim --format json classify endpoint \
+  --endpoint 'postgres://user:secret@aws-0-us.pooler.supabase.com:6543/postgres?password=secret' \
+  --workflow migration
+```
+
+Check session-feature compatibility with transaction pooling:
+
+```bash
+poolsim --format json check pooler \
+  --pooler pg-bouncer \
+  --mode transaction \
+  --uses temporary-tables \
+  --uses advisory-locks
+```
+
+Poolsim exits with code `2` for clear incompatibility, and the JSON output includes remediation-oriented findings.
 
 ## Telemetry Diff Example
 

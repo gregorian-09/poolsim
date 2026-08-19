@@ -64,6 +64,8 @@ Given workload data, pool bounds, and simulation options, `poolsim` can:
 - import telemetry snapshots and diff recommendations against current production settings
 - query Prometheus-compatible telemetry and diff recommendations against current production settings
 - import OpenTelemetry OTLP metric exports through the CLI and web API
+- classify direct, pooled, proxied, transaction-mode, and edge-managed database endpoints
+- check external pooler compatibility for session-state features before relying on pool sizing
 - run CI capacity gates that fail deployments when telemetry violates pool policy
 - run deployment guard checks that return CI-ready safety fields and exit codes
 - diagnose configured pools with `poolsim doctor`

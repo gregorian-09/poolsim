@@ -49,7 +49,7 @@ use poolsim_core::types::{
 Module-oriented import:
 
 ```rust
-use poolsim_core::{distribution, erlang, error, monte_carlo, optimizer, otlp, sensitivity, telemetry};
+use poolsim_core::{distribution, erlang, error, monte_carlo, optimizer, otlp, pooler, sensitivity, telemetry};
 ```
 
 Telemetry import:
@@ -79,6 +79,115 @@ use poolsim_core::otlp::{
 ```
 
 ## Top-Level API
+
+## Pooler And Endpoint API
+
+Use `poolsim_core::pooler` when you need to classify database endpoints or check whether an external pooler mode is safe for the session features used by an application.
+
+Public helpers:
+
+- `poolsim_core::pooler::classify_endpoint`
+- `poolsim_core::pooler::check_pooler_compatibility`
+- `poolsim_core::pooler::redact_endpoint`
+
+Primary input/output types:
+
+- `EndpointClassificationInput`
+- `EndpointClassificationReport`
+- `PoolerCompatibilityInput`
+- `PoolerCompatibilityReport`
+- `PoolerConfigSnapshot`
+- `PoolerFinding`
+
+Primary enums:
+
+- `EndpointProviderKind`
+- `EndpointConnectionKind`
+- `DatabaseWorkflowKind`
+- `ExternalPoolerKind`
+- `MultiplexingMode`
+- `SessionSemanticFeature`
+- `CompatibilityDecision`
+- `EvidenceConfidence`
+
+Endpoint classification example:
+
+```rust
+use poolsim_core::pooler::{
+    classify_endpoint,
+    DatabaseWorkflowKind,
+    EndpointClassificationInput,
+    EndpointConnectionKind,
+};
+
+let report = classify_endpoint(
+    &EndpointClassificationInput::new(
+        "postgres://user:secret@aws-0-us.pooler.supabase.com:6543/postgres?password=secret",
+    )
+    .with_workflow(DatabaseWorkflowKind::Migration),
+);
+
+assert_eq!(report.endpoint_kind, EndpointConnectionKind::TransactionPooler);
+assert_eq!(report.workflow_compatible, Some(false));
+assert!(report.redacted_endpoint.contains("<redacted>"));
+```
+
+Pooler compatibility example:
+
+```rust
+use poolsim_core::pooler::{
+    check_pooler_compatibility,
+    CompatibilityDecision,
+    ExternalPoolerKind,
+    MultiplexingMode,
+    PoolerCompatibilityInput,
+    SessionSemanticFeature,
+};
+
+let report = check_pooler_compatibility(
+    &PoolerCompatibilityInput::new(
+        ExternalPoolerKind::PgBouncer,
+        MultiplexingMode::Transaction,
+    )
+    .with_features(vec![
+        SessionSemanticFeature::TemporaryTables,
+        SessionSemanticFeature::AdvisoryLocks,
+    ]),
+);
+
+assert_eq!(report.compatible, CompatibilityDecision::Incompatible);
+assert_eq!(report.incompatible_features.len(), 2);
+```
+
+Prepared-statement evidence example:
+
+```rust
+use poolsim_core::pooler::{
+    check_pooler_compatibility,
+    CompatibilityDecision,
+    ExternalPoolerKind,
+    MultiplexingMode,
+    PoolerCompatibilityInput,
+    PoolerConfigSnapshot,
+    SessionSemanticFeature,
+};
+
+let report = check_pooler_compatibility(
+    &PoolerCompatibilityInput::new(
+        ExternalPoolerKind::PgBouncer,
+        MultiplexingMode::Transaction,
+    )
+    .with_features(vec![SessionSemanticFeature::PreparedStatements])
+    .with_pooler_config(PoolerConfigSnapshot::new().with_max_prepared_statements(100)),
+);
+
+assert_eq!(report.compatible, CompatibilityDecision::Compatible);
+```
+
+Important rule:
+
+- External poolers are not magic capacity.
+- Always identify endpoint kind, multiplexing mode, session-pinning risks, workflow compatibility, and real backend limits before trusting a pool-size recommendation.
 
 ## OTLP API
 

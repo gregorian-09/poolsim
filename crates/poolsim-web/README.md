@@ -107,6 +107,8 @@ Available REST endpoints:
 - `POST /v1/batch`
 - `POST /v1/telemetry/recommend`
 - `POST /v1/otlp/recommend`
+- `POST /v1/classify/endpoint`
+- `POST /v1/check/pooler`
 
 Available WebSocket endpoint:
 
@@ -136,6 +138,28 @@ curl -s http://127.0.0.1:8080/v1/models
 ```
 
 Use this endpoint to discover supported distribution and queue models for UI selectors.
+
+## Endpoint And Pooler Requests
+
+Classify a direct, pooled, proxied, edge-managed, or unknown database endpoint:
+
+```bash
+curl -s \
+  -X POST http://127.0.0.1:8080/v1/classify/endpoint \
+  -H 'content-type: application/json' \
+  --data @docs/fixtures/endpoint-classification.json
+```
+
+Check whether a pooler mode is compatible with session features:
+
+```bash
+curl -s \
+  -X POST http://127.0.0.1:8080/v1/check/pooler \
+  -H 'content-type: application/json' \
+  --data @docs/fixtures/pooler-compatibility.json
+```
+
+Use these endpoints before treating an external pooler as additional capacity. They are diagnostic helpers; they do not open database connections or modify production configuration.
 
 ## Simulation Request
 

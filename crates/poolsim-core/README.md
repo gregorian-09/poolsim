@@ -118,6 +118,7 @@ Use these modules for advanced workflows:
 - `poolsim_core::types`: public input and output structs.
 - `poolsim_core::telemetry`: telemetry snapshots and recommendation diffs.
 - `poolsim_core::otlp`: OpenTelemetry OTLP JSON metric extraction helpers.
+- `poolsim_core::pooler`: endpoint classification, redaction, and external-pooler compatibility checks.
 - `poolsim_core::distribution`: latency distribution fitting.
 - `poolsim_core::erlang`: Erlang-C queue formulas.
 - `poolsim_core::monte_carlo`: simulation primitives.
@@ -154,6 +155,44 @@ let report = simulate(&workload, &pool, &SimulationOptions::default())?;
 println!("recommended pool size: {}", report.optimal_pool_size);
 println!("p99 queue wait: {:.3} ms", report.p99_queue_wait_ms);
 # Ok::<(), poolsim_core::error::PoolsimError>(())
+```
+
+## Endpoint And Pooler Compatibility Example
+
+Use `poolsim_core::pooler` before relying on pool sizing through provider-managed poolers. It distinguishes direct endpoints from pooled/proxied endpoints and checks whether session features are safe for the selected pooler mode.
+
+```rust
+use poolsim_core::pooler::{
+    check_pooler_compatibility,
+    classify_endpoint,
+    CompatibilityDecision,
+    DatabaseWorkflowKind,
+    EndpointClassificationInput,
+    EndpointConnectionKind,
+    ExternalPoolerKind,
+    MultiplexingMode,
+    PoolerCompatibilityInput,
+    SessionSemanticFeature,
+};
+
+let endpoint = classify_endpoint(
+    &EndpointClassificationInput::new(
+        "postgres://user:secret@aws-0-us.pooler.supabase.com:6543/postgres",
+    )
+    .with_workflow(DatabaseWorkflowKind::Migration),
+);
+assert_eq!(endpoint.endpoint_kind, EndpointConnectionKind::TransactionPooler);
+assert_eq!(endpoint.workflow_compatible, Some(false));
+assert!(endpoint.redacted_endpoint.contains("<redacted>"));
+
+let compatibility = check_pooler_compatibility(
+    &PoolerCompatibilityInput::new(
+        ExternalPoolerKind::PgBouncer,
+        MultiplexingMode::Transaction,
+    )
+    .with_features(vec![SessionSemanticFeature::TemporaryTables]),
+);
+assert_eq!(compatibility.compatible, CompatibilityDecision::Incompatible);
 ```
 
 ## Fixed Pool Evaluation

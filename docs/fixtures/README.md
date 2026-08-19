@@ -22,3 +22,5 @@ This directory contains checked-in sample inputs used by the documentation and v
 - `web-sensitivity.json`: request body for `POST /v1/sensitivity`
 - `web-otlp-recommend.json`: request body for `POST /v1/otlp/recommend`
 - `web-ws-request.json`: initial WebSocket request body for `GET /v1/live`
+- `endpoint-classification.json`: request body for `poolsim classify endpoint` and `POST /v1/classify/endpoint`
+- `pooler-compatibility.json`: request body for `poolsim check pooler` and `POST /v1/check/pooler`

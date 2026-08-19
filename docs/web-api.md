@@ -22,6 +22,8 @@ Checked-in request bodies for the documented HTTP and WebSocket examples live un
 - `docs/fixtures/telemetry.json`
 - `docs/fixtures/web-otlp-recommend.json`
 - `docs/fixtures/web-ws-request.json`
+- `docs/fixtures/endpoint-classification.json`
+- `docs/fixtures/pooler-compatibility.json`
 
 ## Base Routes
 
@@ -37,6 +39,8 @@ Available routes:
 - `POST /v1/batch`
 - `POST /v1/telemetry/recommend`
 - `POST /v1/otlp/recommend`
+- `POST /v1/classify/endpoint`
+- `POST /v1/check/pooler`
 - `GET /v1/live` (WebSocket upgrade)
 
 All REST request bodies are JSON.
@@ -216,6 +220,72 @@ curl -s \
 Response:
 
 - JSON array of `SimulationReport`
+
+### `POST /v1/classify/endpoint`
+
+Purpose:
+
+- classify a database endpoint as direct, pooled, proxied, edge-managed, HTTP/Data API based, or unknown
+- redact credentials and secret-like query parameters
+- detect workflow mismatches, such as using a transaction pooler for migrations
+
+Request model:
+
+- `EndpointClassificationInput.endpoint`
+- `EndpointClassificationInput.provider`
+- `EndpointClassificationInput.workflow`
+
+Example:
+
+```bash
+curl -s \
+  -X POST http://127.0.0.1:8080/v1/classify/endpoint \
+  -H 'content-type: application/json' \
+  --data @docs/fixtures/endpoint-classification.json
+```
+
+Response shape:
+
+- `endpoint_kind`
+- `provider`
+- `workflow_compatible`
+- `redacted_endpoint`
+- `findings`
+- `confidence`
+
+### `POST /v1/check/pooler`
+
+Purpose:
+
+- check whether a pooler mode is compatible with application session features
+- detect transaction/statement pooling risks for temporary tables, advisory locks, session variables, named prepared statements, migrations, and long-running work
+- return remediation-oriented findings instead of treating poolers as magic capacity
+
+Request model:
+
+- `PoolerCompatibilityInput.pooler`
+- `PoolerCompatibilityInput.mode`
+- `PoolerCompatibilityInput.features_used`
+- `PoolerCompatibilityInput.workflow`
+- `PoolerCompatibilityInput.pooler_config`
+
+Example:
+
+```bash
+curl -s \
+  -X POST http://127.0.0.1:8080/v1/check/pooler \
+  -H 'content-type: application/json' \
+  --data @docs/fixtures/pooler-compatibility.json
+```
+
+Response shape:
+
+- `compatible`
+- `incompatible_features`
+- `migration_direct_connection_required`
+- `long_running_direct_connection_required`
+- `findings`
+- `confidence`
 
 ### `POST /v1/telemetry/recommend`
 

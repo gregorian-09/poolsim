@@ -6,7 +6,16 @@ The format is based on Keep a Changelog, and this project uses Semantic Versioni
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Added
+
+- Endpoint classification through `poolsim classify endpoint`, `POST /v1/classify/endpoint`, and `poolsim_core::pooler::classify_endpoint`.
+- External pooler compatibility checks through `poolsim check pooler`, `POST /v1/check/pooler`, and `poolsim_core::pooler::check_pooler_compatibility`.
+- Secret-safe endpoint redaction for classification reports, including user-info and secret-like query parameters.
+- Source-backed documentation, fixtures, and JSON Schemas for endpoint classification and pooler compatibility workflows.
+
+### Compatibility
+
+- Added the new functionality without removing or narrowing existing Rust APIs, CLI commands, REST routes, config fields, output fields, or documented exit-code behavior.
 
 ## [0.3.0] - 2026-07-05
 

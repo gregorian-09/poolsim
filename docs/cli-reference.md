@@ -16,6 +16,7 @@ It covers:
 - Sample-file input
 - Output formats
 - Exit-code behavior
+- Endpoint classification and external-pooler compatibility checks
 
 The CLI binary is `poolsim`.
 
@@ -34,6 +35,8 @@ Checked-in runnable fixture files live under `docs/fixtures/`:
 - `docs/fixtures/otlp-metrics.json`
 - `docs/fixtures/gate-policy.toml`
 - `docs/fixtures/latencies.txt`
+- `docs/fixtures/endpoint-classification.json`
+- `docs/fixtures/pooler-compatibility.json`
 
 ## Command Summary
 
@@ -45,6 +48,8 @@ Available subcommands:
 - `batch`
 - `compare`
 - `budget`
+- `classify endpoint`
+- `check pooler`
 - `import telemetry`
 - `import prometheus`
 - `import otlp`
@@ -67,6 +72,81 @@ Global flags:
 
 - `--format <table|json|csv|html>`
 - `--warn-exit`
+
+## `classify endpoint`
+
+### Purpose
+
+Classifies whether an endpoint appears to be direct, session-pooled, transaction-pooled, statement-pooled, proxied, edge-managed, HTTP/Data API based, or unknown. The command redacts credentials before printing reports.
+
+Use it before applying pool-size recommendations to provider-managed poolers. A pooled endpoint can be right for API traffic and wrong for migrations or long-running admin workflows.
+
+### Example
+
+```bash
+poolsim --format json classify endpoint \
+  --endpoint 'postgres://user:secret@aws-0-us.pooler.supabase.com:6543/postgres?password=secret' \
+  --workflow migration
+```
+
+### Flags
+
+- `--endpoint <value>`: connection string, hostname, DSN, provider endpoint, or binding name to classify. Alias: `--connection-string`.
+- `--provider <supabase|neon|prisma-postgres|aws-rds|aws-rds-proxy|cloudflare-hyperdrive|pg-bouncer|unknown>`: optional provider hint.
+- `--workflow <api-traffic|background-worker|serverless-function|edge-function|migration|backup-restore|database-gui|replication|long-running-analytics|admin-task|unknown>`: optional workflow compatibility check.
+
+### Exit Codes
+
+- `0`: no clear endpoint/workflow mismatch.
+- `2`: endpoint is clearly incompatible with the selected workflow.
+- `3`: warning/review finding when `--warn-exit` is enabled.
+
+See [`endpoint-poolers.md`](endpoint-poolers.md) for detailed examples and limitations.
+
+## `check pooler`
+
+### Purpose
+
+Checks whether the selected pooler mode is compatible with session features used by the application.
+
+This catches common production issues such as using transaction pooling with temporary tables, advisory locks, persistent session variables, named prepared statements, migration workflows, or long-running work that should use a direct/session endpoint.
+
+### Example
+
+```bash
+poolsim --format json check pooler \
+  --pooler pg-bouncer \
+  --mode transaction \
+  --uses temporary-tables \
+  --uses advisory-locks
+```
+
+Prepared-statement evidence example:
+
+```bash
+poolsim --format json check pooler \
+  --pooler pg-bouncer \
+  --mode transaction \
+  --uses prepared-statements \
+  --max-prepared-statements 100
+```
+
+### Flags
+
+- `--pooler <pg-bouncer|rds-proxy|supavisor|prisma-postgres-pooler|neon-pooler|cloudflare-hyperdrive|unknown>`: pooler family.
+- `--mode <none|session|transaction|statement|provider-managed|unknown>`: active multiplexing mode.
+- `--uses <feature>`: repeatable feature flag. Supported values include `prepared-statements`, `protocol-prepared-statements`, `named-prepared-statements`, `temporary-tables`, `advisory-locks`, `session-variables`, `set-statement`, `listen-notify-listener`, `hold-cursors`, `interactive-transaction`, `long-running-query`, `copy-protocol`, `migrations`, and `unknown`.
+- `--workflow <...>`: optional workflow compatibility check using the same values as `classify endpoint`.
+- `--max-prepared-statements <integer>`: pooler evidence for PgBouncer prepared-statement support.
+- `--resets-session-state <true|false>`: optional provider/config evidence about session-state reset behavior.
+
+### Exit Codes
+
+- `0`: compatible, or needs review without `--warn-exit`.
+- `2`: incompatible.
+- `3`: needs review when `--warn-exit` is enabled.
+
+See [`endpoint-poolers.md`](endpoint-poolers.md) for detailed examples and limitations.
 
 ## Global Options
 
