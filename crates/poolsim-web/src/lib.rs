@@ -34,6 +34,11 @@ pub fn build_app(state: AppState, rate_limit_state: RateLimitState, cors_origins
         .route("/v1/batch", post(routes::batch::handler))
         .route("/v1/telemetry/recommend", post(routes::telemetry::handler))
         .route("/v1/otlp/recommend", post(routes::otlp::handler))
+        .route(
+            "/v1/classify/endpoint",
+            post(routes::classify::endpoint_handler),
+        )
+        .route("/v1/check/pooler", post(routes::check::pooler_handler))
         .route("/v1/live", get(routes::live::handler))
         .with_state(state)
         .layer(from_fn_with_state(

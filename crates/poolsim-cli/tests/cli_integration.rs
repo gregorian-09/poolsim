@@ -177,3 +177,63 @@ fn batch_and_evaluate_commands_emit_json() {
         serde_json::from_slice(&eval_out.stdout).expect("evaluate JSON output should parse");
     assert_eq!(eval_payload["pool_size"], 8);
 }
+
+#[test]
+fn classify_endpoint_and_check_pooler_emit_json() {
+    let classify = run(&[
+        "--format",
+        "json",
+        "classify",
+        "endpoint",
+        "--endpoint",
+        "postgres://user:secret@aws-0-us.pooler.supabase.com:6543/postgres?password=secret",
+        "--workflow",
+        "migration",
+    ]);
+    assert_eq!(
+        classify.status.code(),
+        Some(2),
+        "stderr: {}",
+        String::from_utf8_lossy(&classify.stderr)
+    );
+    let classify_payload: serde_json::Value =
+        serde_json::from_slice(&classify.stdout).expect("classify JSON output should parse");
+    assert_eq!(classify_payload["endpoint_kind"], "transaction-pooler");
+    assert_eq!(classify_payload["provider"], "supabase");
+    assert_eq!(classify_payload["workflow_compatible"], false);
+    assert!(classify_payload["redacted_endpoint"]
+        .as_str()
+        .expect("redacted endpoint")
+        .contains("<redacted>"));
+
+    let check = run(&[
+        "--format",
+        "json",
+        "check",
+        "pooler",
+        "--pooler",
+        "pg-bouncer",
+        "--mode",
+        "transaction",
+        "--uses",
+        "temporary-tables",
+        "--uses",
+        "advisory-locks",
+    ]);
+    assert_eq!(
+        check.status.code(),
+        Some(2),
+        "stderr: {}",
+        String::from_utf8_lossy(&check.stderr)
+    );
+    let check_payload: serde_json::Value =
+        serde_json::from_slice(&check.stdout).expect("check JSON output should parse");
+    assert_eq!(check_payload["compatible"], "incompatible");
+    assert_eq!(
+        check_payload["incompatible_features"]
+            .as_array()
+            .expect("features array")
+            .len(),
+        2
+    );
+}

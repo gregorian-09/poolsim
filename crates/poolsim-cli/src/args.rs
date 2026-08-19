@@ -66,6 +66,8 @@ pub enum Commands {
     Batch(BatchArgs),
     Compare(CompareArgs),
     Budget(BudgetArgs),
+    Classify(ClassifyArgs),
+    Check(CheckArgs),
     Import(ImportArgs),
     Gate(GateArgs),
     Guard(GuardArgs),
@@ -91,6 +93,212 @@ pub enum CliDatabaseKind {
     Mysql,
     Sqlite,
     SqlServer,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct ClassifyArgs {
+    #[command(subcommand)]
+    pub command: ClassifyCommands,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum ClassifyCommands {
+    Endpoint(EndpointClassifyArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct EndpointClassifyArgs {
+    #[arg(long, alias = "connection-string")]
+    pub endpoint: String,
+
+    #[arg(long, value_enum)]
+    pub provider: Option<CliEndpointProviderKind>,
+
+    #[arg(long, value_enum)]
+    pub workflow: Option<CliDatabaseWorkflowKind>,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct CheckArgs {
+    #[command(subcommand)]
+    pub command: CheckCommands,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum CheckCommands {
+    Pooler(PoolerCheckArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct PoolerCheckArgs {
+    #[arg(long, value_enum)]
+    pub pooler: CliExternalPoolerKind,
+
+    #[arg(long, value_enum)]
+    pub mode: CliMultiplexingMode,
+
+    #[arg(long = "uses", value_enum)]
+    pub features_used: Vec<CliSessionSemanticFeature>,
+
+    #[arg(long, value_enum)]
+    pub workflow: Option<CliDatabaseWorkflowKind>,
+
+    #[arg(long)]
+    pub max_prepared_statements: Option<u32>,
+
+    #[arg(long)]
+    pub resets_session_state: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliEndpointProviderKind {
+    Supabase,
+    Neon,
+    PrismaPostgres,
+    AwsRds,
+    AwsRdsProxy,
+    CloudflareHyperdrive,
+    PgBouncer,
+    Unknown,
+}
+
+impl From<CliEndpointProviderKind> for poolsim_core::pooler::EndpointProviderKind {
+    fn from(value: CliEndpointProviderKind) -> Self {
+        match value {
+            CliEndpointProviderKind::Supabase => Self::Supabase,
+            CliEndpointProviderKind::Neon => Self::Neon,
+            CliEndpointProviderKind::PrismaPostgres => Self::PrismaPostgres,
+            CliEndpointProviderKind::AwsRds => Self::AwsRds,
+            CliEndpointProviderKind::AwsRdsProxy => Self::AwsRdsProxy,
+            CliEndpointProviderKind::CloudflareHyperdrive => Self::CloudflareHyperdrive,
+            CliEndpointProviderKind::PgBouncer => Self::PgBouncer,
+            CliEndpointProviderKind::Unknown => Self::Unknown,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliDatabaseWorkflowKind {
+    ApiTraffic,
+    BackgroundWorker,
+    ServerlessFunction,
+    EdgeFunction,
+    Migration,
+    BackupRestore,
+    DatabaseGui,
+    Replication,
+    LongRunningAnalytics,
+    AdminTask,
+    Unknown,
+}
+
+impl From<CliDatabaseWorkflowKind> for poolsim_core::pooler::DatabaseWorkflowKind {
+    fn from(value: CliDatabaseWorkflowKind) -> Self {
+        match value {
+            CliDatabaseWorkflowKind::ApiTraffic => Self::ApiTraffic,
+            CliDatabaseWorkflowKind::BackgroundWorker => Self::BackgroundWorker,
+            CliDatabaseWorkflowKind::ServerlessFunction => Self::ServerlessFunction,
+            CliDatabaseWorkflowKind::EdgeFunction => Self::EdgeFunction,
+            CliDatabaseWorkflowKind::Migration => Self::Migration,
+            CliDatabaseWorkflowKind::BackupRestore => Self::BackupRestore,
+            CliDatabaseWorkflowKind::DatabaseGui => Self::DatabaseGui,
+            CliDatabaseWorkflowKind::Replication => Self::Replication,
+            CliDatabaseWorkflowKind::LongRunningAnalytics => Self::LongRunningAnalytics,
+            CliDatabaseWorkflowKind::AdminTask => Self::AdminTask,
+            CliDatabaseWorkflowKind::Unknown => Self::Unknown,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliExternalPoolerKind {
+    PgBouncer,
+    RdsProxy,
+    Supavisor,
+    PrismaPostgresPooler,
+    NeonPooler,
+    CloudflareHyperdrive,
+    Unknown,
+}
+
+impl From<CliExternalPoolerKind> for poolsim_core::pooler::ExternalPoolerKind {
+    fn from(value: CliExternalPoolerKind) -> Self {
+        match value {
+            CliExternalPoolerKind::PgBouncer => Self::PgBouncer,
+            CliExternalPoolerKind::RdsProxy => Self::RdsProxy,
+            CliExternalPoolerKind::Supavisor => Self::Supavisor,
+            CliExternalPoolerKind::PrismaPostgresPooler => Self::PrismaPostgresPooler,
+            CliExternalPoolerKind::NeonPooler => Self::NeonPooler,
+            CliExternalPoolerKind::CloudflareHyperdrive => Self::CloudflareHyperdrive,
+            CliExternalPoolerKind::Unknown => Self::Unknown,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliMultiplexingMode {
+    None,
+    Session,
+    Transaction,
+    Statement,
+    ProviderManaged,
+    Unknown,
+}
+
+impl From<CliMultiplexingMode> for poolsim_core::pooler::MultiplexingMode {
+    fn from(value: CliMultiplexingMode) -> Self {
+        match value {
+            CliMultiplexingMode::None => Self::None,
+            CliMultiplexingMode::Session => Self::Session,
+            CliMultiplexingMode::Transaction => Self::Transaction,
+            CliMultiplexingMode::Statement => Self::Statement,
+            CliMultiplexingMode::ProviderManaged => Self::ProviderManaged,
+            CliMultiplexingMode::Unknown => Self::Unknown,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliSessionSemanticFeature {
+    SetStatement,
+    ListenNotifyListener,
+    NotifyOnly,
+    PreparedStatements,
+    ProtocolPreparedStatements,
+    NamedPreparedStatements,
+    TemporaryTables,
+    HoldCursors,
+    AdvisoryLocks,
+    SessionVariables,
+    Migrations,
+    LongRunningQuery,
+    InteractiveTransaction,
+    CopyProtocol,
+    Unknown,
+}
+
+impl From<CliSessionSemanticFeature> for poolsim_core::pooler::SessionSemanticFeature {
+    fn from(value: CliSessionSemanticFeature) -> Self {
+        match value {
+            CliSessionSemanticFeature::SetStatement => Self::SetStatement,
+            CliSessionSemanticFeature::ListenNotifyListener => Self::ListenNotifyListener,
+            CliSessionSemanticFeature::NotifyOnly => Self::NotifyOnly,
+            CliSessionSemanticFeature::PreparedStatements => Self::PreparedStatements,
+            CliSessionSemanticFeature::ProtocolPreparedStatements => {
+                Self::ProtocolPreparedStatements
+            }
+            CliSessionSemanticFeature::NamedPreparedStatements => Self::NamedPreparedStatements,
+            CliSessionSemanticFeature::TemporaryTables => Self::TemporaryTables,
+            CliSessionSemanticFeature::HoldCursors => Self::HoldCursors,
+            CliSessionSemanticFeature::AdvisoryLocks => Self::AdvisoryLocks,
+            CliSessionSemanticFeature::SessionVariables => Self::SessionVariables,
+            CliSessionSemanticFeature::Migrations => Self::Migrations,
+            CliSessionSemanticFeature::LongRunningQuery => Self::LongRunningQuery,
+            CliSessionSemanticFeature::InteractiveTransaction => Self::InteractiveTransaction,
+            CliSessionSemanticFeature::CopyProtocol => Self::CopyProtocol,
+            CliSessionSemanticFeature::Unknown => Self::Unknown,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Args)]

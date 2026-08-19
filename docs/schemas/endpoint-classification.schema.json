@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gregorian-09/poolsim/schemas/endpoint-classification.schema.json",
+  "title": "Poolsim endpoint classification request",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["endpoint"],
+  "properties": {
+    "endpoint": { "type": "string", "minLength": 1 },
+    "provider": {
+      "type": ["string", "null"],
+      "enum": ["supabase", "neon", "prisma-postgres", "aws-rds", "aws-rds-proxy", "cloudflare-hyperdrive", "pg-bouncer", "unknown", null]
+    },
+    "workflow": {
+      "type": ["string", "null"],
+      "enum": ["api-traffic", "background-worker", "serverless-function", "edge-function", "migration", "backup-restore", "database-gui", "replication", "long-running-analytics", "admin-task", "unknown", null]
+    }
+  }
+}

@@ -245,6 +245,43 @@ async fn rest_routes_work_and_return_structured_errors() {
     assert_eq!(otlp_json["service_name"], "checkout-api");
     assert!(otlp_json["diff"]["recommended_pool_size"].is_number());
 
+    let endpoint_payload = json!({
+        "endpoint": "postgres://user:secret@aws-0-us.pooler.supabase.com:6543/postgres?password=secret",
+        "workflow": "migration"
+    });
+    let (endpoint_status, endpoint_json) = json_request(
+        app.clone(),
+        "POST",
+        "/v1/classify/endpoint",
+        endpoint_payload,
+    )
+    .await;
+    assert_eq!(endpoint_status, StatusCode::OK);
+    assert_eq!(endpoint_json["endpoint_kind"], "transaction-pooler");
+    assert_eq!(endpoint_json["provider"], "supabase");
+    assert_eq!(endpoint_json["workflow_compatible"], false);
+    assert!(endpoint_json["redacted_endpoint"]
+        .as_str()
+        .expect("redacted endpoint")
+        .contains("<redacted>"));
+
+    let pooler_payload = json!({
+        "pooler": "pg-bouncer",
+        "mode": "transaction",
+        "features_used": ["temporary-tables", "advisory-locks"]
+    });
+    let (pooler_status, pooler_json) =
+        json_request(app.clone(), "POST", "/v1/check/pooler", pooler_payload).await;
+    assert_eq!(pooler_status, StatusCode::OK);
+    assert_eq!(pooler_json["compatible"], "incompatible");
+    assert_eq!(
+        pooler_json["incompatible_features"]
+            .as_array()
+            .expect("features array")
+            .len(),
+        2
+    );
+
     let invalid = json!({
         "workload": {
             "requests_per_second": 300.0,

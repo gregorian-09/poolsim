@@ -11,6 +11,8 @@
 //! - `/v1/telemetry/recommend`
 //! - `/v1/otlp/recommend`
 //! - `/v1/live`
+//! - `/v1/classify/endpoint`
+//! - `/v1/check/pooler`
 //!
 //! Request and response types live in the child modules, including:
 //!
@@ -23,6 +25,10 @@
 
 /// Batch simulation endpoint.
 pub mod batch;
+/// Compatibility-check endpoints.
+pub mod check;
+/// Endpoint-classification endpoints.
+pub mod classify;
 /// Fixed pool-size evaluation endpoint.
 pub mod evaluate;
 /// Health endpoint.

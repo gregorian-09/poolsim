@@ -1,0 +1,5 @@
+{
+  "pooler": "pg-bouncer",
+  "mode": "transaction",
+  "features_used": ["temporary-tables", "advisory-locks"]
+}

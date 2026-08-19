@@ -1,0 +1,4 @@
+{
+  "endpoint": "postgres://user:secret@aws-0-us.pooler.supabase.com:6543/postgres?password=secret",
+  "workflow": "migration"
+}

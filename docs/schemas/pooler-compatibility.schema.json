@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gregorian-09/poolsim/schemas/pooler-compatibility.schema.json",
+  "title": "Poolsim pooler compatibility request",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["pooler", "mode"],
+  "properties": {
+    "pooler": {
+      "type": "string",
+      "enum": ["pg-bouncer", "rds-proxy", "supavisor", "prisma-postgres-pooler", "neon-pooler", "cloudflare-hyperdrive", "unknown"]
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["none", "session", "transaction", "statement", "provider-managed", "unknown"]
+    },
+    "features_used": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["set-statement", "listen-notify-listener", "notify-only", "prepared-statements", "protocol-prepared-statements", "named-prepared-statements", "temporary-tables", "hold-cursors", "advisory-locks", "session-variables", "migrations", "long-running-query", "interactive-transaction", "copy-protocol", "unknown"]
+      }
+    },
+    "workflow": {
+      "type": ["string", "null"],
+      "enum": ["api-traffic", "background-worker", "serverless-function", "edge-function", "migration", "backup-restore", "database-gui", "replication", "long-running-analytics", "admin-task", "unknown", null]
+    },
+    "pooler_config": {
+      "type": ["object", "null"],
+      "additionalProperties": true,
+      "properties": {
+        "max_prepared_statements": { "type": ["integer", "null"], "minimum": 0 },
+        "resets_session_state": { "type": ["boolean", "null"] }
+      }
+    }
+  }
+}

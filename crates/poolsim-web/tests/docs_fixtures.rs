@@ -191,6 +191,28 @@ async fn docs_rest_fixtures_round_trip() {
     assert_eq!(otlp_status, StatusCode::OK);
     assert_eq!(otlp_json["service_name"], "checkout-api");
     assert!(otlp_json["diff"]["recommended_pool_size"].is_number());
+
+    let (endpoint_status, endpoint_json) = json_request(
+        app.clone(),
+        "POST",
+        "/v1/classify/endpoint",
+        fixture_json("docs/fixtures/endpoint-classification.json"),
+    )
+    .await;
+    assert_eq!(endpoint_status, StatusCode::OK);
+    assert_eq!(endpoint_json["endpoint_kind"], "transaction-pooler");
+    assert_eq!(endpoint_json["workflow_compatible"], false);
+
+    let (pooler_status, pooler_json) = json_request(
+        app.clone(),
+        "POST",
+        "/v1/check/pooler",
+        fixture_json("docs/fixtures/pooler-compatibility.json"),
+    )
+    .await;
+    assert_eq!(pooler_status, StatusCode::OK);
+    assert_eq!(pooler_json["compatible"], "incompatible");
+    assert!(pooler_json["incompatible_features"].is_array());
 }
 
 #[tokio::test]

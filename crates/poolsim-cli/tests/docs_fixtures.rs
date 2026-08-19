@@ -789,6 +789,8 @@ fn docs_json_schemas_are_valid_json_and_match_fixture_shapes() {
         "docs/schemas/budget.schema.json",
         "docs/schemas/telemetry.schema.json",
         "docs/schemas/gate-policy.schema.json",
+        "docs/schemas/endpoint-classification.schema.json",
+        "docs/schemas/pooler-compatibility.schema.json",
     ];
 
     for path in schema_paths {
@@ -850,6 +852,105 @@ fn docs_json_schemas_are_valid_json_and_match_fixture_shapes() {
         .parse()
         .expect("gate policy fixture should parse as TOML");
     assert!(gate_policy.get("max_saturation").is_some());
+
+    let endpoint: Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            workspace_root().join("docs/fixtures/endpoint-classification.json"),
+        )
+        .expect("endpoint classification fixture should be readable"),
+    )
+    .expect("endpoint classification fixture should parse");
+    assert!(endpoint["endpoint"].is_string());
+
+    let pooler: Value = serde_json::from_str(
+        &std::fs::read_to_string(workspace_root().join("docs/fixtures/pooler-compatibility.json"))
+            .expect("pooler compatibility fixture should be readable"),
+    )
+    .expect("pooler compatibility fixture should parse");
+    assert!(pooler["pooler"].is_string());
+    assert!(pooler["features_used"]
+        .as_array()
+        .is_some_and(|items| !items.is_empty()));
+}
+
+#[test]
+fn docs_endpoint_and_pooler_examples_work() {
+    let endpoint_output = run_cli(&[
+        "--format",
+        "json",
+        "classify",
+        "endpoint",
+        "--endpoint",
+        "postgres://user:secret@aws-0-us.pooler.supabase.com:6543/postgres?password=secret",
+        "--workflow",
+        "migration",
+    ]);
+    assert_eq!(
+        endpoint_output.status.code(),
+        Some(2),
+        "endpoint workflow mismatch should exit 2\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&endpoint_output.stdout),
+        String::from_utf8_lossy(&endpoint_output.stderr)
+    );
+    let endpoint: Value = serde_json::from_str(&stdout_utf8(&endpoint_output))
+        .expect("endpoint classification output should parse");
+    assert_eq!(endpoint["endpoint_kind"], "transaction-pooler");
+    assert_eq!(endpoint["workflow_compatible"], false);
+    assert!(endpoint["redacted_endpoint"]
+        .as_str()
+        .expect("redacted endpoint")
+        .contains("<redacted>"));
+
+    let pooler_output = run_cli(&[
+        "--format",
+        "json",
+        "check",
+        "pooler",
+        "--pooler",
+        "pg-bouncer",
+        "--mode",
+        "transaction",
+        "--uses",
+        "temporary-tables",
+        "--uses",
+        "advisory-locks",
+    ]);
+    assert_eq!(
+        pooler_output.status.code(),
+        Some(2),
+        "pooler incompatibility should exit 2\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&pooler_output.stdout),
+        String::from_utf8_lossy(&pooler_output.stderr)
+    );
+    let pooler: Value =
+        serde_json::from_str(&stdout_utf8(&pooler_output)).expect("pooler output should parse");
+    assert_eq!(pooler["compatible"], "incompatible");
+    assert_eq!(
+        pooler["incompatible_features"]
+            .as_array()
+            .expect("features array")
+            .len(),
+        2
+    );
+
+    let prepared_output = run_cli(&[
+        "--format",
+        "json",
+        "check",
+        "pooler",
+        "--pooler",
+        "pg-bouncer",
+        "--mode",
+        "transaction",
+        "--uses",
+        "prepared-statements",
+        "--max-prepared-statements",
+        "100",
+    ]);
+    assert_success(&prepared_output, "prepared statement pooler evidence");
+    let prepared: Value =
+        serde_json::from_str(&stdout_utf8(&prepared_output)).expect("prepared output should parse");
+    assert_eq!(prepared["compatible"], "compatible");
 }
 
 #[test]

@@ -23,7 +23,13 @@ use anyhow::{Context, Result};
 use args::{Cli, Commands, OutputFormat};
 use clap::Parser;
 use poolsim_core::{
-    evaluate, simulate, sweep_with_options,
+    evaluate,
+    pooler::{
+        check_pooler_compatibility, classify_endpoint, EndpointClassificationInput,
+        EndpointClassificationReport, PoolerCompatibilityInput, PoolerCompatibilityReport,
+        PoolerConfigSnapshot,
+    },
+    simulate, sweep_with_options,
     telemetry::{recommend_from_telemetry, TelemetryRecommendation},
     types::{EvaluationResult, RiskLevel, SaturationLevel, SensitivityRow, SimulationReport},
 };
@@ -151,6 +157,45 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
             render_budget(&report, cli.format)?;
             Ok(exit_code_for_budget_status(report.status, cli.warn_exit))
         }
+        Commands::Classify(args) => match args.command {
+            args::ClassifyCommands::Endpoint(args) => {
+                let mut input = EndpointClassificationInput::new(args.endpoint);
+                if let Some(provider) = args.provider {
+                    input = input.with_provider(provider.into());
+                }
+                if let Some(workflow) = args.workflow {
+                    input = input.with_workflow(workflow.into());
+                }
+                let report = classify_endpoint(&input);
+                render_endpoint_classification(&report, cli.format)?;
+                Ok(exit_code_for_endpoint_classification(
+                    &report,
+                    cli.warn_exit,
+                ))
+            }
+        },
+        Commands::Check(args) => match args.command {
+            args::CheckCommands::Pooler(args) => {
+                let mut input = PoolerCompatibilityInput::new(args.pooler.into(), args.mode.into())
+                    .with_features(args.features_used.into_iter().map(Into::into).collect());
+                if let Some(workflow) = args.workflow {
+                    input = input.with_workflow(workflow.into());
+                }
+                if args.max_prepared_statements.is_some() || args.resets_session_state.is_some() {
+                    let mut config = PoolerConfigSnapshot::new();
+                    if let Some(value) = args.max_prepared_statements {
+                        config = config.with_max_prepared_statements(value);
+                    }
+                    if let Some(value) = args.resets_session_state {
+                        config = config.with_resets_session_state(value);
+                    }
+                    input = input.with_pooler_config(config);
+                }
+                let report = check_pooler_compatibility(&input);
+                render_pooler_compatibility(&report, cli.format)?;
+                Ok(exit_code_for_pooler_compatibility(&report, cli.warn_exit))
+            }
+        },
         Commands::Import(args) => match args.command {
             args::ImportCommands::Telemetry(args) => {
                 let input = config::resolve_telemetry_input(&args)?;
@@ -332,6 +377,89 @@ fn render_budget(report: &budget::BudgetPlanReport, format: OutputFormat) -> Res
     }
 }
 
+fn render_endpoint_classification(
+    report: &EndpointClassificationReport,
+    format: OutputFormat,
+) -> Result<()> {
+    match format {
+        OutputFormat::Table => {
+            println!("endpoint_kind: {:?}", report.endpoint_kind);
+            println!("provider: {:?}", report.provider);
+            println!("workflow_compatible: {:?}", report.workflow_compatible);
+            println!("confidence: {:?}", report.confidence);
+            println!("redacted_endpoint: {}", report.redacted_endpoint);
+            for finding in &report.findings {
+                println!(
+                    "finding: {} [{:?}] {} -> {}",
+                    finding.code, finding.risk, finding.message, finding.remediation
+                );
+            }
+            Ok(())
+        }
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => {
+            println!("field,value");
+            println!("endpoint_kind,{:?}", report.endpoint_kind);
+            println!("provider,{:?}", report.provider);
+            println!("workflow_compatible,{:?}", report.workflow_compatible);
+            println!("confidence,{:?}", report.confidence);
+            println!("redacted_endpoint,{}", report.redacted_endpoint);
+            println!("finding_count,{}", report.findings.len());
+            Ok(())
+        }
+        OutputFormat::Html => render::html::print("Poolsim endpoint classification report", report),
+    }
+}
+
+fn render_pooler_compatibility(
+    report: &PoolerCompatibilityReport,
+    format: OutputFormat,
+) -> Result<()> {
+    match format {
+        OutputFormat::Table => {
+            println!("compatible: {:?}", report.compatible);
+            println!(
+                "migration_direct_connection_required: {}",
+                report.migration_direct_connection_required
+            );
+            println!(
+                "long_running_direct_connection_required: {}",
+                report.long_running_direct_connection_required
+            );
+            println!("confidence: {:?}", report.confidence);
+            println!("incompatible_features: {:?}", report.incompatible_features);
+            for finding in &report.findings {
+                println!(
+                    "finding: {} [{:?}] {} -> {}",
+                    finding.code, finding.risk, finding.message, finding.remediation
+                );
+            }
+            Ok(())
+        }
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => {
+            println!("field,value");
+            println!("compatible,{:?}", report.compatible);
+            println!(
+                "migration_direct_connection_required,{}",
+                report.migration_direct_connection_required
+            );
+            println!(
+                "long_running_direct_connection_required,{}",
+                report.long_running_direct_connection_required
+            );
+            println!("confidence,{:?}", report.confidence);
+            println!(
+                "incompatible_feature_count,{}",
+                report.incompatible_features.len()
+            );
+            println!("finding_count,{}", report.findings.len());
+            Ok(())
+        }
+        OutputFormat::Html => render::html::print("Poolsim pooler compatibility report", report),
+    }
+}
+
 fn render_telemetry(recommendation: &TelemetryRecommendation, format: OutputFormat) -> Result<()> {
     match format {
         OutputFormat::Table => render::table::telemetry(recommendation),
@@ -450,6 +578,35 @@ fn exit_code_for_budget_status(status: budget::BudgetStatus, warn_exit: bool) ->
     match status {
         budget::BudgetStatus::Critical => ExitCode::from(2),
         budget::BudgetStatus::Warning if warn_exit => ExitCode::from(3),
+        _ => ExitCode::from(0),
+    }
+}
+
+fn exit_code_for_endpoint_classification(
+    report: &EndpointClassificationReport,
+    warn_exit: bool,
+) -> ExitCode {
+    if report.workflow_compatible == Some(false) {
+        ExitCode::from(2)
+    } else if warn_exit
+        && report
+            .findings
+            .iter()
+            .any(|finding| finding.risk >= RiskLevel::Medium)
+    {
+        ExitCode::from(3)
+    } else {
+        ExitCode::from(0)
+    }
+}
+
+fn exit_code_for_pooler_compatibility(
+    report: &PoolerCompatibilityReport,
+    warn_exit: bool,
+) -> ExitCode {
+    match report.compatible {
+        poolsim_core::pooler::CompatibilityDecision::Incompatible => ExitCode::from(2),
+        poolsim_core::pooler::CompatibilityDecision::NeedsReview if warn_exit => ExitCode::from(3),
         _ => ExitCode::from(0),
     }
 }
