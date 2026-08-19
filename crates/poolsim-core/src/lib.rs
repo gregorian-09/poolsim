@@ -17,6 +17,8 @@ pub mod monte_carlo;
 pub mod optimizer;
 /// OpenTelemetry metric payload helpers.
 pub mod otlp;
+/// Endpoint classification and external-pooler compatibility checks.
+pub mod pooler;
 /// Sensitivity analysis routines.
 pub mod sensitivity;
 /// Telemetry import and recommendation-diff routines.
