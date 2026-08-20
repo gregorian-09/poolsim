@@ -113,6 +113,7 @@ Operational commands:
 - `poolsim check pooler`: detect external-pooler/session-feature compatibility risks.
 - `poolsim check session-state`: add client-aware prepared-statement and session-state remediation for popular backend libraries.
 - `poolsim import pooler-evidence`: summarize observed pooler client/backend counters from a JSON snapshot.
+- `poolsim import pgbouncer-pools`: parse captured PgBouncer `SHOW POOLS` output into the same pooler evidence report.
 - `poolsim doctor`: explain whether a current pool is healthy.
 - `poolsim generate-config`: produce framework-specific pool config snippets.
 
@@ -206,6 +207,17 @@ poolsim --format json import pooler-evidence \
 ```
 
 The pooler evidence import reports observed client connections, backend connections, utilization against known limits, waiting clients, saturation, and confidence.
+
+Import PgBouncer native `SHOW POOLS` output without manually normalizing JSON:
+
+```bash
+poolsim --format json import pgbouncer-pools \
+  --file docs/fixtures/pgbouncer-show-pools.csv \
+  --label checkout-pgbouncer \
+  --pooler-backend-limit 30
+```
+
+Use `psql -p 6432 -d pgbouncer --csv -c "SHOW POOLS;"` for repeatable captures. The command also accepts default aligned `psql` table output for copy-paste diagnostics.
 
 Poolsim exits with code `2` for clear incompatibility, and the JSON output includes remediation-oriented findings.
 

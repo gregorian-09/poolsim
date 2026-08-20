@@ -68,6 +68,7 @@ Given workload data, pool bounds, and simulation options, `poolsim` can:
 - check external pooler compatibility for session-state features before relying on pool sizing
 - add client-specific session-state guidance for Prisma, node-postgres, sqlx, SQLAlchemy asyncpg, PostgREST, PgJDBC, and generic PostgreSQL clients
 - import observed pooler client/backend counters before changing application pool settings
+- import captured PgBouncer `SHOW POOLS` output directly into pooler evidence reports
 - plan serverless and edge connection footprint across concurrent execution environments
 - map connection ownership across application pools, external pooler client/backend layers, and database backends
 - run CI capacity gates that fail deployments when telemetry violates pool policy
@@ -194,6 +195,14 @@ Import observed pooler client/backend counters:
 ```bash
 cargo run -p poolsim-cli -- --format json import pooler-evidence \
   --config docs/fixtures/pooler-evidence.json
+```
+
+Import captured PgBouncer `SHOW POOLS` output:
+
+```bash
+cargo run -p poolsim-cli -- --format json import pgbouncer-pools \
+  --file docs/fixtures/pgbouncer-show-pools.csv \
+  --pooler-backend-limit 30
 ```
 
 Plan serverless pool footprint before raising concurrency or pool size:

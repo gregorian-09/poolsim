@@ -4,6 +4,8 @@ Poolsim can import observed external-pooler counters and summarize whether clien
 
 Use this when you have PgBouncer `SHOW POOLS`, Supavisor pooler evidence, RDS Proxy metrics, or equivalent provider telemetry and need to keep client connections separate from real database backend connections.
 
+If your evidence source is PgBouncer `SHOW POOLS`, you can also use the direct importer documented in [`pgbouncer-show-pools-import.md`](pgbouncer-show-pools-import.md) instead of manually normalizing JSON.
+
 ## Why This Exists
 
 External poolers expose at least two different capacity surfaces:

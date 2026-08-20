@@ -205,6 +205,8 @@ Public helpers:
 - `poolsim_core::pooler::check_pooler_compatibility`
 - `poolsim_core::pooler::analyze_session_state_compatibility`
 - `poolsim_core::pooler::summarize_pooler_evidence`
+- `poolsim_core::pooler::parse_pgbouncer_show_pools`
+- `poolsim_core::pooler::summarize_pgbouncer_show_pools`
 - `poolsim_core::pooler::redact_endpoint`
 
 Primary input/output types:
@@ -219,6 +221,8 @@ Primary input/output types:
 - `ClientCompatibilityGuidance`
 - `PoolerEvidenceSnapshot`
 - `PoolerEvidenceReport`
+- `PgbouncerPoolRow`
+- `PgbouncerShowPoolsSnapshot`
 - `PoolerFinding`
 
 Primary enums:
@@ -363,6 +367,30 @@ let report = summarize_pooler_evidence(
 
 assert_eq!(report.status, PoolerEvidenceStatus::Healthy);
 assert_eq!(report.observed_backend_connections, Some(15));
+```
+
+PgBouncer `SHOW POOLS` import example:
+
+```rust
+use poolsim_core::pooler::{
+    parse_pgbouncer_show_pools,
+    summarize_pgbouncer_show_pools,
+    PgbouncerShowPoolsSnapshot,
+    PoolerEvidenceStatus,
+};
+
+let capture = "database,user,cl_active,cl_waiting,sv_active,sv_idle,pool_mode\ncheckout,web,42,0,8,7,transaction\n";
+let rows = parse_pgbouncer_show_pools(capture)?;
+let report = summarize_pgbouncer_show_pools(
+    &PgbouncerShowPoolsSnapshot::new(rows)
+        .with_label("checkout-prod")
+        .with_pooler_client_limit(500)
+        .with_pooler_backend_limit(30),
+)?;
+
+assert_eq!(report.status, PoolerEvidenceStatus::Healthy);
+assert_eq!(report.observed_client_connections, Some(42));
+# Ok::<(), poolsim_core::error::PoolsimError>(())
 ```
 
 Important rule:

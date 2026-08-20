@@ -42,6 +42,7 @@ Checked-in runnable fixture files live under `docs/fixtures/`:
 - `docs/fixtures/endpoint-classification.json`
 - `docs/fixtures/pooler-compatibility.json`
 - `docs/fixtures/pooler-evidence.json`
+- `docs/fixtures/pgbouncer-show-pools.csv`
 - `docs/fixtures/session-state-compatibility.json`
 - `docs/fixtures/serverless-concurrency.json`
 - `docs/fixtures/connection-ownership.json`
@@ -63,6 +64,7 @@ Available subcommands:
 - `check session-state`
 - `import telemetry`
 - `import pooler-evidence`
+- `import pgbouncer-pools`
 - `import prometheus`
 - `import otlp`
 - `gate telemetry`
@@ -263,6 +265,61 @@ poolsim --format json import pooler-evidence \
 - `3`: client-waiting or needs-review when `--warn-exit` is enabled.
 
 See [`pooler-evidence-import.md`](pooler-evidence-import.md) for detailed field semantics and source-backed rules.
+
+## `import pgbouncer-pools`
+
+### Purpose
+
+Imports captured PgBouncer `SHOW POOLS` output and converts it into the existing normalized `PoolerEvidenceReport` output.
+
+Use this command when you operate PgBouncer and want poolsim to read the native PgBouncer counters directly instead of manually writing `pooler-evidence.json`.
+
+### Example
+
+```bash
+poolsim --format json import pgbouncer-pools \
+  --file docs/fixtures/pgbouncer-show-pools.csv \
+  --label checkout-pgbouncer \
+  --pooler-client-limit 500 \
+  --pooler-backend-limit 30
+```
+
+### Capture Format
+
+Recommended CSV capture:
+
+```bash
+psql -p 6432 -d pgbouncer --csv -c "SHOW POOLS;" > pgbouncer-show-pools.csv
+```
+
+Default aligned `psql` table output is also accepted for manual incident notes and copy-paste workflows.
+
+### Flags
+
+- `--file <path>`: captured PgBouncer `SHOW POOLS` output.
+- `--input <path>`: alias for `--file`.
+- `--label <text>`: optional service, database, environment, or PgBouncer instance label.
+- `--mode <none|session|transaction|statement|provider-managed|unknown>`: optional pooling-mode override when the capture omits `pool_mode`.
+- `--pooler-client-limit <n>`: optional client-side PgBouncer connection cap.
+- `--pooler-backend-limit <n>`: optional backend/server connection cap.
+
+### Output Fields
+
+The output fields are identical to `import pooler-evidence`:
+
+- `observed_client_connections`: sum of `cl_active + cl_waiting` across PgBouncer rows.
+- `observed_backend_connections`: sum of `sv_active + sv_idle` across PgBouncer rows.
+- `client_waiting`: sum of `cl_waiting` across PgBouncer rows.
+- `backend_utilization`: backend connections divided by `--pooler-backend-limit`, when supplied.
+- `client_utilization`: client connections divided by `--pooler-client-limit`, when supplied.
+
+### Exit Codes
+
+- `0`: healthy, or warning/review evidence without `--warn-exit`.
+- `2`: backend-saturated.
+- `3`: client-waiting or needs-review when `--warn-exit` is enabled.
+
+See [`pgbouncer-show-pools-import.md`](pgbouncer-show-pools-import.md) for capture guidance, counter mapping, library examples, and interpretation rules.
 
 ## `plan serverless`
 

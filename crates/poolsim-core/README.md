@@ -45,6 +45,31 @@ The telemetry module remains the Rust API for comparing a current production poo
 
 This is the same model used by the CLI `import`, `doctor`, `gate`, `guard`, and `generate-config` workflows.
 
+### PgBouncer Evidence Imports
+
+Rust callers can parse captured PgBouncer `SHOW POOLS` output directly and summarize it into the same pooler evidence model used by the CLI:
+
+```rust
+use poolsim_core::pooler::{
+    parse_pgbouncer_show_pools,
+    summarize_pgbouncer_show_pools,
+    PgbouncerShowPoolsSnapshot,
+};
+
+let capture = "database,user,cl_active,cl_waiting,sv_active,sv_idle,pool_mode\ncheckout,web,42,0,8,7,transaction\n";
+let rows = parse_pgbouncer_show_pools(capture)?;
+let report = summarize_pgbouncer_show_pools(
+    &PgbouncerShowPoolsSnapshot::new(rows)
+        .with_label("checkout-prod")
+        .with_pooler_backend_limit(30),
+)?;
+
+assert_eq!(report.observed_backend_connections, Some(15));
+# Ok::<(), poolsim_core::error::PoolsimError>(())
+```
+
+The parser accepts `psql --csv` output and default aligned `psql` table output. The summarizer aggregates PgBouncer's per-`(database, user)` rows into total client and backend pressure.
+
 ### Better Foundation For Non-Rust Integrations
 
 The core crate is still pure sizing logic, but `0.3.0` makes it easier for other surfaces to build on top of it. The release now has documented adoption paths for:

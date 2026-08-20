@@ -11,6 +11,7 @@ This folder contains user-facing documentation for the current Poolsim capabilit
 - [`endpoint-poolers.md`](endpoint-poolers.md): Endpoint classification and external-pooler compatibility checks for direct, pooled, proxied, transaction-mode, and edge-managed database endpoints.
 - [`session-state-compatibility.md`](session-state-compatibility.md): Client-aware prepared-statement and session-state compatibility guidance for external poolers.
 - [`pooler-evidence-import.md`](pooler-evidence-import.md): Normalized pooler client/backend evidence import for PgBouncer, Supavisor, RDS Proxy, and similar poolers.
+- [`pgbouncer-show-pools-import.md`](pgbouncer-show-pools-import.md): Direct PgBouncer `SHOW POOLS` CSV/aligned-output import into normalized pooler evidence.
 - [`serverless-concurrency.md`](serverless-concurrency.md): Serverless and edge execution-environment pool footprint planning.
 - [`connection-ownership.md`](connection-ownership.md): Connection ownership graph for app pools, pooler client/backend layers, and database backend capacity.
 - [`terraform-opentofu.md`](terraform-opentofu.md): Terraform/OpenTofu external-data adapter for connection-pool sizing as code.
