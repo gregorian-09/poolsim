@@ -18,6 +18,7 @@ It covers:
 - Exit-code behavior
 - Endpoint classification and external-pooler compatibility checks
 - Client-aware prepared-statement and session-state compatibility checks
+- Pooler evidence import for observed client/backend counters
 - Serverless execution-environment connection-footprint planning
 - Connection ownership graph reporting
 
@@ -40,6 +41,7 @@ Checked-in runnable fixture files live under `docs/fixtures/`:
 - `docs/fixtures/latencies.txt`
 - `docs/fixtures/endpoint-classification.json`
 - `docs/fixtures/pooler-compatibility.json`
+- `docs/fixtures/pooler-evidence.json`
 - `docs/fixtures/session-state-compatibility.json`
 - `docs/fixtures/serverless-concurrency.json`
 - `docs/fixtures/connection-ownership.json`
@@ -60,6 +62,7 @@ Available subcommands:
 - `check pooler`
 - `check session-state`
 - `import telemetry`
+- `import pooler-evidence`
 - `import prometheus`
 - `import otlp`
 - `gate telemetry`
@@ -223,6 +226,43 @@ poolsim --format json check session-state \
 - `3`: needs review when `--warn-exit` is enabled.
 
 See [`session-state-compatibility.md`](session-state-compatibility.md) for detailed examples, source-backed rules, and limitations.
+
+## `import pooler-evidence`
+
+### Purpose
+
+Imports a normalized JSON snapshot of external-pooler client/backend counters and reports whether clients are waiting, backend pooler capacity is saturated, or evidence is incomplete.
+
+Use it for PgBouncer `SHOW POOLS`, Supavisor/PgBouncer pooler evidence, RDS Proxy metrics, or equivalent telemetry after normalizing field names.
+
+### Example
+
+```bash
+poolsim --format json import pooler-evidence \
+  --config docs/fixtures/pooler-evidence.json
+```
+
+### Flags
+
+- `--config <path>`: JSON file containing `pooler`, `mode`, client counters, backend/server counters, and optional client/backend limits.
+
+### Output Fields
+
+- `status`: `healthy`, `client-waiting`, `backend-saturated`, or `needs-review`.
+- `observed_client_connections`: `client_active + client_waiting`, when both are known.
+- `observed_backend_connections`: `server_active + server_idle`, when both are known.
+- `backend_utilization`: backend connections divided by `pooler_backend_limit`, when known.
+- `client_utilization`: client connections divided by `pooler_client_limit`, when known.
+- `findings`: remediation-oriented evidence findings.
+- `confidence`: evidence confidence.
+
+### Exit Codes
+
+- `0`: healthy, or warning/review evidence without `--warn-exit`.
+- `2`: backend-saturated.
+- `3`: client-waiting or needs-review when `--warn-exit` is enabled.
+
+See [`pooler-evidence-import.md`](pooler-evidence-import.md) for detailed field semantics and source-backed rules.
 
 ## `plan serverless`
 
