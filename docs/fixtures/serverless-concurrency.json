@@ -1,0 +1,9 @@
+{
+  "platform": "aws-lambda",
+  "max_concurrent_invocations": 120,
+  "reserved_concurrency": 80,
+  "app_pool_size_per_environment": 2,
+  "uses_external_pooler": false,
+  "database_backend_limit": 240,
+  "warm_reuse_ratio": 0.72
+}

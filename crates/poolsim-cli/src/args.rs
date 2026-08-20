@@ -66,6 +66,7 @@ pub enum Commands {
     Batch(BatchArgs),
     Compare(CompareArgs),
     Budget(BudgetArgs),
+    Plan(PlanArgs),
     Classify(ClassifyArgs),
     Check(CheckArgs),
     Import(ImportArgs),
@@ -74,6 +75,69 @@ pub enum Commands {
     Doctor(DoctorArgs),
     GenerateConfig(GenerateConfigArgs),
     Init(InitArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct PlanArgs {
+    #[command(subcommand)]
+    pub command: PlanCommands,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum PlanCommands {
+    Serverless(ServerlessPlanArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct ServerlessPlanArgs {
+    #[arg(long, value_enum)]
+    pub platform: CliServerlessPlatformKind,
+
+    #[arg(long)]
+    pub max_concurrent_invocations: Option<u32>,
+
+    #[arg(long)]
+    pub reserved_concurrency: Option<u32>,
+
+    #[arg(long, alias = "pool-size", alias = "pool-size-per-environment")]
+    pub app_pool_size_per_environment: Option<u32>,
+
+    #[arg(long)]
+    pub uses_external_pooler: bool,
+
+    #[arg(long, value_enum)]
+    pub external_pooler: Option<CliExternalPoolerKind>,
+
+    #[arg(long)]
+    pub database_backend_limit: Option<u32>,
+
+    #[arg(long)]
+    pub warm_reuse_ratio: Option<f64>,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliServerlessPlatformKind {
+    AwsLambda,
+    VercelFunctions,
+    CloudflareWorkers,
+    NetlifyFunctions,
+    AzureFunctions,
+    GoogleCloudFunctions,
+    Unknown,
+}
+
+impl From<CliServerlessPlatformKind> for poolsim_core::serverless::ServerlessPlatformKind {
+    fn from(value: CliServerlessPlatformKind) -> Self {
+        match value {
+            CliServerlessPlatformKind::AwsLambda => Self::AwsLambda,
+            CliServerlessPlatformKind::VercelFunctions => Self::VercelFunctions,
+            CliServerlessPlatformKind::CloudflareWorkers => Self::CloudflareWorkers,
+            CliServerlessPlatformKind::NetlifyFunctions => Self::NetlifyFunctions,
+            CliServerlessPlatformKind::AzureFunctions => Self::AzureFunctions,
+            CliServerlessPlatformKind::GoogleCloudFunctions => Self::GoogleCloudFunctions,
+            CliServerlessPlatformKind::Unknown => Self::Unknown,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]

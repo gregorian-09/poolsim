@@ -39,6 +39,10 @@ pub fn build_app(state: AppState, rate_limit_state: RateLimitState, cors_origins
             post(routes::classify::endpoint_handler),
         )
         .route("/v1/check/pooler", post(routes::check::pooler_handler))
+        .route(
+            "/v1/plan/serverless",
+            post(routes::plan::serverless_handler),
+        )
         .route("/v1/live", get(routes::live::handler))
         .with_state(state)
         .layer(from_fn_with_state(

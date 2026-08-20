@@ -213,6 +213,18 @@ async fn docs_rest_fixtures_round_trip() {
     assert_eq!(pooler_status, StatusCode::OK);
     assert_eq!(pooler_json["compatible"], "incompatible");
     assert!(pooler_json["incompatible_features"].is_array());
+
+    let (serverless_status, serverless_json) = json_request(
+        app.clone(),
+        "POST",
+        "/v1/plan/serverless",
+        fixture_json("docs/fixtures/serverless-concurrency.json"),
+    )
+    .await;
+    assert_eq!(serverless_status, StatusCode::OK);
+    assert_eq!(serverless_json["status"], "pass");
+    assert_eq!(serverless_json["effective_concurrency"], 80);
+    assert_eq!(serverless_json["worst_case_app_pool_connections"], 160);
 }
 
 #[tokio::test]

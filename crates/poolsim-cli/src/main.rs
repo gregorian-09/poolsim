@@ -29,6 +29,10 @@ use poolsim_core::{
         EndpointClassificationReport, PoolerCompatibilityInput, PoolerCompatibilityReport,
         PoolerConfigSnapshot,
     },
+    serverless::{
+        plan_serverless_concurrency, ServerlessConcurrencyInput, ServerlessConcurrencyReport,
+        ServerlessConcurrencyStatus,
+    },
     simulate, sweep_with_options,
     telemetry::{recommend_from_telemetry, TelemetryRecommendation},
     types::{EvaluationResult, RiskLevel, SaturationLevel, SensitivityRow, SimulationReport},
@@ -157,6 +161,28 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
             render_budget(&report, cli.format)?;
             Ok(exit_code_for_budget_status(report.status, cli.warn_exit))
         }
+        Commands::Plan(args) => match args.command {
+            args::PlanCommands::Serverless(args) => {
+                let mut input = ServerlessConcurrencyInput::new(args.platform.into());
+                input.max_concurrent_invocations = args.max_concurrent_invocations;
+                input.reserved_concurrency = args.reserved_concurrency;
+                input.app_pool_size_per_environment = args.app_pool_size_per_environment;
+                input.uses_external_pooler = args.uses_external_pooler;
+                input.external_pooler = args.external_pooler.map(Into::into);
+                if input.external_pooler.is_some() {
+                    input.uses_external_pooler = true;
+                }
+                input.database_backend_limit = args.database_backend_limit;
+                input.warm_reuse_ratio = args.warm_reuse_ratio;
+
+                let report = plan_serverless_concurrency(&input)?;
+                render_serverless_concurrency(&report, cli.format)?;
+                Ok(exit_code_for_serverless_status(
+                    report.status,
+                    cli.warn_exit,
+                ))
+            }
+        },
         Commands::Classify(args) => match args.command {
             args::ClassifyCommands::Endpoint(args) => {
                 let mut input = EndpointClassificationInput::new(args.endpoint);
@@ -377,6 +403,65 @@ fn render_budget(report: &budget::BudgetPlanReport, format: OutputFormat) -> Res
     }
 }
 
+fn render_serverless_concurrency(
+    report: &ServerlessConcurrencyReport,
+    format: OutputFormat,
+) -> Result<()> {
+    match format {
+        OutputFormat::Table => {
+            println!("status: {:?}", report.status);
+            println!("platform: {:?}", report.platform);
+            println!("effective_concurrency: {:?}", report.effective_concurrency);
+            println!(
+                "worst_case_app_pool_connections: {:?}",
+                report.worst_case_app_pool_connections
+            );
+            println!(
+                "direct_database_backend_upper_bound: {:?}",
+                report.direct_database_backend_upper_bound
+            );
+            println!(
+                "database_backend_limit: {:?}",
+                report.database_backend_limit
+            );
+            println!("uses_external_pooler: {}", report.uses_external_pooler);
+            println!("external_pooler: {:?}", report.external_pooler);
+            println!("connection_churn_risk: {:?}", report.connection_churn_risk);
+            println!("confidence: {:?}", report.confidence);
+            for finding in &report.findings {
+                println!(
+                    "finding: {} [{:?}] {} -> {}",
+                    finding.code, finding.risk, finding.message, finding.remediation
+                );
+            }
+            Ok(())
+        }
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => {
+            println!("field,value");
+            println!("status,{:?}", report.status);
+            println!("platform,{:?}", report.platform);
+            println!("effective_concurrency,{:?}", report.effective_concurrency);
+            println!(
+                "worst_case_app_pool_connections,{:?}",
+                report.worst_case_app_pool_connections
+            );
+            println!(
+                "direct_database_backend_upper_bound,{:?}",
+                report.direct_database_backend_upper_bound
+            );
+            println!("database_backend_limit,{:?}", report.database_backend_limit);
+            println!("uses_external_pooler,{}", report.uses_external_pooler);
+            println!("external_pooler,{:?}", report.external_pooler);
+            println!("connection_churn_risk,{:?}", report.connection_churn_risk);
+            println!("confidence,{:?}", report.confidence);
+            println!("finding_count,{}", report.findings.len());
+            Ok(())
+        }
+        OutputFormat::Html => render::html::print("Poolsim serverless concurrency report", report),
+    }
+}
+
 fn render_endpoint_classification(
     report: &EndpointClassificationReport,
     format: OutputFormat,
@@ -578,6 +663,21 @@ fn exit_code_for_budget_status(status: budget::BudgetStatus, warn_exit: bool) ->
     match status {
         budget::BudgetStatus::Critical => ExitCode::from(2),
         budget::BudgetStatus::Warning if warn_exit => ExitCode::from(3),
+        _ => ExitCode::from(0),
+    }
+}
+
+fn exit_code_for_serverless_status(
+    status: ServerlessConcurrencyStatus,
+    warn_exit: bool,
+) -> ExitCode {
+    match status {
+        ServerlessConcurrencyStatus::Critical => ExitCode::from(2),
+        ServerlessConcurrencyStatus::Warning | ServerlessConcurrencyStatus::NeedsReview
+            if warn_exit =>
+        {
+            ExitCode::from(3)
+        }
         _ => ExitCode::from(0),
     }
 }

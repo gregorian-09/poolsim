@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gregorian-09/poolsim/docs/schemas/serverless-concurrency.schema.json",
+  "title": "Poolsim serverless concurrency plan request",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["platform"],
+  "properties": {
+    "platform": {
+      "type": "string",
+      "enum": [
+        "aws-lambda",
+        "vercel-functions",
+        "cloudflare-workers",
+        "netlify-functions",
+        "azure-functions",
+        "google-cloud-functions",
+        "unknown"
+      ]
+    },
+    "max_concurrent_invocations": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "reserved_concurrency": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "app_pool_size_per_environment": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "uses_external_pooler": {
+      "type": "boolean"
+    },
+    "external_pooler": {
+      "type": "string",
+      "enum": [
+        "pg-bouncer",
+        "rds-proxy",
+        "supavisor",
+        "prisma-postgres-pooler",
+        "neon-pooler",
+        "cloudflare-hyperdrive",
+        "unknown"
+      ]
+    },
+    "database_backend_limit": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "warm_reuse_ratio": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
+  }
+}

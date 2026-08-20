@@ -791,6 +791,7 @@ fn docs_json_schemas_are_valid_json_and_match_fixture_shapes() {
         "docs/schemas/gate-policy.schema.json",
         "docs/schemas/endpoint-classification.schema.json",
         "docs/schemas/pooler-compatibility.schema.json",
+        "docs/schemas/serverless-concurrency.schema.json",
     ];
 
     for path in schema_paths {
@@ -871,6 +872,16 @@ fn docs_json_schemas_are_valid_json_and_match_fixture_shapes() {
     assert!(pooler["features_used"]
         .as_array()
         .is_some_and(|items| !items.is_empty()));
+
+    let serverless: Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            workspace_root().join("docs/fixtures/serverless-concurrency.json"),
+        )
+        .expect("serverless concurrency fixture should be readable"),
+    )
+    .expect("serverless concurrency fixture should parse");
+    assert!(serverless["platform"].is_string());
+    assert!(serverless["app_pool_size_per_environment"].is_number());
 }
 
 #[test]
@@ -954,6 +965,79 @@ fn docs_endpoint_and_pooler_examples_work() {
 }
 
 #[test]
+fn docs_serverless_plan_examples_work() {
+    let safe_output = run_cli(&[
+        "--format",
+        "json",
+        "plan",
+        "serverless",
+        "--platform",
+        "aws-lambda",
+        "--max-concurrent-invocations",
+        "120",
+        "--reserved-concurrency",
+        "80",
+        "--pool-size",
+        "2",
+        "--database-backend-limit",
+        "240",
+        "--warm-reuse-ratio",
+        "0.72",
+    ]);
+    assert_success(&safe_output, "serverless plan safe example");
+    let safe: Value =
+        serde_json::from_str(&stdout_utf8(&safe_output)).expect("serverless output should parse");
+    assert_eq!(safe["status"], "pass");
+    assert_eq!(safe["effective_concurrency"], 80);
+    assert_eq!(safe["worst_case_app_pool_connections"], 160);
+
+    let critical_output = run_cli(&[
+        "--format",
+        "json",
+        "plan",
+        "serverless",
+        "--platform",
+        "vercel-functions",
+        "--max-concurrent-invocations",
+        "200",
+        "--pool-size-per-environment",
+        "4",
+        "--database-backend-limit",
+        "300",
+    ]);
+    assert_eq!(critical_output.status.code(), Some(2));
+    let critical: Value = serde_json::from_str(&stdout_utf8(&critical_output))
+        .expect("critical serverless output should parse");
+    assert_eq!(critical["status"], "critical");
+    assert_eq!(critical["direct_database_backend_upper_bound"], 800);
+
+    let external_output = run_cli(&[
+        "--format",
+        "json",
+        "plan",
+        "serverless",
+        "--platform",
+        "cloudflare-workers",
+        "--max-concurrent-invocations",
+        "500",
+        "--pool-size",
+        "1",
+        "--external-pooler",
+        "cloudflare-hyperdrive",
+        "--database-backend-limit",
+        "100",
+        "--warm-reuse-ratio",
+        "0.20",
+    ]);
+    assert_success(&external_output, "serverless external pooler example");
+    let external: Value = serde_json::from_str(&stdout_utf8(&external_output))
+        .expect("external pooler output should parse");
+    assert_eq!(external["status"], "warning");
+    assert_eq!(external["direct_database_backend_upper_bound"], Value::Null);
+    assert_eq!(external["uses_external_pooler"], true);
+}
+
+#[test]
 fn docs_html_output_examples_work_for_major_commands() {
     let commands: Vec<Vec<String>> = vec![
         vec![
@@ -987,6 +1071,20 @@ fn docs_html_output_examples_work_for_major_commands() {
             "budget".to_string(),
             "--config".to_string(),
             fixture("docs/fixtures/budget.json"),
+        ],
+        vec![
+            "plan".to_string(),
+            "serverless".to_string(),
+            "--platform".to_string(),
+            "aws-lambda".to_string(),
+            "--max-concurrent-invocations".to_string(),
+            "120".to_string(),
+            "--reserved-concurrency".to_string(),
+            "80".to_string(),
+            "--pool-size".to_string(),
+            "2".to_string(),
+            "--database-backend-limit".to_string(),
+            "200".to_string(),
         ],
         vec![
             "import".to_string(),

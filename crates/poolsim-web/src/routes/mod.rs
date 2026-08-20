@@ -13,6 +13,7 @@
 //! - `/v1/live`
 //! - `/v1/classify/endpoint`
 //! - `/v1/check/pooler`
+//! - `/v1/plan/serverless`
 //!
 //! Request and response types live in the child modules, including:
 //!
@@ -39,6 +40,8 @@ pub mod live;
 pub mod models;
 /// OTLP recommendation endpoint.
 pub mod otlp;
+/// Capacity-planning endpoints.
+pub mod plan;
 /// Sensitivity analysis endpoint.
 pub mod sensitivity;
 /// Single simulation endpoint.
