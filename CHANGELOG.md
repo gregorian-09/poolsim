@@ -13,8 +13,11 @@ The format is based on Keep a Changelog, and this project uses Semantic Versioni
 - Secret-safe endpoint redaction for classification reports, including user-info and secret-like query parameters.
 - Serverless concurrency planning through `poolsim plan serverless`, `POST /v1/plan/serverless`, and `poolsim_core::serverless::plan_serverless_concurrency`.
 - Conservative serverless app-side footprint reporting with effective concurrency, worst-case pool connections, direct backend upper bounds, churn risk, confidence, and remediation findings.
+- Connection ownership graphs through `poolsim graph ownership`, `POST /v1/graph/ownership`, and `poolsim_core::ownership::build_connection_ownership_graph`.
+- Explicit app-pool, external-pooler client, external-pooler backend, and database-backend ownership reporting.
 - Source-backed documentation, fixtures, and JSON Schemas for endpoint classification and pooler compatibility workflows.
 - Source-backed documentation, fixtures, and JSON Schema coverage for serverless connection-footprint planning.
+- Source-backed documentation, fixtures, and JSON Schema coverage for connection ownership graphs.
 
 ### Compatibility
 

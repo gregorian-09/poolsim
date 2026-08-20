@@ -18,6 +18,7 @@ It covers:
 - Exit-code behavior
 - Endpoint classification and external-pooler compatibility checks
 - Serverless execution-environment connection-footprint planning
+- Connection ownership graph reporting
 
 The CLI binary is `poolsim`.
 
@@ -39,6 +40,7 @@ Checked-in runnable fixture files live under `docs/fixtures/`:
 - `docs/fixtures/endpoint-classification.json`
 - `docs/fixtures/pooler-compatibility.json`
 - `docs/fixtures/serverless-concurrency.json`
+- `docs/fixtures/connection-ownership.json`
 
 ## Command Summary
 
@@ -51,6 +53,7 @@ Available subcommands:
 - `compare`
 - `budget`
 - `plan serverless`
+- `graph ownership`
 - `classify endpoint`
 - `check pooler`
 - `import telemetry`
@@ -211,6 +214,49 @@ poolsim --format json plan serverless \
 - `3`: warning or needs-review when `--warn-exit` is enabled.
 
 See [`serverless-concurrency.md`](serverless-concurrency.md) for detailed examples, source-backed assumptions, and limitations.
+
+## `graph ownership`
+
+### Purpose
+
+Builds a connection ownership graph showing runtime units, application pools, external pooler client-side connections, external pooler backend connections, and real database backend capacity.
+
+Use it when a pooler, proxy, serverless runtime, or provider-managed endpoint makes it unclear whether a connection count is client-side capacity or real backend database capacity.
+
+### Example
+
+```bash
+poolsim --format json graph ownership \
+  --service-name checkout-api \
+  --runtime-units 12 \
+  --pool-size 10 \
+  --endpoint-kind database-proxy \
+  --external-pooler rds-proxy \
+  --pooler-client-limit 1000 \
+  --pooler-backend-limit 90 \
+  --database-backend-limit 120 \
+  --session-pinning-risk medium
+```
+
+### Flags
+
+- `--service-name <value>`: optional service/workload label.
+- `--runtime-units <integer>`: replicas, processes, workers, or execution environments that can each own a pool. Aliases: `--instances`, `--replicas`, `--execution-environments`.
+- `--app-pool-size-per-runtime-unit <integer>`: application-side pool size per runtime unit. Aliases: `--pool-size`, `--pool-size-per-runtime-unit`.
+- `--endpoint-kind <direct-database|session-pooler|transaction-pooler|statement-pooler|database-proxy|edge-pooler|http-data-api|unknown>`: endpoint class.
+- `--external-pooler <pg-bouncer|rds-proxy|supavisor|prisma-postgres-pooler|neon-pooler|cloudflare-hyperdrive|unknown>`: external pooler family.
+- `--pooler-client-limit <integer>`: client connection cap accepted by the pooler/proxy.
+- `--pooler-backend-limit <integer>`: backend database connection cap owned by the pooler/proxy.
+- `--database-backend-limit <integer>`: effective real database connection budget.
+- `--session-pinning-risk <low|medium|high|critical>`: optional risk that session pinning reduces multiplexing.
+
+### Exit Codes
+
+- `0`: complete, or needs-review without `--warn-exit`.
+- `2`: unsafe backend capacity path.
+- `3`: needs-review when `--warn-exit` is enabled.
+
+See [`connection-ownership.md`](connection-ownership.md) for graph semantics and source-backed limitations.
 
 ## Global Options
 

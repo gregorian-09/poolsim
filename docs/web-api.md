@@ -25,6 +25,7 @@ Checked-in request bodies for the documented HTTP and WebSocket examples live un
 - `docs/fixtures/endpoint-classification.json`
 - `docs/fixtures/pooler-compatibility.json`
 - `docs/fixtures/serverless-concurrency.json`
+- `docs/fixtures/connection-ownership.json`
 
 ## Base Routes
 
@@ -43,6 +44,7 @@ Available routes:
 - `POST /v1/classify/endpoint`
 - `POST /v1/check/pooler`
 - `POST /v1/plan/serverless`
+- `POST /v1/graph/ownership`
 - `GET /v1/live` (WebSocket upgrade)
 
 All REST request bodies are JSON.
@@ -329,6 +331,48 @@ Response shape:
 - `uses_external_pooler`
 - `external_pooler`
 - `connection_churn_risk`
+- `findings`
+- `confidence`
+
+### `POST /v1/graph/ownership`
+
+Purpose:
+
+- build a connection ownership graph from application runtime units to database backend capacity
+- distinguish application pool connections from external pooler client/backend connections
+- flag missing pooler backend caps, missing database limits, high pinning risk, and unsafe backend limits
+
+Request model:
+
+- `ConnectionOwnershipInput.service_name`
+- `ConnectionOwnershipInput.runtime_units`
+- `ConnectionOwnershipInput.app_pool_size_per_runtime_unit`
+- `ConnectionOwnershipInput.endpoint_kind`
+- `ConnectionOwnershipInput.external_pooler`
+- `ConnectionOwnershipInput.pooler_client_limit`
+- `ConnectionOwnershipInput.pooler_backend_limit`
+- `ConnectionOwnershipInput.database_backend_limit`
+- `ConnectionOwnershipInput.session_pinning_risk`
+
+Example:
+
+```bash
+curl -s \
+  -X POST http://127.0.0.1:8080/v1/graph/ownership \
+  -H 'content-type: application/json' \
+  --data @docs/fixtures/connection-ownership.json
+```
+
+Response shape:
+
+- `status`
+- `service_name`
+- `nodes`
+- `edges`
+- `app_connection_upper_bound`
+- `database_backend_upper_bound`
+- `database_backend_limit`
+- `bottleneck_layer`
 - `findings`
 - `confidence`
 

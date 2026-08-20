@@ -108,6 +108,7 @@ Operational commands:
 - `poolsim compare`: compare named traffic scenarios.
 - `poolsim budget`: allocate one database connection budget across services.
 - `poolsim plan serverless`: calculate serverless app-side pool footprint across concurrent execution environments.
+- `poolsim graph ownership`: map which layer owns app, pooler, and database backend connection capacity.
 - `poolsim classify endpoint`: identify direct, pooled, proxied, edge-managed, or unknown database endpoints and redact secrets.
 - `poolsim check pooler`: detect external-pooler/session-feature compatibility risks.
 - `poolsim doctor`: explain whether a current pool is healthy.
@@ -199,6 +200,25 @@ poolsim --format json plan serverless \
 ```
 
 The key output is `worst_case_app_pool_connections`. Poolsim calculates it as `effective_concurrency * app_pool_size_per_environment`. If traffic uses an external pooler, Poolsim still reports the app-side footprint but leaves `direct_database_backend_upper_bound` as `null` until backend pooler evidence proves the real database footprint.
+
+## Connection Ownership Graph Example
+
+Map the connection layers for a service using RDS Proxy:
+
+```bash
+poolsim --format json graph ownership \
+  --service-name checkout-api \
+  --runtime-units 12 \
+  --pool-size 10 \
+  --endpoint-kind database-proxy \
+  --external-pooler rds-proxy \
+  --pooler-client-limit 1000 \
+  --pooler-backend-limit 90 \
+  --database-backend-limit 120 \
+  --session-pinning-risk medium
+```
+
+The output separates `application-pool`, `pooler-client`, `pooler-backend`, and `database-backend` nodes. Use this before deciding whether a connection count is only client-side capacity or real backend database capacity.
 
 ## Telemetry Diff Example
 

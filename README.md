@@ -67,6 +67,7 @@ Given workload data, pool bounds, and simulation options, `poolsim` can:
 - classify direct, pooled, proxied, transaction-mode, and edge-managed database endpoints
 - check external pooler compatibility for session-state features before relying on pool sizing
 - plan serverless and edge connection footprint across concurrent execution environments
+- map connection ownership across application pools, external pooler client/backend layers, and database backends
 - run CI capacity gates that fail deployments when telemetry violates pool policy
 - run deployment guard checks that return CI-ready safety fields and exit codes
 - diagnose configured pools with `poolsim doctor`
@@ -185,6 +186,21 @@ cargo run -p poolsim-cli -- --format json plan serverless \
   --pool-size 2 \
   --database-backend-limit 240 \
   --warm-reuse-ratio 0.72
+```
+
+Map ownership when a proxy or pooler sits between the app and database:
+
+```bash
+cargo run -p poolsim-cli -- --format json graph ownership \
+  --service-name checkout-api \
+  --runtime-units 12 \
+  --pool-size 10 \
+  --endpoint-kind database-proxy \
+  --external-pooler rds-proxy \
+  --pooler-client-limit 1000 \
+  --pooler-backend-limit 90 \
+  --database-backend-limit 120 \
+  --session-pinning-risk medium
 ```
 
 Run the deployment guard wrapper for CI pipelines that need explicit `deployment_safe`, `exit_code`, and `reason` fields:

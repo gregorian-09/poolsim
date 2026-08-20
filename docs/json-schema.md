@@ -15,6 +15,7 @@ Available schemas:
 - [`schemas/endpoint-classification.schema.json`](schemas/endpoint-classification.schema.json): endpoint-classification request for `poolsim classify endpoint` and `POST /v1/classify/endpoint`.
 - [`schemas/pooler-compatibility.schema.json`](schemas/pooler-compatibility.schema.json): external-pooler compatibility request for `poolsim check pooler` and `POST /v1/check/pooler`.
 - [`schemas/serverless-concurrency.schema.json`](schemas/serverless-concurrency.schema.json): serverless concurrency-planning request for `poolsim plan serverless` and `POST /v1/plan/serverless`.
+- [`schemas/connection-ownership.schema.json`](schemas/connection-ownership.schema.json): connection ownership graph request for `poolsim graph ownership` and `POST /v1/graph/ownership`.
 
 The schemas are forward-compatible by design: they require the fields Poolsim needs today, but allow additional properties so future optional fields do not immediately break older editor setups.
 
@@ -79,6 +80,14 @@ Serverless concurrency example:
 npx ajv-cli validate \
   -s docs/schemas/serverless-concurrency.schema.json \
   -d docs/fixtures/serverless-concurrency.json
+```
+
+Connection ownership example:
+
+```bash
+npx ajv-cli validate \
+  -s docs/schemas/connection-ownership.schema.json \
+  -d docs/fixtures/connection-ownership.json
 ```
 
 Gate policy files are commonly TOML in this repository. Convert TOML to JSON before validating against `gate-policy.schema.json`, or keep a JSON policy copy for CI validation.

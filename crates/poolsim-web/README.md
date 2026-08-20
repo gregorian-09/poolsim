@@ -110,6 +110,7 @@ Available REST endpoints:
 - `POST /v1/classify/endpoint`
 - `POST /v1/check/pooler`
 - `POST /v1/plan/serverless`
+- `POST /v1/graph/ownership`
 
 Available WebSocket endpoint:
 
@@ -174,6 +175,19 @@ curl -s \
 ```
 
 The response includes `effective_concurrency`, `worst_case_app_pool_connections`, `direct_database_backend_upper_bound`, `connection_churn_risk`, and remediation findings. When an external pooler is present, the direct backend upper bound is intentionally `null` until backend pooler telemetry or configuration evidence proves the real database footprint.
+
+## Connection Ownership Graph Request
+
+Map the layers between an application pool, external pooler, and database backend:
+
+```bash
+curl -s \
+  -X POST http://127.0.0.1:8080/v1/graph/ownership \
+  -H 'content-type: application/json' \
+  --data @docs/fixtures/connection-ownership.json
+```
+
+The response includes ordered `nodes`, ordered `edges`, `app_connection_upper_bound`, `database_backend_upper_bound`, `bottleneck_layer`, `confidence`, and remediation findings.
 
 ## Simulation Request
 
