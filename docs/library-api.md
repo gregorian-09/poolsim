@@ -49,7 +49,7 @@ use poolsim_core::types::{
 Module-oriented import:
 
 ```rust
-use poolsim_core::{distribution, erlang, error, monte_carlo, optimizer, otlp, pooler, sensitivity, telemetry};
+use poolsim_core::{distribution, erlang, error, monte_carlo, optimizer, otlp, pooler, sensitivity, serverless, telemetry};
 ```
 
 Telemetry import:
@@ -79,6 +79,68 @@ use poolsim_core::otlp::{
 ```
 
 ## Top-Level API
+
+## Serverless Concurrency API
+
+Use `poolsim_core::serverless` when a serverless or edge deployment can create many concurrent execution environments, each with its own app-side database pool.
+
+Public helper:
+
+- `poolsim_core::serverless::plan_serverless_concurrency`
+
+Primary input/output types:
+
+- `ServerlessConcurrencyInput`
+- `ServerlessConcurrencyReport`
+
+Primary enums:
+
+- `ServerlessPlatformKind`
+- `ServerlessConcurrencyStatus`
+
+Example:
+
+```rust
+use poolsim_core::serverless::{
+    plan_serverless_concurrency,
+    ServerlessConcurrencyInput,
+    ServerlessConcurrencyStatus,
+    ServerlessPlatformKind,
+};
+
+let input = ServerlessConcurrencyInput::new(ServerlessPlatformKind::AwsLambda)
+    .with_max_concurrent_invocations(120)
+    .with_reserved_concurrency(80)
+    .with_app_pool_size_per_environment(2)
+    .with_database_backend_limit(240)
+    .with_warm_reuse_ratio(0.72);
+
+let report = plan_serverless_concurrency(&input)?;
+assert_eq!(report.status, ServerlessConcurrencyStatus::Pass);
+assert_eq!(report.effective_concurrency, Some(80));
+assert_eq!(report.worst_case_app_pool_connections, Some(160));
+# Ok::<(), poolsim_core::error::PoolsimError>(())
+```
+
+External-pooler example:
+
+```rust
+use poolsim_core::{
+    pooler::ExternalPoolerKind,
+    serverless::{plan_serverless_concurrency, ServerlessConcurrencyInput, ServerlessPlatformKind},
+};
+
+let input = ServerlessConcurrencyInput::new(ServerlessPlatformKind::CloudflareWorkers)
+    .with_max_concurrent_invocations(500)
+    .with_app_pool_size_per_environment(1)
+    .with_external_pooler(ExternalPoolerKind::CloudflareHyperdrive)
+    .with_database_backend_limit(100)
+    .with_warm_reuse_ratio(0.20);
+
+let report = plan_serverless_concurrency(&input)?;
+assert_eq!(report.direct_database_backend_upper_bound, None);
+# Ok::<(), poolsim_core::error::PoolsimError>(())
+```
 
 ## Pooler And Endpoint API
 

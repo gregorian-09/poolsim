@@ -119,6 +119,7 @@ Use these modules for advanced workflows:
 - `poolsim_core::telemetry`: telemetry snapshots and recommendation diffs.
 - `poolsim_core::otlp`: OpenTelemetry OTLP JSON metric extraction helpers.
 - `poolsim_core::pooler`: endpoint classification, redaction, and external-pooler compatibility checks.
+- `poolsim_core::serverless`: serverless and edge execution-environment connection-footprint planning.
 - `poolsim_core::distribution`: latency distribution fitting.
 - `poolsim_core::erlang`: Erlang-C queue formulas.
 - `poolsim_core::monte_carlo`: simulation primitives.
@@ -193,6 +194,32 @@ let compatibility = check_pooler_compatibility(
     .with_features(vec![SessionSemanticFeature::TemporaryTables]),
 );
 assert_eq!(compatibility.compatible, CompatibilityDecision::Incompatible);
+```
+
+## Serverless Concurrency Planning Example
+
+Use `poolsim_core::serverless` when each concurrent serverless execution environment can own its own application-side database pool.
+
+```rust
+use poolsim_core::serverless::{
+    plan_serverless_concurrency,
+    ServerlessConcurrencyStatus,
+    ServerlessConcurrencyInput,
+    ServerlessPlatformKind,
+};
+
+let input = ServerlessConcurrencyInput::new(ServerlessPlatformKind::AwsLambda)
+    .with_max_concurrent_invocations(120)
+    .with_reserved_concurrency(80)
+    .with_app_pool_size_per_environment(2)
+    .with_database_backend_limit(240)
+    .with_warm_reuse_ratio(0.72);
+
+let report = plan_serverless_concurrency(&input)?;
+assert_eq!(report.status, ServerlessConcurrencyStatus::Pass);
+assert_eq!(report.effective_concurrency, Some(80));
+assert_eq!(report.worst_case_app_pool_connections, Some(160));
+# Ok::<(), poolsim_core::error::PoolsimError>(())
 ```
 
 ## Fixed Pool Evaluation

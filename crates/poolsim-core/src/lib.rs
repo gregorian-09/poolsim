@@ -21,6 +21,8 @@ pub mod otlp;
 pub mod pooler;
 /// Sensitivity analysis routines.
 pub mod sensitivity;
+/// Serverless and edge execution-environment capacity planning.
+pub mod serverless;
 /// Telemetry import and recommendation-diff routines.
 pub mod telemetry;
 /// Public input/output data models.
