@@ -120,6 +120,7 @@ Use these modules for advanced workflows:
 - `poolsim_core::otlp`: OpenTelemetry OTLP JSON metric extraction helpers.
 - `poolsim_core::pooler`: endpoint classification, redaction, and external-pooler compatibility checks.
 - `poolsim_core::serverless`: serverless and edge execution-environment connection-footprint planning.
+- `poolsim_core::ownership`: connection ownership graph across application pools, poolers, and database backends.
 - `poolsim_core::distribution`: latency distribution fitting.
 - `poolsim_core::erlang`: Erlang-C queue formulas.
 - `poolsim_core::monte_carlo`: simulation primitives.
@@ -219,6 +220,39 @@ let report = plan_serverless_concurrency(&input)?;
 assert_eq!(report.status, ServerlessConcurrencyStatus::Pass);
 assert_eq!(report.effective_concurrency, Some(80));
 assert_eq!(report.worst_case_app_pool_connections, Some(160));
+# Ok::<(), poolsim_core::error::PoolsimError>(())
+```
+
+## Connection Ownership Graph Example
+
+Use `poolsim_core::ownership` when a proxy, pooler, or provider layer makes it unclear which connection count consumes real database backend capacity.
+
+```rust
+use poolsim_core::{
+    ownership::{
+        build_connection_ownership_graph,
+        ConnectionOwnershipInput,
+        ConnectionOwnershipStatus,
+    },
+    pooler::{EndpointConnectionKind, ExternalPoolerKind},
+    types::RiskLevel,
+};
+
+let input = ConnectionOwnershipInput::new()
+    .with_service_name("checkout-api")
+    .with_runtime_units(12)
+    .with_app_pool_size_per_runtime_unit(10)
+    .with_endpoint_kind(EndpointConnectionKind::DatabaseProxy)
+    .with_external_pooler(ExternalPoolerKind::RdsProxy)
+    .with_pooler_client_limit(1000)
+    .with_pooler_backend_limit(90)
+    .with_database_backend_limit(120)
+    .with_session_pinning_risk(RiskLevel::Medium);
+
+let report = build_connection_ownership_graph(&input)?;
+assert_eq!(report.status, ConnectionOwnershipStatus::Complete);
+assert_eq!(report.app_connection_upper_bound, Some(120));
+assert_eq!(report.database_backend_upper_bound, Some(90));
 # Ok::<(), poolsim_core::error::PoolsimError>(())
 ```
 

@@ -49,7 +49,7 @@ use poolsim_core::types::{
 Module-oriented import:
 
 ```rust
-use poolsim_core::{distribution, erlang, error, monte_carlo, optimizer, otlp, pooler, sensitivity, serverless, telemetry};
+use poolsim_core::{distribution, erlang, error, monte_carlo, optimizer, otlp, ownership, pooler, sensitivity, serverless, telemetry};
 ```
 
 Telemetry import:
@@ -139,6 +139,59 @@ let input = ServerlessConcurrencyInput::new(ServerlessPlatformKind::CloudflareWo
 
 let report = plan_serverless_concurrency(&input)?;
 assert_eq!(report.direct_database_backend_upper_bound, None);
+# Ok::<(), poolsim_core::error::PoolsimError>(())
+```
+
+## Connection Ownership API
+
+Use `poolsim_core::ownership` when you need to explain which layer owns connection capacity and which layer consumes real database backend connections.
+
+Public helper:
+
+- `poolsim_core::ownership::build_connection_ownership_graph`
+
+Primary input/output types:
+
+- `ConnectionOwnershipInput`
+- `ConnectionOwnershipReport`
+- `ConnectionOwnershipNode`
+- `ConnectionOwnershipEdge`
+
+Primary enums:
+
+- `ConnectionLayerKind`
+- `ConnectionRelationshipKind`
+- `ConnectionOwnershipStatus`
+
+Example:
+
+```rust
+use poolsim_core::{
+    ownership::{
+        build_connection_ownership_graph,
+        ConnectionOwnershipInput,
+        ConnectionOwnershipStatus,
+    },
+    pooler::{EndpointConnectionKind, ExternalPoolerKind},
+    types::RiskLevel,
+};
+
+let input = ConnectionOwnershipInput::new()
+    .with_service_name("checkout-api")
+    .with_runtime_units(12)
+    .with_app_pool_size_per_runtime_unit(10)
+    .with_endpoint_kind(EndpointConnectionKind::DatabaseProxy)
+    .with_external_pooler(ExternalPoolerKind::RdsProxy)
+    .with_pooler_client_limit(1000)
+    .with_pooler_backend_limit(90)
+    .with_database_backend_limit(120)
+    .with_session_pinning_risk(RiskLevel::Medium);
+
+let report = build_connection_ownership_graph(&input)?;
+assert_eq!(report.status, ConnectionOwnershipStatus::Complete);
+assert_eq!(report.app_connection_upper_bound, Some(120));
+assert_eq!(report.database_backend_upper_bound, Some(90));
+assert!(report.nodes.iter().any(|node| node.id == "pooler-backend"));
 # Ok::<(), poolsim_core::error::PoolsimError>(())
 ```
 
