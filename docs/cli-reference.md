@@ -17,6 +17,7 @@ It covers:
 - Output formats
 - Exit-code behavior
 - Endpoint classification and external-pooler compatibility checks
+- Client-aware prepared-statement and session-state compatibility checks
 - Serverless execution-environment connection-footprint planning
 - Connection ownership graph reporting
 
@@ -39,6 +40,7 @@ Checked-in runnable fixture files live under `docs/fixtures/`:
 - `docs/fixtures/latencies.txt`
 - `docs/fixtures/endpoint-classification.json`
 - `docs/fixtures/pooler-compatibility.json`
+- `docs/fixtures/session-state-compatibility.json`
 - `docs/fixtures/serverless-concurrency.json`
 - `docs/fixtures/connection-ownership.json`
 
@@ -56,6 +58,7 @@ Available subcommands:
 - `graph ownership`
 - `classify endpoint`
 - `check pooler`
+- `check session-state`
 - `import telemetry`
 - `import prometheus`
 - `import otlp`
@@ -153,6 +156,73 @@ poolsim --format json check pooler \
 - `3`: needs review when `--warn-exit` is enabled.
 
 See [`endpoint-poolers.md`](endpoint-poolers.md) for detailed examples and limitations.
+
+## `check session-state`
+
+### Purpose
+
+Adds client-aware guidance on top of `check pooler`. It checks the pooler mode, the session features used by the workload, and the client library's known prepared-statement/session-state behavior.
+
+Use this command when a team asks, "Can Prisma, node-postgres, sqlx, SQLAlchemy asyncpg, PostgREST, PgJDBC, or a generic PostgreSQL client safely use this transaction pooler or proxy?"
+
+### Examples
+
+`sqlx` with PgBouncer prepared-statement tracking evidence:
+
+```bash
+poolsim --format json check session-state \
+  --client sqlx \
+  --pooler pg-bouncer \
+  --mode transaction \
+  --uses prepared-statements \
+  --max-prepared-statements 100
+```
+
+Prisma through Supavisor transaction mode:
+
+```bash
+poolsim --format json check session-state \
+  --client prisma \
+  --pooler supavisor \
+  --mode transaction
+```
+
+node-postgres with named prepared statements:
+
+```bash
+poolsim --format json check session-state \
+  --client node-postgres \
+  --pooler pg-bouncer \
+  --mode transaction \
+  --uses named-prepared-statements
+```
+
+### Flags
+
+- `--client <generic-postgres|prisma|node-postgres|sqlx|sqlalchemy-asyncpg|postgrest|pg-jdbc|unknown>`: client library or framework whose known session-state behavior should be applied.
+- `--pooler <pg-bouncer|rds-proxy|supavisor|prisma-postgres-pooler|neon-pooler|cloudflare-hyperdrive|unknown>`: pooler family.
+- `--mode <none|session|transaction|statement|provider-managed|unknown>`: active multiplexing mode.
+- `--uses <feature>`: repeatable explicit feature flag, using the same values as `check pooler`.
+- `--workflow <...>`: optional workflow compatibility check using the same values as `classify endpoint`.
+- `--max-prepared-statements <integer>`: pooler evidence for PgBouncer prepared-statement support.
+- `--resets-session-state <true|false>`: optional provider/config evidence about session-state reset behavior.
+
+### Output Fields
+
+- `compatible`: final decision after generic pooler checks and client guidance.
+- `client`, `pooler`, `mode`: analyzed inputs.
+- `effective_features`: explicit plus client-inferred session features.
+- `pooler_report`: nested generic `check pooler` result.
+- `client_guidance`: client/provider-specific remediation with source URLs.
+- `confidence`: final confidence after applying client assumptions.
+
+### Exit Codes
+
+- `0`: compatible, or needs review without `--warn-exit`.
+- `2`: incompatible.
+- `3`: needs review when `--warn-exit` is enabled.
+
+See [`session-state-compatibility.md`](session-state-compatibility.md) for detailed examples, source-backed rules, and limitations.
 
 ## `plan serverless`
 

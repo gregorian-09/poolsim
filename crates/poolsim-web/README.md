@@ -109,6 +109,7 @@ Available REST endpoints:
 - `POST /v1/otlp/recommend`
 - `POST /v1/classify/endpoint`
 - `POST /v1/check/pooler`
+- `POST /v1/check/session-state`
 - `POST /v1/plan/serverless`
 - `POST /v1/graph/ownership`
 
@@ -161,7 +162,16 @@ curl -s \
   --data @docs/fixtures/pooler-compatibility.json
 ```
 
-Use these endpoints before treating an external pooler as additional capacity. They are diagnostic helpers; they do not open database connections or modify production configuration.
+Add client-aware prepared-statement and session-state guidance:
+
+```bash
+curl -s \
+  -X POST http://127.0.0.1:8080/v1/check/session-state \
+  -H 'content-type: application/json' \
+  --data @docs/fixtures/session-state-compatibility.json
+```
+
+Use these endpoints before treating an external pooler as additional capacity. They are diagnostic helpers; they do not open database connections or modify production configuration. The session-state response nests the generic pooler result in `pooler_report` and adds `client_guidance` with source-backed remediation.
 
 ## Serverless Concurrency Planning Request
 

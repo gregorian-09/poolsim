@@ -209,6 +209,34 @@ poolsim --format json check pooler \
 
 Without this evidence, poolsim treats prepared statements under PgBouncer transaction pooling as unsafe.
 
+### Client-Aware Session-State Check
+
+Use `poolsim check session-state` when you want poolsim to apply known client-library behavior and return concrete remediation for the library your service uses.
+
+```bash
+poolsim --format json check session-state \
+  --client sqlx \
+  --pooler pg-bouncer \
+  --mode transaction \
+  --uses prepared-statements \
+  --max-prepared-statements 100
+```
+
+The response includes the generic `pooler_report` plus `client_guidance`. The guidance includes source URLs and a `requires_change` flag for combinations that should not go to production without a config or topology change.
+
+Supported clients:
+
+- `generic-postgres`
+- `prisma`
+- `node-postgres`
+- `sqlx`
+- `sqlalchemy-asyncpg`
+- `postgrest`
+- `pg-jdbc`
+- `unknown`
+
+See [`session-state-compatibility.md`](session-state-compatibility.md) for source-backed rules, examples, outputs, and limitations.
+
 ### Library Example
 
 ```rust

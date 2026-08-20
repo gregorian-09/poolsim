@@ -24,6 +24,7 @@ Checked-in request bodies for the documented HTTP and WebSocket examples live un
 - `docs/fixtures/web-ws-request.json`
 - `docs/fixtures/endpoint-classification.json`
 - `docs/fixtures/pooler-compatibility.json`
+- `docs/fixtures/session-state-compatibility.json`
 - `docs/fixtures/serverless-concurrency.json`
 - `docs/fixtures/connection-ownership.json`
 
@@ -43,6 +44,7 @@ Available routes:
 - `POST /v1/otlp/recommend`
 - `POST /v1/classify/endpoint`
 - `POST /v1/check/pooler`
+- `POST /v1/check/session-state`
 - `POST /v1/plan/serverless`
 - `POST /v1/graph/ownership`
 - `GET /v1/live` (WebSocket upgrade)
@@ -289,6 +291,43 @@ Response shape:
 - `migration_direct_connection_required`
 - `long_running_direct_connection_required`
 - `findings`
+- `confidence`
+
+### `POST /v1/check/session-state`
+
+Purpose:
+
+- add client-aware prepared-statement and session-state guidance on top of the generic pooler compatibility check
+- infer known client behavior for Prisma, node-postgres, `sqlx`, SQLAlchemy asyncpg, PostgREST, PgJDBC, generic PostgreSQL clients, and unknown clients
+- report source-backed remediation for client/pooler combinations that need config changes before production use
+
+Request model:
+
+- `SessionStateCompatibilityInput.client`
+- `SessionStateCompatibilityInput.pooler`
+- `SessionStateCompatibilityInput.mode`
+- `SessionStateCompatibilityInput.features_used`
+- `SessionStateCompatibilityInput.workflow`
+- `SessionStateCompatibilityInput.pooler_config`
+
+Example:
+
+```bash
+curl -s \
+  -X POST http://127.0.0.1:8080/v1/check/session-state \
+  -H 'content-type: application/json' \
+  --data @docs/fixtures/session-state-compatibility.json
+```
+
+Response shape:
+
+- `compatible`
+- `client`
+- `pooler`
+- `mode`
+- `effective_features`
+- `pooler_report`
+- `client_guidance`
 - `confidence`
 
 ### `POST /v1/plan/serverless`

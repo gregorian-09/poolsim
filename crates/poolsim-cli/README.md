@@ -111,6 +111,7 @@ Operational commands:
 - `poolsim graph ownership`: map which layer owns app, pooler, and database backend connection capacity.
 - `poolsim classify endpoint`: identify direct, pooled, proxied, edge-managed, or unknown database endpoints and redact secrets.
 - `poolsim check pooler`: detect external-pooler/session-feature compatibility risks.
+- `poolsim check session-state`: add client-aware prepared-statement and session-state remediation for popular backend libraries.
 - `poolsim doctor`: explain whether a current pool is healthy.
 - `poolsim generate-config`: produce framework-specific pool config snippets.
 
@@ -182,6 +183,19 @@ poolsim --format json check pooler \
   --uses temporary-tables \
   --uses advisory-locks
 ```
+
+Add client-aware prepared-statement guidance:
+
+```bash
+poolsim --format json check session-state \
+  --client sqlx \
+  --pooler pg-bouncer \
+  --mode transaction \
+  --uses prepared-statements \
+  --max-prepared-statements 100
+```
+
+The session-state check reuses the generic pooler compatibility result, then adds `client_guidance` for Prisma, node-postgres, `sqlx`, SQLAlchemy asyncpg, PostgREST, PgJDBC, generic PostgreSQL clients, and unknown clients.
 
 Poolsim exits with code `2` for clear incompatibility, and the JSON output includes remediation-oriented findings.
 

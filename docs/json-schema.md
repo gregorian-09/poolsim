@@ -14,6 +14,7 @@ Available schemas:
 - [`schemas/gate-policy.schema.json`](schemas/gate-policy.schema.json): capacity gate policy for `poolsim gate` and `poolsim guard`.
 - [`schemas/endpoint-classification.schema.json`](schemas/endpoint-classification.schema.json): endpoint-classification request for `poolsim classify endpoint` and `POST /v1/classify/endpoint`.
 - [`schemas/pooler-compatibility.schema.json`](schemas/pooler-compatibility.schema.json): external-pooler compatibility request for `poolsim check pooler` and `POST /v1/check/pooler`.
+- [`schemas/session-state-compatibility.schema.json`](schemas/session-state-compatibility.schema.json): client-aware session-state compatibility request for `poolsim check session-state` and `POST /v1/check/session-state`.
 - [`schemas/serverless-concurrency.schema.json`](schemas/serverless-concurrency.schema.json): serverless concurrency-planning request for `poolsim plan serverless` and `POST /v1/plan/serverless`.
 - [`schemas/connection-ownership.schema.json`](schemas/connection-ownership.schema.json): connection ownership graph request for `poolsim graph ownership` and `POST /v1/graph/ownership`.
 
@@ -72,6 +73,14 @@ Pooler compatibility example:
 npx ajv-cli validate \
   -s docs/schemas/pooler-compatibility.schema.json \
   -d docs/fixtures/pooler-compatibility.json
+```
+
+Session-state compatibility example:
+
+```bash
+npx ajv-cli validate \
+  -s docs/schemas/session-state-compatibility.schema.json \
+  -d docs/fixtures/session-state-compatibility.json
 ```
 
 Serverless concurrency example:

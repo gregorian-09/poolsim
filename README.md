@@ -66,6 +66,7 @@ Given workload data, pool bounds, and simulation options, `poolsim` can:
 - import OpenTelemetry OTLP metric exports through the CLI and web API
 - classify direct, pooled, proxied, transaction-mode, and edge-managed database endpoints
 - check external pooler compatibility for session-state features before relying on pool sizing
+- add client-specific session-state guidance for Prisma, node-postgres, sqlx, SQLAlchemy asyncpg, PostgREST, PgJDBC, and generic PostgreSQL clients
 - plan serverless and edge connection footprint across concurrent execution environments
 - map connection ownership across application pools, external pooler client/backend layers, and database backends
 - run CI capacity gates that fail deployments when telemetry violates pool policy
@@ -174,6 +175,17 @@ Compare normal, peak, and incident traffic scenarios side by side:
 ```bash
 cargo run -p poolsim-cli -- --format json compare \
   --config docs/fixtures/scenarios.json
+```
+
+Check client-specific session-state compatibility before routing traffic through a transaction pooler:
+
+```bash
+cargo run -p poolsim-cli -- --format json check session-state \
+  --client sqlx \
+  --pooler pg-bouncer \
+  --mode transaction \
+  --uses prepared-statements \
+  --max-prepared-statements 100
 ```
 
 Plan serverless pool footprint before raising concurrency or pool size:
