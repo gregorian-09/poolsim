@@ -203,6 +203,7 @@ Public helpers:
 
 - `poolsim_core::pooler::classify_endpoint`
 - `poolsim_core::pooler::check_pooler_compatibility`
+- `poolsim_core::pooler::analyze_session_state_compatibility`
 - `poolsim_core::pooler::redact_endpoint`
 
 Primary input/output types:
@@ -212,6 +213,9 @@ Primary input/output types:
 - `PoolerCompatibilityInput`
 - `PoolerCompatibilityReport`
 - `PoolerConfigSnapshot`
+- `SessionStateCompatibilityInput`
+- `SessionStateCompatibilityReport`
+- `ClientCompatibilityGuidance`
 - `PoolerFinding`
 
 Primary enums:
@@ -222,6 +226,7 @@ Primary enums:
 - `ExternalPoolerKind`
 - `MultiplexingMode`
 - `SessionSemanticFeature`
+- `ClientLibraryKind`
 - `CompatibilityDecision`
 - `EvidenceConfidence`
 
@@ -297,6 +302,35 @@ let report = check_pooler_compatibility(
 );
 
 assert_eq!(report.compatible, CompatibilityDecision::Compatible);
+```
+
+Client-aware session-state example:
+
+```rust
+use poolsim_core::pooler::{
+    analyze_session_state_compatibility,
+    ClientLibraryKind,
+    CompatibilityDecision,
+    ExternalPoolerKind,
+    MultiplexingMode,
+    PoolerConfigSnapshot,
+    SessionSemanticFeature,
+    SessionStateCompatibilityInput,
+};
+
+let report = analyze_session_state_compatibility(
+    &SessionStateCompatibilityInput::new(
+        ClientLibraryKind::Sqlx,
+        ExternalPoolerKind::PgBouncer,
+        MultiplexingMode::Transaction,
+    )
+    .with_features(vec![SessionSemanticFeature::PreparedStatements])
+    .with_pooler_config(PoolerConfigSnapshot::new().with_max_prepared_statements(100)),
+);
+
+assert_ne!(report.compatible, CompatibilityDecision::Incompatible);
+assert_eq!(report.pooler_report.compatible, CompatibilityDecision::Compatible);
+assert!(!report.client_guidance.is_empty());
 ```
 
 Important rule:

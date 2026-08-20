@@ -118,7 +118,7 @@ Use these modules for advanced workflows:
 - `poolsim_core::types`: public input and output structs.
 - `poolsim_core::telemetry`: telemetry snapshots and recommendation diffs.
 - `poolsim_core::otlp`: OpenTelemetry OTLP JSON metric extraction helpers.
-- `poolsim_core::pooler`: endpoint classification, redaction, and external-pooler compatibility checks.
+- `poolsim_core::pooler`: endpoint classification, redaction, external-pooler compatibility checks, and client-aware session-state analysis.
 - `poolsim_core::serverless`: serverless and edge execution-environment connection-footprint planning.
 - `poolsim_core::ownership`: connection ownership graph across application pools, poolers, and database backends.
 - `poolsim_core::distribution`: latency distribution fitting.
@@ -195,6 +195,35 @@ let compatibility = check_pooler_compatibility(
     .with_features(vec![SessionSemanticFeature::TemporaryTables]),
 );
 assert_eq!(compatibility.compatible, CompatibilityDecision::Incompatible);
+```
+
+Client-aware session-state guidance reuses the same base compatibility check and adds framework-specific remediation:
+
+```rust
+use poolsim_core::pooler::{
+    analyze_session_state_compatibility,
+    ClientLibraryKind,
+    CompatibilityDecision,
+    ExternalPoolerKind,
+    MultiplexingMode,
+    PoolerConfigSnapshot,
+    SessionSemanticFeature,
+    SessionStateCompatibilityInput,
+};
+
+let report = analyze_session_state_compatibility(
+    &SessionStateCompatibilityInput::new(
+        ClientLibraryKind::Sqlx,
+        ExternalPoolerKind::PgBouncer,
+        MultiplexingMode::Transaction,
+    )
+    .with_features(vec![SessionSemanticFeature::PreparedStatements])
+    .with_pooler_config(PoolerConfigSnapshot::new().with_max_prepared_statements(100)),
+);
+
+assert_ne!(report.compatible, CompatibilityDecision::Incompatible);
+assert_eq!(report.pooler_report.compatible, CompatibilityDecision::Compatible);
+assert!(!report.client_guidance.is_empty());
 ```
 
 ## Serverless Concurrency Planning Example

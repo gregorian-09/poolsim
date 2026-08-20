@@ -175,6 +175,29 @@ pub enum SessionSemanticFeature {
     Unknown,
 }
 
+/// Client library or framework whose database behavior influences pooler safety.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum ClientLibraryKind {
+    /// Generic PostgreSQL client with no framework-specific assumptions.
+    GenericPostgres,
+    /// Prisma Client or Prisma ORM runtime traffic.
+    Prisma,
+    /// node-postgres / `pg`.
+    NodePostgres,
+    /// Rust `sqlx`.
+    Sqlx,
+    /// SQLAlchemy using the asyncpg PostgreSQL dialect.
+    SqlalchemyAsyncpg,
+    /// PostgREST.
+    Postgrest,
+    /// PostgreSQL JDBC driver.
+    PgJdbc,
+    /// Client library is not known to poolsim.
+    Unknown,
+}
+
 /// Compatibility decision for a pooler/workflow combination.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case")]
@@ -380,6 +403,106 @@ pub struct PoolerCompatibilityReport {
     pub confidence: EvidenceConfidence,
 }
 
+/// Input for client-aware session-state compatibility analysis.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct SessionStateCompatibilityInput {
+    /// Client library or framework to analyze.
+    pub client: ClientLibraryKind,
+    /// Pooler family to check.
+    pub pooler: ExternalPoolerKind,
+    /// Multiplexing mode used by the pooler.
+    pub mode: MultiplexingMode,
+    /// Application/database features explicitly used by this workload.
+    #[serde(default)]
+    pub features_used: Vec<SessionSemanticFeature>,
+    /// Optional workflow that will run through the pooler.
+    #[serde(default)]
+    pub workflow: Option<DatabaseWorkflowKind>,
+    /// Optional pooler configuration evidence.
+    #[serde(default)]
+    pub pooler_config: Option<PoolerConfigSnapshot>,
+}
+
+impl SessionStateCompatibilityInput {
+    /// Creates client-aware session-state compatibility input.
+    pub fn new(
+        client: ClientLibraryKind,
+        pooler: ExternalPoolerKind,
+        mode: MultiplexingMode,
+    ) -> Self {
+        Self {
+            client,
+            pooler,
+            mode,
+            features_used: Vec::new(),
+            workflow: None,
+            pooler_config: None,
+        }
+    }
+
+    /// Sets explicitly used session features.
+    #[must_use]
+    pub fn with_features(mut self, features: Vec<SessionSemanticFeature>) -> Self {
+        self.features_used = features;
+        self
+    }
+
+    /// Sets the workload workflow.
+    #[must_use]
+    pub fn with_workflow(mut self, workflow: DatabaseWorkflowKind) -> Self {
+        self.workflow = Some(workflow);
+        self
+    }
+
+    /// Sets pooler configuration evidence.
+    #[must_use]
+    pub fn with_pooler_config(mut self, config: PoolerConfigSnapshot) -> Self {
+        self.pooler_config = Some(config);
+        self
+    }
+}
+
+/// Client-specific guidance for session-state and prepared-statement safety.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ClientCompatibilityGuidance {
+    /// Stable machine-readable guidance code.
+    pub code: String,
+    /// Severity/risk associated with this guidance.
+    pub risk: RiskLevel,
+    /// Human-readable explanation.
+    pub message: String,
+    /// Concrete client or pooler configuration action.
+    pub remediation: String,
+    /// Source URL used for this guidance.
+    pub source_url: String,
+    /// Whether the guidance requires a config or topology change before production use.
+    pub requires_change: bool,
+}
+
+/// Result of client-aware session-state compatibility analysis.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct SessionStateCompatibilityReport {
+    /// Overall compatibility decision after base pooler checks and client guidance.
+    pub compatible: CompatibilityDecision,
+    /// Client library or framework that was analyzed.
+    pub client: ClientLibraryKind,
+    /// Pooler family that was analyzed.
+    pub pooler: ExternalPoolerKind,
+    /// Multiplexing mode that was analyzed.
+    pub mode: MultiplexingMode,
+    /// Explicit plus client-inferred session features used for the base check.
+    pub effective_features: Vec<SessionSemanticFeature>,
+    /// Existing pooler compatibility report reused by this higher-level analysis.
+    pub pooler_report: PoolerCompatibilityReport,
+    /// Client-specific guidance and source-backed remediation.
+    pub client_guidance: Vec<ClientCompatibilityGuidance>,
+    /// Evidence confidence after applying client-specific assumptions.
+    pub confidence: EvidenceConfidence,
+}
+
 /// Classifies a database endpoint and returns redacted, report-safe evidence.
 pub fn classify_endpoint(input: &EndpointClassificationInput) -> EndpointClassificationReport {
     let redacted_endpoint = redact_endpoint(&input.endpoint);
@@ -522,6 +645,50 @@ pub fn check_pooler_compatibility(input: &PoolerCompatibilityInput) -> PoolerCom
         migration_direct_connection_required,
         long_running_direct_connection_required,
         findings,
+        confidence,
+    }
+}
+
+/// Checks pooler compatibility and adds client-specific session-state guidance.
+///
+/// This function is intentionally additive. It reuses
+/// [`check_pooler_compatibility`] for the base pooler decision, then layers
+/// framework/client guidance on top so callers can see both the generic pooler
+/// result and the concrete configuration change for their library.
+pub fn analyze_session_state_compatibility(
+    input: &SessionStateCompatibilityInput,
+) -> SessionStateCompatibilityReport {
+    let effective_features = effective_session_features(input.client, &input.features_used);
+    let mut base_input = PoolerCompatibilityInput::new(input.pooler, input.mode)
+        .with_features(effective_features.clone());
+    if let Some(workflow) = input.workflow {
+        base_input = base_input.with_workflow(workflow);
+    }
+    if let Some(config) = input.pooler_config.clone() {
+        base_input = base_input.with_pooler_config(config);
+    }
+
+    let pooler_report = check_pooler_compatibility(&base_input);
+    let client_guidance = client_guidance(input, &effective_features);
+    let confidence = client_guidance
+        .iter()
+        .fold(pooler_report.confidence, |acc, item| {
+            if input.client == ClientLibraryKind::Unknown || item.risk >= RiskLevel::High {
+                confidence_min(acc, EvidenceConfidence::Medium)
+            } else {
+                acc
+            }
+        });
+    let compatible = merge_client_decision(&pooler_report, &client_guidance, confidence);
+
+    SessionStateCompatibilityReport {
+        compatible,
+        client: input.client,
+        pooler: input.pooler,
+        mode: input.mode,
+        effective_features,
+        pooler_report,
+        client_guidance,
         confidence,
     }
 }
@@ -697,6 +864,201 @@ fn feature_needs_review(
             | SessionSemanticFeature::ProtocolPreparedStatements
     ) && config.is_none()
         && !matches!(pooler, ExternalPoolerKind::PgBouncer)
+}
+
+fn effective_session_features(
+    client: ClientLibraryKind,
+    explicit_features: &[SessionSemanticFeature],
+) -> Vec<SessionSemanticFeature> {
+    let mut features = explicit_features.to_vec();
+    for feature in default_client_features(client) {
+        if !features.contains(&feature) {
+            features.push(feature);
+        }
+    }
+    features
+}
+
+fn default_client_features(client: ClientLibraryKind) -> Vec<SessionSemanticFeature> {
+    match client {
+        ClientLibraryKind::Prisma
+        | ClientLibraryKind::Sqlx
+        | ClientLibraryKind::SqlalchemyAsyncpg
+        | ClientLibraryKind::Postgrest => vec![SessionSemanticFeature::PreparedStatements],
+        ClientLibraryKind::GenericPostgres
+        | ClientLibraryKind::NodePostgres
+        | ClientLibraryKind::PgJdbc
+        | ClientLibraryKind::Unknown => Vec::new(),
+    }
+}
+
+fn client_guidance(
+    input: &SessionStateCompatibilityInput,
+    effective_features: &[SessionSemanticFeature],
+) -> Vec<ClientCompatibilityGuidance> {
+    let mut guidance = Vec::new();
+    let uses_prepared = effective_features.iter().any(|feature| {
+        matches!(
+            feature,
+            SessionSemanticFeature::PreparedStatements
+                | SessionSemanticFeature::ProtocolPreparedStatements
+                | SessionSemanticFeature::NamedPreparedStatements
+        )
+    });
+    let transactional = matches!(
+        input.mode,
+        MultiplexingMode::Transaction | MultiplexingMode::Statement
+    );
+
+    match input.client {
+        ClientLibraryKind::Prisma if transactional => guidance.push(guidance_item(
+            "CLIENT_PRISMA_POOLER_PREPARED_STATEMENTS",
+            RiskLevel::High,
+            "Prisma uses prepared statements and needs PgBouncer-compatible configuration for pooled runtime traffic",
+            "use a pooled runtime URL only when the pooler supports the Prisma mode; keep Prisma migration and schema commands on a direct URL",
+            "https://docs.prisma.io/docs/orm/v6/prisma-client/setup-and-configuration/databases-connections/pgbouncer",
+            input.workflow.is_some_and(requires_direct_endpoint) || uses_prepared_without_evidence(input),
+        )),
+        ClientLibraryKind::NodePostgres if transactional => guidance.push(guidance_item(
+            "CLIENT_NODE_PG_NAMED_PREPARED_STATEMENTS",
+            RiskLevel::Medium,
+            "node-postgres only creates prepared statements when a query config includes a name",
+            "avoid the query config name field with transaction poolers, or prove PgBouncer max_prepared_statements is non-zero before using named statements",
+            "https://node-postgres.com/features/queries",
+            effective_features.contains(&SessionSemanticFeature::NamedPreparedStatements),
+        )),
+        ClientLibraryKind::Sqlx if transactional => guidance.push(guidance_item(
+            "CLIENT_SQLX_STATEMENT_CACHE",
+            RiskLevel::High,
+            "sqlx prepares and caches PostgreSQL statements by default",
+            "set statement_cache_capacity to 0 for transaction poolers that cannot preserve prepared statements, or prove PgBouncer prepared-statement tracking is enabled",
+            "https://docs.rs/sqlx/latest/sqlx/postgres/struct.PgConnectOptions.html",
+            uses_prepared_without_evidence(input),
+        )),
+        ClientLibraryKind::SqlalchemyAsyncpg if transactional => guidance.push(guidance_item(
+            "CLIENT_SQLALCHEMY_ASYNCPG_PREPARED_CACHE",
+            RiskLevel::High,
+            "SQLAlchemy's asyncpg dialect prepares and caches statements per DBAPI connection",
+            "set prepared_statement_cache_size=0, or use PgBouncer-safe dynamic prepared statement names plus NullPool and DISCARD cleanup",
+            "https://docs.sqlalchemy.org/en/21/dialects/postgresql.html",
+            uses_prepared_without_evidence(input),
+        )),
+        ClientLibraryKind::Postgrest if transactional => {
+            guidance.push(guidance_item(
+                "CLIENT_POSTGREST_EXTERNAL_POOLER",
+                RiskLevel::High,
+                "PostgREST requires prepared statements to be disabled for PgBouncer transaction pooling",
+                "set db-prepared-statements=false and db-channel-enabled=false when using transaction pooling; avoid statement pooling",
+                "https://docs.postgrest.org/en/v12/references/connection_pool.html",
+                true,
+            ));
+            if input.mode == MultiplexingMode::Statement {
+                guidance.push(guidance_item(
+                    "CLIENT_POSTGREST_STATEMENT_POOLING_UNSUPPORTED",
+                    RiskLevel::Critical,
+                    "PostgREST does not support statement pooling",
+                    "use PostgREST's internal pool, a session pooler, or transaction pooling with prepared statements and LISTEN disabled",
+                    "https://docs.postgrest.org/en/v12/references/connection_pool.html",
+                    true,
+                ));
+            }
+        }
+        ClientLibraryKind::PgJdbc if transactional && uses_prepared => guidance.push(guidance_item(
+            "CLIENT_PGJDBC_PREPARE_THRESHOLD",
+            RiskLevel::High,
+            "JDBC prepared statements can conflict with transaction pooling unless disabled or backed by compatible pooler support",
+            "add prepareThreshold=0 to disable prepared statements when PgBouncer prepared-statement tracking is unavailable",
+            "https://www.pgbouncer.org/faq.html",
+            uses_prepared_without_evidence(input),
+        )),
+        ClientLibraryKind::Unknown => guidance.push(guidance_item(
+            "CLIENT_LIBRARY_UNKNOWN",
+            RiskLevel::Medium,
+            "client library behavior is unknown",
+            "provide the client library or explicitly list session features so poolsim can apply source-backed rules",
+            "https://www.pgbouncer.org/features.html",
+            false,
+        )),
+        ClientLibraryKind::GenericPostgres | ClientLibraryKind::Prisma | ClientLibraryKind::NodePostgres | ClientLibraryKind::Sqlx | ClientLibraryKind::SqlalchemyAsyncpg | ClientLibraryKind::Postgrest | ClientLibraryKind::PgJdbc => {}
+    }
+
+    if input.pooler == ExternalPoolerKind::Supavisor
+        && input.mode == MultiplexingMode::Transaction
+        && uses_prepared
+    {
+        guidance.push(guidance_item(
+            "PROVIDER_SUPAVISOR_TRANSACTION_PREPARED_STATEMENTS",
+            RiskLevel::High,
+            "Supabase documents that Supavisor transaction mode does not support prepared statements",
+            "disable prepared statements for this client or use a session/direct endpoint for workloads that require them",
+            "https://supabase.com/docs/guides/database/connecting-to-postgres",
+            true,
+        ));
+    }
+
+    if input.pooler == ExternalPoolerKind::RdsProxy && uses_prepared {
+        guidance.push(guidance_item(
+            "PROVIDER_RDS_PROXY_PINNING_REVIEW",
+            RiskLevel::Medium,
+            "RDS Proxy can pin sessions for stateful behavior, reducing multiplexing benefits",
+            "measure pinning and remove prepared statements, SET state, temporary tables, and other session state before relying on backend reuse",
+            "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-proxy-pinning.html",
+            false,
+        ));
+    }
+
+    guidance
+}
+
+fn uses_prepared_without_evidence(input: &SessionStateCompatibilityInput) -> bool {
+    matches!(
+        input.mode,
+        MultiplexingMode::Transaction | MultiplexingMode::Statement
+    ) && !matches!(input.pooler, ExternalPoolerKind::PgBouncer)
+        || (input.pooler == ExternalPoolerKind::PgBouncer
+            && input
+                .pooler_config
+                .as_ref()
+                .and_then(|config| config.max_prepared_statements)
+                .unwrap_or(0)
+                == 0)
+}
+
+fn merge_client_decision(
+    pooler_report: &PoolerCompatibilityReport,
+    guidance: &[ClientCompatibilityGuidance],
+    confidence: EvidenceConfidence,
+) -> CompatibilityDecision {
+    if pooler_report.compatible == CompatibilityDecision::Incompatible
+        || guidance.iter().any(|item| item.requires_change)
+    {
+        CompatibilityDecision::Incompatible
+    } else if pooler_report.compatible == CompatibilityDecision::NeedsReview
+        || confidence != EvidenceConfidence::High
+        || guidance.iter().any(|item| item.risk >= RiskLevel::Medium)
+    {
+        CompatibilityDecision::NeedsReview
+    } else {
+        CompatibilityDecision::Compatible
+    }
+}
+
+fn guidance_item(
+    code: impl Into<String>,
+    risk: RiskLevel,
+    message: impl Into<String>,
+    remediation: impl Into<String>,
+    source_url: impl Into<String>,
+    requires_change: bool,
+) -> ClientCompatibilityGuidance {
+    ClientCompatibilityGuidance {
+        code: code.into(),
+        risk,
+        message: message.into(),
+        remediation: remediation.into(),
+        source_url: source_url.into(),
+        requires_change,
+    }
 }
 
 fn feature_finding(feature: SessionSemanticFeature, mode: MultiplexingMode) -> PoolerFinding {
@@ -880,5 +1242,78 @@ mod tests {
             .with_pooler_config(PoolerConfigSnapshot::new().with_max_prepared_statements(100)),
         );
         assert_eq!(safe_report.compatible, CompatibilityDecision::Compatible);
+    }
+
+    #[test]
+    fn session_state_analysis_reuses_pooler_check_and_adds_client_guidance() {
+        let report = analyze_session_state_compatibility(
+            &SessionStateCompatibilityInput::new(
+                ClientLibraryKind::Sqlx,
+                ExternalPoolerKind::PgBouncer,
+                MultiplexingMode::Transaction,
+            )
+            .with_pooler_config(PoolerConfigSnapshot::new().with_max_prepared_statements(100)),
+        );
+
+        assert_eq!(report.compatible, CompatibilityDecision::NeedsReview);
+        assert!(report
+            .effective_features
+            .contains(&SessionSemanticFeature::PreparedStatements));
+        assert_eq!(
+            report.pooler_report.compatible,
+            CompatibilityDecision::Compatible
+        );
+        assert!(report
+            .client_guidance
+            .iter()
+            .any(|item| item.code == "CLIENT_SQLX_STATEMENT_CACHE"));
+    }
+
+    #[test]
+    fn session_state_analysis_marks_supavisor_prepared_statements_incompatible() {
+        let report = analyze_session_state_compatibility(&SessionStateCompatibilityInput::new(
+            ClientLibraryKind::Prisma,
+            ExternalPoolerKind::Supavisor,
+            MultiplexingMode::Transaction,
+        ));
+
+        assert_eq!(report.compatible, CompatibilityDecision::Incompatible);
+        assert!(report.client_guidance.iter().any(|item| item.code
+            == "PROVIDER_SUPAVISOR_TRANSACTION_PREPARED_STATEMENTS"
+            && item.requires_change));
+    }
+
+    #[test]
+    fn session_state_analysis_covers_node_postgres_and_postgrest_branches() {
+        let node_report = analyze_session_state_compatibility(
+            &SessionStateCompatibilityInput::new(
+                ClientLibraryKind::NodePostgres,
+                ExternalPoolerKind::PgBouncer,
+                MultiplexingMode::Transaction,
+            )
+            .with_features(vec![SessionSemanticFeature::NamedPreparedStatements]),
+        );
+        assert_eq!(node_report.compatible, CompatibilityDecision::Incompatible);
+        assert!(node_report
+            .client_guidance
+            .iter()
+            .any(|item| item.code == "CLIENT_NODE_PG_NAMED_PREPARED_STATEMENTS"));
+
+        let postgrest_report = analyze_session_state_compatibility(
+            &SessionStateCompatibilityInput::new(
+                ClientLibraryKind::Postgrest,
+                ExternalPoolerKind::PgBouncer,
+                MultiplexingMode::Statement,
+            )
+            .with_pooler_config(PoolerConfigSnapshot::new().with_max_prepared_statements(100)),
+        );
+        assert_eq!(
+            postgrest_report.compatible,
+            CompatibilityDecision::Incompatible
+        );
+        assert!(postgrest_report
+            .client_guidance
+            .iter()
+            .any(|item| item.code == "CLIENT_POSTGREST_STATEMENT_POOLING_UNSUPPORTED"));
     }
 }
