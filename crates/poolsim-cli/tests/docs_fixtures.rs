@@ -791,6 +791,7 @@ fn docs_json_schemas_are_valid_json_and_match_fixture_shapes() {
         "docs/schemas/gate-policy.schema.json",
         "docs/schemas/endpoint-classification.schema.json",
         "docs/schemas/pooler-compatibility.schema.json",
+        "docs/schemas/session-state-compatibility.schema.json",
         "docs/schemas/serverless-concurrency.schema.json",
         "docs/schemas/connection-ownership.schema.json",
     ];
@@ -873,6 +874,16 @@ fn docs_json_schemas_are_valid_json_and_match_fixture_shapes() {
     assert!(pooler["features_used"]
         .as_array()
         .is_some_and(|items| !items.is_empty()));
+
+    let session_state: Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            workspace_root().join("docs/fixtures/session-state-compatibility.json"),
+        )
+        .expect("session-state compatibility fixture should be readable"),
+    )
+    .expect("session-state compatibility fixture should parse");
+    assert_eq!(session_state["client"], "sqlx");
+    assert!(session_state["pooler_config"].is_object());
 
     let serverless: Value = serde_json::from_str(
         &std::fs::read_to_string(
@@ -971,6 +982,51 @@ fn docs_endpoint_and_pooler_examples_work() {
     let prepared: Value =
         serde_json::from_str(&stdout_utf8(&prepared_output)).expect("prepared output should parse");
     assert_eq!(prepared["compatible"], "compatible");
+
+    let session_state_output = run_cli(&[
+        "--format",
+        "json",
+        "check",
+        "session-state",
+        "--client",
+        "sqlx",
+        "--pooler",
+        "pg-bouncer",
+        "--mode",
+        "transaction",
+        "--uses",
+        "prepared-statements",
+        "--max-prepared-statements",
+        "100",
+    ]);
+    assert_success(
+        &session_state_output,
+        "session-state compatibility evidence",
+    );
+    let session_state: Value = serde_json::from_str(&stdout_utf8(&session_state_output))
+        .expect("session-state output should parse");
+    assert_eq!(session_state["client"], "sqlx");
+    assert_eq!(session_state["pooler_report"]["compatible"], "compatible");
+    assert!(session_state["client_guidance"]
+        .as_array()
+        .is_some_and(|items| !items.is_empty()));
+
+    let supavisor_output = run_cli(&[
+        "--format",
+        "json",
+        "check",
+        "session-state",
+        "--client",
+        "prisma",
+        "--pooler",
+        "supavisor",
+        "--mode",
+        "transaction",
+    ]);
+    assert_eq!(supavisor_output.status.code(), Some(2));
+    let supavisor: Value = serde_json::from_str(&stdout_utf8(&supavisor_output))
+        .expect("supavisor session-state output should parse");
+    assert_eq!(supavisor["compatible"], "incompatible");
 }
 
 #[test]
@@ -1165,6 +1221,20 @@ fn docs_html_output_examples_work_for_major_commands() {
             "90".to_string(),
             "--database-backend-limit".to_string(),
             "120".to_string(),
+        ],
+        vec![
+            "check".to_string(),
+            "session-state".to_string(),
+            "--client".to_string(),
+            "sqlx".to_string(),
+            "--pooler".to_string(),
+            "pg-bouncer".to_string(),
+            "--mode".to_string(),
+            "transaction".to_string(),
+            "--uses".to_string(),
+            "prepared-statements".to_string(),
+            "--max-prepared-statements".to_string(),
+            "100".to_string(),
         ],
         vec![
             "import".to_string(),

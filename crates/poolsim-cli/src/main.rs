@@ -29,9 +29,10 @@ use poolsim_core::{
         ConnectionOwnershipStatus,
     },
     pooler::{
-        check_pooler_compatibility, classify_endpoint, EndpointClassificationInput,
-        EndpointClassificationReport, PoolerCompatibilityInput, PoolerCompatibilityReport,
-        PoolerConfigSnapshot,
+        analyze_session_state_compatibility, check_pooler_compatibility, classify_endpoint,
+        EndpointClassificationInput, EndpointClassificationReport, PoolerCompatibilityInput,
+        PoolerCompatibilityReport, PoolerConfigSnapshot, SessionStateCompatibilityInput,
+        SessionStateCompatibilityReport,
     },
     serverless::{
         plan_serverless_concurrency, ServerlessConcurrencyInput, ServerlessConcurrencyReport,
@@ -232,19 +233,36 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
                 if let Some(workflow) = args.workflow {
                     input = input.with_workflow(workflow.into());
                 }
-                if args.max_prepared_statements.is_some() || args.resets_session_state.is_some() {
-                    let mut config = PoolerConfigSnapshot::new();
-                    if let Some(value) = args.max_prepared_statements {
-                        config = config.with_max_prepared_statements(value);
-                    }
-                    if let Some(value) = args.resets_session_state {
-                        config = config.with_resets_session_state(value);
-                    }
+                if let Some(config) =
+                    pooler_config_from_args(args.max_prepared_statements, args.resets_session_state)
+                {
                     input = input.with_pooler_config(config);
                 }
                 let report = check_pooler_compatibility(&input);
                 render_pooler_compatibility(&report, cli.format)?;
                 Ok(exit_code_for_pooler_compatibility(&report, cli.warn_exit))
+            }
+            args::CheckCommands::SessionState(args) => {
+                let mut input = SessionStateCompatibilityInput::new(
+                    args.client.into(),
+                    args.pooler.into(),
+                    args.mode.into(),
+                )
+                .with_features(args.features_used.into_iter().map(Into::into).collect());
+                if let Some(workflow) = args.workflow {
+                    input = input.with_workflow(workflow.into());
+                }
+                if let Some(config) =
+                    pooler_config_from_args(args.max_prepared_statements, args.resets_session_state)
+                {
+                    input = input.with_pooler_config(config);
+                }
+                let report = analyze_session_state_compatibility(&input);
+                render_session_state_compatibility(&report, cli.format)?;
+                Ok(exit_code_for_session_state_compatibility(
+                    &report,
+                    cli.warn_exit,
+                ))
             }
         },
         Commands::Import(args) => match args.command {
@@ -645,6 +663,58 @@ fn render_pooler_compatibility(
     }
 }
 
+fn render_session_state_compatibility(
+    report: &SessionStateCompatibilityReport,
+    format: OutputFormat,
+) -> Result<()> {
+    match format {
+        OutputFormat::Table => {
+            println!("compatible: {:?}", report.compatible);
+            println!("client: {:?}", report.client);
+            println!("pooler: {:?}", report.pooler);
+            println!("mode: {:?}", report.mode);
+            println!("confidence: {:?}", report.confidence);
+            println!("effective_features: {:?}", report.effective_features);
+            println!("pooler_compatible: {:?}", report.pooler_report.compatible);
+            for guidance in &report.client_guidance {
+                println!(
+                    "guidance: {} [{:?}] {} -> {}",
+                    guidance.code, guidance.risk, guidance.message, guidance.remediation
+                );
+            }
+            for finding in &report.pooler_report.findings {
+                println!(
+                    "finding: {} [{:?}] {} -> {}",
+                    finding.code, finding.risk, finding.message, finding.remediation
+                );
+            }
+            Ok(())
+        }
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => {
+            println!("field,value");
+            println!("compatible,{:?}", report.compatible);
+            println!("client,{:?}", report.client);
+            println!("pooler,{:?}", report.pooler);
+            println!("mode,{:?}", report.mode);
+            println!("confidence,{:?}", report.confidence);
+            println!(
+                "effective_feature_count,{}",
+                report.effective_features.len()
+            );
+            println!("client_guidance_count,{}", report.client_guidance.len());
+            println!(
+                "pooler_finding_count,{}",
+                report.pooler_report.findings.len()
+            );
+            Ok(())
+        }
+        OutputFormat::Html => {
+            render::html::print("Poolsim session-state compatibility report", report)
+        }
+    }
+}
+
 fn render_telemetry(recommendation: &TelemetryRecommendation, format: OutputFormat) -> Result<()> {
     match format {
         OutputFormat::Table => render::table::telemetry(recommendation),
@@ -820,6 +890,35 @@ fn exit_code_for_pooler_compatibility(
         poolsim_core::pooler::CompatibilityDecision::NeedsReview if warn_exit => ExitCode::from(3),
         _ => ExitCode::from(0),
     }
+}
+
+fn exit_code_for_session_state_compatibility(
+    report: &SessionStateCompatibilityReport,
+    warn_exit: bool,
+) -> ExitCode {
+    match report.compatible {
+        poolsim_core::pooler::CompatibilityDecision::Incompatible => ExitCode::from(2),
+        poolsim_core::pooler::CompatibilityDecision::NeedsReview if warn_exit => ExitCode::from(3),
+        _ => ExitCode::from(0),
+    }
+}
+
+fn pooler_config_from_args(
+    max_prepared_statements: Option<u32>,
+    resets_session_state: Option<bool>,
+) -> Option<PoolerConfigSnapshot> {
+    if max_prepared_statements.is_none() && resets_session_state.is_none() {
+        return None;
+    }
+
+    let mut config = PoolerConfigSnapshot::new();
+    if let Some(value) = max_prepared_statements {
+        config = config.with_max_prepared_statements(value);
+    }
+    if let Some(value) = resets_session_state {
+        config = config.with_resets_session_state(value);
+    }
+    Some(config)
 }
 
 #[cfg(test)]

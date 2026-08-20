@@ -1,0 +1,11 @@
+{
+  "client": "sqlx",
+  "pooler": "pg-bouncer",
+  "mode": "transaction",
+  "features_used": ["prepared-statements"],
+  "workflow": "api-traffic",
+  "pooler_config": {
+    "max_prepared_statements": 100,
+    "resets_session_state": true
+  }
+}

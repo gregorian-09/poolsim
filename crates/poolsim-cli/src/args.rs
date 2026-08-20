@@ -284,6 +284,7 @@ pub struct CheckArgs {
 #[derive(Debug, Clone, Subcommand)]
 pub enum CheckCommands {
     Pooler(PoolerCheckArgs),
+    SessionState(SessionStateCheckArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -305,6 +306,57 @@ pub struct PoolerCheckArgs {
 
     #[arg(long)]
     pub resets_session_state: Option<bool>,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct SessionStateCheckArgs {
+    #[arg(long, value_enum)]
+    pub client: CliClientLibraryKind,
+
+    #[arg(long, value_enum)]
+    pub pooler: CliExternalPoolerKind,
+
+    #[arg(long, value_enum)]
+    pub mode: CliMultiplexingMode,
+
+    #[arg(long = "uses", value_enum)]
+    pub features_used: Vec<CliSessionSemanticFeature>,
+
+    #[arg(long, value_enum)]
+    pub workflow: Option<CliDatabaseWorkflowKind>,
+
+    #[arg(long)]
+    pub max_prepared_statements: Option<u32>,
+
+    #[arg(long)]
+    pub resets_session_state: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliClientLibraryKind {
+    GenericPostgres,
+    Prisma,
+    NodePostgres,
+    Sqlx,
+    SqlalchemyAsyncpg,
+    Postgrest,
+    PgJdbc,
+    Unknown,
+}
+
+impl From<CliClientLibraryKind> for poolsim_core::pooler::ClientLibraryKind {
+    fn from(value: CliClientLibraryKind) -> Self {
+        match value {
+            CliClientLibraryKind::GenericPostgres => Self::GenericPostgres,
+            CliClientLibraryKind::Prisma => Self::Prisma,
+            CliClientLibraryKind::NodePostgres => Self::NodePostgres,
+            CliClientLibraryKind::Sqlx => Self::Sqlx,
+            CliClientLibraryKind::SqlalchemyAsyncpg => Self::SqlalchemyAsyncpg,
+            CliClientLibraryKind::Postgrest => Self::Postgrest,
+            CliClientLibraryKind::PgJdbc => Self::PgJdbc,
+            CliClientLibraryKind::Unknown => Self::Unknown,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -1014,6 +1066,49 @@ mod tests {
         ])
         .expect("html output format should parse");
         assert!(matches!(cli.format, OutputFormat::Html));
+    }
+
+    #[test]
+    fn parser_handles_session_state_check_subcommand() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "check",
+            "session-state",
+            "--client",
+            "sqlx",
+            "--pooler",
+            "pg-bouncer",
+            "--mode",
+            "transaction",
+            "--uses",
+            "prepared-statements",
+            "--workflow",
+            "api-traffic",
+            "--max-prepared-statements",
+            "100",
+            "--resets-session-state",
+            "true",
+        ])
+        .expect("session-state check should parse");
+
+        match cli.command {
+            Commands::Check(args) => match args.command {
+                CheckCommands::SessionState(args) => {
+                    assert!(matches!(args.client, CliClientLibraryKind::Sqlx));
+                    assert!(matches!(args.pooler, CliExternalPoolerKind::PgBouncer));
+                    assert!(matches!(args.mode, CliMultiplexingMode::Transaction));
+                    assert_eq!(args.features_used.len(), 1);
+                    assert!(matches!(
+                        args.workflow,
+                        Some(CliDatabaseWorkflowKind::ApiTraffic)
+                    ));
+                    assert_eq!(args.max_prepared_statements, Some(100));
+                    assert_eq!(args.resets_session_state, Some(true));
+                }
+                _ => panic!("expected session-state check"),
+            },
+            _ => panic!("expected check command"),
+        }
     }
 
     #[test]

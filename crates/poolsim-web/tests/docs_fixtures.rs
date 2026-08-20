@@ -214,6 +214,21 @@ async fn docs_rest_fixtures_round_trip() {
     assert_eq!(pooler_json["compatible"], "incompatible");
     assert!(pooler_json["incompatible_features"].is_array());
 
+    let (session_state_status, session_state_json) = json_request(
+        app.clone(),
+        "POST",
+        "/v1/check/session-state",
+        fixture_json("docs/fixtures/session-state-compatibility.json"),
+    )
+    .await;
+    assert_eq!(session_state_status, StatusCode::OK);
+    assert_eq!(session_state_json["client"], "sqlx");
+    assert_eq!(
+        session_state_json["pooler_report"]["compatible"],
+        "compatible"
+    );
+    assert!(session_state_json["client_guidance"].is_array());
+
     let (serverless_status, serverless_json) = json_request(
         app.clone(),
         "POST",

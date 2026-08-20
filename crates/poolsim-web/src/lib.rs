@@ -40,6 +40,10 @@ pub fn build_app(state: AppState, rate_limit_state: RateLimitState, cors_origins
         )
         .route("/v1/check/pooler", post(routes::check::pooler_handler))
         .route(
+            "/v1/check/session-state",
+            post(routes::check::session_state_handler),
+        )
+        .route(
             "/v1/plan/serverless",
             post(routes::plan::serverless_handler),
         )

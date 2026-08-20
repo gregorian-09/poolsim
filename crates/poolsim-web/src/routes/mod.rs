@@ -13,6 +13,7 @@
 //! - `/v1/live`
 //! - `/v1/classify/endpoint`
 //! - `/v1/check/pooler`
+//! - `/v1/check/session-state`
 //! - `/v1/plan/serverless`
 //! - `/v1/graph/ownership`
 //!
