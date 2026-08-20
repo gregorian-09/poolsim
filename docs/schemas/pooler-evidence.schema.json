@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gregorian-09/poolsim/docs/schemas/pooler-evidence.schema.json",
+  "title": "Poolsim Pooler Evidence Snapshot",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["pooler", "mode"],
+  "properties": {
+    "pooler": {
+      "type": "string",
+      "enum": ["pg-bouncer", "rds-proxy", "supavisor", "prisma-postgres-pooler", "neon-pooler", "cloudflare-hyperdrive", "unknown"]
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["none", "session", "transaction", "statement", "provider-managed", "unknown"]
+    },
+    "label": { "type": ["string", "null"] },
+    "client_active": { "type": ["integer", "null"], "minimum": 0 },
+    "client_waiting": { "type": ["integer", "null"], "minimum": 0 },
+    "server_active": { "type": ["integer", "null"], "minimum": 0 },
+    "server_idle": { "type": ["integer", "null"], "minimum": 0 },
+    "pooler_client_limit": { "type": ["integer", "null"], "minimum": 0 },
+    "pooler_backend_limit": { "type": ["integer", "null"], "minimum": 0 }
+  }
+}

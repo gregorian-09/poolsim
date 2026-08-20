@@ -1,0 +1,11 @@
+{
+  "pooler": "pg-bouncer",
+  "mode": "transaction",
+  "label": "checkout-api/postgres",
+  "client_active": 42,
+  "client_waiting": 0,
+  "server_active": 8,
+  "server_idle": 7,
+  "pooler_client_limit": 500,
+  "pooler_backend_limit": 30
+}

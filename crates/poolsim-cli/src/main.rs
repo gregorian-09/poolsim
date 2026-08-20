@@ -17,7 +17,7 @@ mod otlp;
 mod prometheus;
 mod render;
 
-use std::process::ExitCode;
+use std::{fs, process::ExitCode};
 
 use anyhow::{Context, Result};
 use args::{Cli, Commands, OutputFormat};
@@ -30,9 +30,10 @@ use poolsim_core::{
     },
     pooler::{
         analyze_session_state_compatibility, check_pooler_compatibility, classify_endpoint,
-        EndpointClassificationInput, EndpointClassificationReport, PoolerCompatibilityInput,
-        PoolerCompatibilityReport, PoolerConfigSnapshot, SessionStateCompatibilityInput,
-        SessionStateCompatibilityReport,
+        summarize_pooler_evidence, EndpointClassificationInput, EndpointClassificationReport,
+        PoolerCompatibilityInput, PoolerCompatibilityReport, PoolerConfigSnapshot,
+        PoolerEvidenceReport, PoolerEvidenceSnapshot, PoolerEvidenceStatus,
+        SessionStateCompatibilityInput, SessionStateCompatibilityReport,
     },
     serverless::{
         plan_serverless_concurrency, ServerlessConcurrencyInput, ServerlessConcurrencyReport,
@@ -292,6 +293,12 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
                     recommendation.diff.worst_saturation(),
                     cli.warn_exit,
                 ))
+            }
+            args::ImportCommands::PoolerEvidence(args) => {
+                let input = load_pooler_evidence_snapshot(&args.config)?;
+                let report = summarize_pooler_evidence(&input);
+                render_pooler_evidence(&report, cli.format)?;
+                Ok(exit_code_for_pooler_evidence(&report, cli.warn_exit))
             }
         },
         Commands::Gate(args) => {
@@ -715,6 +722,59 @@ fn render_session_state_compatibility(
     }
 }
 
+fn render_pooler_evidence(report: &PoolerEvidenceReport, format: OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Table => {
+            println!("status: {:?}", report.status);
+            println!("pooler: {:?}", report.pooler);
+            println!("mode: {:?}", report.mode);
+            println!("label: {:?}", report.label);
+            println!(
+                "observed_client_connections: {:?}",
+                report.observed_client_connections
+            );
+            println!(
+                "observed_backend_connections: {:?}",
+                report.observed_backend_connections
+            );
+            println!("client_waiting: {:?}", report.client_waiting);
+            println!("backend_utilization: {:?}", report.backend_utilization);
+            println!("client_utilization: {:?}", report.client_utilization);
+            println!("confidence: {:?}", report.confidence);
+            for finding in &report.findings {
+                println!(
+                    "finding: {} [{:?}] {} -> {}",
+                    finding.code, finding.risk, finding.message, finding.remediation
+                );
+            }
+            Ok(())
+        }
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => {
+            println!("field,value");
+            println!("status,{:?}", report.status);
+            println!("pooler,{:?}", report.pooler);
+            println!("mode,{:?}", report.mode);
+            println!("label,{:?}", report.label);
+            println!(
+                "observed_client_connections,{:?}",
+                report.observed_client_connections
+            );
+            println!(
+                "observed_backend_connections,{:?}",
+                report.observed_backend_connections
+            );
+            println!("client_waiting,{:?}", report.client_waiting);
+            println!("backend_utilization,{:?}", report.backend_utilization);
+            println!("client_utilization,{:?}", report.client_utilization);
+            println!("confidence,{:?}", report.confidence);
+            println!("finding_count,{}", report.findings.len());
+            Ok(())
+        }
+        OutputFormat::Html => render::html::print("Poolsim pooler evidence report", report),
+    }
+}
+
 fn render_telemetry(recommendation: &TelemetryRecommendation, format: OutputFormat) -> Result<()> {
     match format {
         OutputFormat::Table => render::table::telemetry(recommendation),
@@ -903,6 +963,16 @@ fn exit_code_for_session_state_compatibility(
     }
 }
 
+fn exit_code_for_pooler_evidence(report: &PoolerEvidenceReport, warn_exit: bool) -> ExitCode {
+    match report.status {
+        PoolerEvidenceStatus::BackendSaturated => ExitCode::from(2),
+        PoolerEvidenceStatus::ClientWaiting | PoolerEvidenceStatus::NeedsReview if warn_exit => {
+            ExitCode::from(3)
+        }
+        _ => ExitCode::from(0),
+    }
+}
+
 fn pooler_config_from_args(
     max_prepared_statements: Option<u32>,
     resets_session_state: Option<bool>,
@@ -919,6 +989,13 @@ fn pooler_config_from_args(
         config = config.with_resets_session_state(value);
     }
     Some(config)
+}
+
+fn load_pooler_evidence_snapshot(path: &std::path::Path) -> Result<PoolerEvidenceSnapshot> {
+    let text = fs::read_to_string(path)
+        .with_context(|| format!("failed to read pooler evidence config {}", path.display()))?;
+    serde_json::from_str(&text)
+        .with_context(|| format!("failed to parse pooler evidence config {}", path.display()))
 }
 
 #[cfg(test)]

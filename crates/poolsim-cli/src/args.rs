@@ -817,6 +817,13 @@ pub enum ImportCommands {
     Telemetry(TelemetryImportArgs),
     Prometheus(PrometheusImportArgs),
     Otlp(OtlpImportArgs),
+    PoolerEvidence(PoolerEvidenceImportArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct PoolerEvidenceImportArgs {
+    #[arg(long)]
+    pub config: PathBuf,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -1358,7 +1365,9 @@ mod tests {
                     assert_eq!(telemetry.config, PathBuf::from("telemetry.json"));
                     assert_eq!(telemetry.current_pool_size, Some(12));
                 }
-                ImportCommands::Prometheus(_) | ImportCommands::Otlp(_) => {
+                ImportCommands::Prometheus(_)
+                | ImportCommands::Otlp(_)
+                | ImportCommands::PoolerEvidence(_) => {
                     panic!("expected telemetry import")
                 }
             },
@@ -1394,6 +1403,27 @@ mod tests {
                     assert_eq!(otlp.current_pool_size, 8);
                 }
                 _ => panic!("expected OTLP import"),
+            },
+            _ => panic!("expected import command"),
+        }
+    }
+
+    #[test]
+    fn parser_handles_import_pooler_evidence_subcommand() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "import",
+            "pooler-evidence",
+            "--config",
+            "pooler-evidence.json",
+        ])
+        .expect("pooler evidence import args should parse");
+        match cli.command {
+            Commands::Import(args) => match args.command {
+                ImportCommands::PoolerEvidence(args) => {
+                    assert_eq!(args.config, PathBuf::from("pooler-evidence.json"));
+                }
+                _ => panic!("expected pooler evidence import"),
             },
             _ => panic!("expected import command"),
         }
@@ -1441,7 +1471,9 @@ mod tests {
                     assert_eq!(prometheus.max_server_connections, 100);
                     assert_eq!(prometheus.header.len(), 1);
                 }
-                ImportCommands::Telemetry(_) | ImportCommands::Otlp(_) => {
+                ImportCommands::Telemetry(_)
+                | ImportCommands::Otlp(_)
+                | ImportCommands::PoolerEvidence(_) => {
                     panic!("expected prometheus import")
                 }
             },

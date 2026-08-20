@@ -791,6 +791,7 @@ fn docs_json_schemas_are_valid_json_and_match_fixture_shapes() {
         "docs/schemas/gate-policy.schema.json",
         "docs/schemas/endpoint-classification.schema.json",
         "docs/schemas/pooler-compatibility.schema.json",
+        "docs/schemas/pooler-evidence.schema.json",
         "docs/schemas/session-state-compatibility.schema.json",
         "docs/schemas/serverless-concurrency.schema.json",
         "docs/schemas/connection-ownership.schema.json",
@@ -874,6 +875,14 @@ fn docs_json_schemas_are_valid_json_and_match_fixture_shapes() {
     assert!(pooler["features_used"]
         .as_array()
         .is_some_and(|items| !items.is_empty()));
+
+    let pooler_evidence: Value = serde_json::from_str(
+        &std::fs::read_to_string(workspace_root().join("docs/fixtures/pooler-evidence.json"))
+            .expect("pooler evidence fixture should be readable"),
+    )
+    .expect("pooler evidence fixture should parse");
+    assert_eq!(pooler_evidence["pooler"], "pg-bouncer");
+    assert!(pooler_evidence["server_active"].is_number());
 
     let session_state: Value = serde_json::from_str(
         &std::fs::read_to_string(
@@ -1027,6 +1036,61 @@ fn docs_endpoint_and_pooler_examples_work() {
     let supavisor: Value = serde_json::from_str(&stdout_utf8(&supavisor_output))
         .expect("supavisor session-state output should parse");
     assert_eq!(supavisor["compatible"], "incompatible");
+}
+
+#[test]
+fn docs_pooler_evidence_examples_work() {
+    let output = run_cli(&[
+        "--format",
+        "json",
+        "import",
+        "pooler-evidence",
+        "--config",
+        &fixture("docs/fixtures/pooler-evidence.json"),
+    ]);
+    assert_success(&output, "pooler evidence import");
+    let report: Value =
+        serde_json::from_str(&stdout_utf8(&output)).expect("pooler evidence output should parse");
+    assert_eq!(report["status"], "healthy");
+    assert_eq!(report["observed_client_connections"], 42);
+    assert_eq!(report["observed_backend_connections"], 15);
+    assert_eq!(report["backend_utilization"], 0.5);
+
+    let unique = format!(
+        "{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock should be after epoch")
+            .as_nanos()
+    );
+    let waiting_path = std::env::temp_dir().join(format!("pooler-evidence-waiting-{unique}.json"));
+    std::fs::write(
+        &waiting_path,
+        r#"{
+          "pooler": "pg-bouncer",
+          "mode": "transaction",
+          "client_active": 100,
+          "client_waiting": 3,
+          "server_active": 8,
+          "server_idle": 2,
+          "pooler_backend_limit": 20
+        }"#,
+    )
+    .expect("waiting pooler evidence fixture should be written");
+    let waiting_output = run_cli(&[
+        "--warn-exit",
+        "--format",
+        "json",
+        "import",
+        "pooler-evidence",
+        "--config",
+        waiting_path.to_str().expect("temp path should be UTF-8"),
+    ]);
+    assert_eq!(waiting_output.status.code(), Some(3));
+    let waiting: Value = serde_json::from_str(&stdout_utf8(&waiting_output))
+        .expect("waiting pooler evidence output should parse");
+    assert_eq!(waiting["status"], "client-waiting");
 }
 
 #[test]
@@ -1241,6 +1305,12 @@ fn docs_html_output_examples_work_for_major_commands() {
             "telemetry".to_string(),
             "--config".to_string(),
             fixture("docs/fixtures/telemetry.json"),
+        ],
+        vec![
+            "import".to_string(),
+            "pooler-evidence".to_string(),
+            "--config".to_string(),
+            fixture("docs/fixtures/pooler-evidence.json"),
         ],
         vec![
             "gate".to_string(),
