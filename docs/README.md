@@ -9,6 +9,7 @@ This folder contains user-facing documentation for the current Poolsim capabilit
 - [`cli-reference.md`](cli-reference.md): Exhaustive command-line reference covering every subcommand, flag, config shape, output format, and exit-code path.
 - [`web-api.md`](web-api.md): Exhaustive REST/WebSocket reference plus embedding examples for `build_app`, `AppState`, and `RateLimitState`.
 - [`endpoint-poolers.md`](endpoint-poolers.md): Endpoint classification and external-pooler compatibility checks for direct, pooled, proxied, transaction-mode, and edge-managed database endpoints.
+- [`serverless-concurrency.md`](serverless-concurrency.md): Serverless and edge execution-environment pool footprint planning.
 - [`terraform-opentofu.md`](terraform-opentofu.md): Terraform/OpenTofu external-data adapter for connection-pool sizing as code.
 - [`language-bindings.md`](language-bindings.md): Python, TypeScript, and Go bindings that delegate to the stable CLI JSON contract.
 - [`ci-integration.md`](ci-integration.md): GitHub Action, GitLab CI, and GHCR Docker image integration guide for capacity gates and web deployment.

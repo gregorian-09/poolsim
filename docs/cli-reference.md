@@ -17,6 +17,7 @@ It covers:
 - Output formats
 - Exit-code behavior
 - Endpoint classification and external-pooler compatibility checks
+- Serverless execution-environment connection-footprint planning
 
 The CLI binary is `poolsim`.
 
@@ -37,6 +38,7 @@ Checked-in runnable fixture files live under `docs/fixtures/`:
 - `docs/fixtures/latencies.txt`
 - `docs/fixtures/endpoint-classification.json`
 - `docs/fixtures/pooler-compatibility.json`
+- `docs/fixtures/serverless-concurrency.json`
 
 ## Command Summary
 
@@ -48,6 +50,7 @@ Available subcommands:
 - `batch`
 - `compare`
 - `budget`
+- `plan serverless`
 - `classify endpoint`
 - `check pooler`
 - `import telemetry`
@@ -147,6 +150,67 @@ poolsim --format json check pooler \
 - `3`: needs review when `--warn-exit` is enabled.
 
 See [`endpoint-poolers.md`](endpoint-poolers.md) for detailed examples and limitations.
+
+## `plan serverless`
+
+### Purpose
+
+Plans database connection footprint for serverless and edge workloads where each concurrent execution environment can own its own application-side pool.
+
+This command answers whether `effective_concurrency * pool_size_per_environment` can exceed the real database backend budget. It is deliberately conservative: warm reuse changes churn risk, not worst-case simultaneous connection capacity, and external poolers produce review findings until backend pooler behavior is verified.
+
+### Example
+
+```bash
+poolsim --format json plan serverless \
+  --platform aws-lambda \
+  --max-concurrent-invocations 120 \
+  --reserved-concurrency 80 \
+  --pool-size 2 \
+  --database-backend-limit 240 \
+  --warm-reuse-ratio 0.72
+```
+
+External pooler example:
+
+```bash
+poolsim --format json plan serverless \
+  --platform cloudflare-workers \
+  --max-concurrent-invocations 500 \
+  --pool-size 1 \
+  --external-pooler cloudflare-hyperdrive \
+  --database-backend-limit 100 \
+  --warm-reuse-ratio 0.20
+```
+
+### Flags
+
+- `--platform <aws-lambda|vercel-functions|cloudflare-workers|netlify-functions|azure-functions|google-cloud-functions|unknown>`: serverless or edge platform family.
+- `--max-concurrent-invocations <integer>`: expected maximum concurrent invocations or execution environments.
+- `--reserved-concurrency <integer>`: explicit platform concurrency cap. When both max and reserved concurrency are supplied, Poolsim uses the smaller value.
+- `--app-pool-size-per-environment <integer>`: maximum app-side pool size per execution environment. Aliases: `--pool-size`, `--pool-size-per-environment`.
+- `--uses-external-pooler`: marks traffic as going through a pooler or proxy.
+- `--external-pooler <pg-bouncer|rds-proxy|supavisor|prisma-postgres-pooler|neon-pooler|cloudflare-hyperdrive|unknown>`: known external pooler family. Supplying this also marks the plan as using an external pooler.
+- `--database-backend-limit <integer>`: effective backend connection budget for this workload after reserves and shared-service budgets.
+- `--warm-reuse-ratio <0.0..1.0>`: observed or estimated warm execution-environment reuse ratio. This affects churn risk, not worst-case capacity.
+
+### Output Fields
+
+- `status`: `pass`, `warning`, `critical`, or `needs-review`.
+- `effective_concurrency`: concurrency used after applying caps.
+- `worst_case_app_pool_connections`: `effective_concurrency * app_pool_size_per_environment`.
+- `direct_database_backend_upper_bound`: direct backend upper bound when no external pooler is used, otherwise `null`.
+- `connection_churn_risk`: `Low`, `Medium`, `High`, or `Critical`.
+- `findings`: machine-readable risk and remediation records.
+- `confidence`: evidence confidence.
+
+### Exit Codes
+
+- `0`: pass, warning, or needs-review without `--warn-exit`.
+- `2`: critical direct backend limit exceedance.
+- `3`: warning or needs-review when `--warn-exit` is enabled.
+
+See [`serverless-concurrency.md`](serverless-concurrency.md) for detailed examples, source-backed assumptions, and limitations.
 
 ## Global Options
 

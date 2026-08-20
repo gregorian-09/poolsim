@@ -66,6 +66,7 @@ Given workload data, pool bounds, and simulation options, `poolsim` can:
 - import OpenTelemetry OTLP metric exports through the CLI and web API
 - classify direct, pooled, proxied, transaction-mode, and edge-managed database endpoints
 - check external pooler compatibility for session-state features before relying on pool sizing
+- plan serverless and edge connection footprint across concurrent execution environments
 - run CI capacity gates that fail deployments when telemetry violates pool policy
 - run deployment guard checks that return CI-ready safety fields and exit codes
 - diagnose configured pools with `poolsim doctor`
@@ -172,6 +173,18 @@ Compare normal, peak, and incident traffic scenarios side by side:
 ```bash
 cargo run -p poolsim-cli -- --format json compare \
   --config docs/fixtures/scenarios.json
+```
+
+Plan serverless pool footprint before raising concurrency or pool size:
+
+```bash
+cargo run -p poolsim-cli -- --format json plan serverless \
+  --platform aws-lambda \
+  --max-concurrent-invocations 120 \
+  --reserved-concurrency 80 \
+  --pool-size 2 \
+  --database-backend-limit 240 \
+  --warm-reuse-ratio 0.72
 ```
 
 Run the deployment guard wrapper for CI pipelines that need explicit `deployment_safe`, `exit_code`, and `reason` fields:

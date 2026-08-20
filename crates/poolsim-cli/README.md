@@ -107,6 +107,7 @@ Operational commands:
 
 - `poolsim compare`: compare named traffic scenarios.
 - `poolsim budget`: allocate one database connection budget across services.
+- `poolsim plan serverless`: calculate serverless app-side pool footprint across concurrent execution environments.
 - `poolsim classify endpoint`: identify direct, pooled, proxied, edge-managed, or unknown database endpoints and redact secrets.
 - `poolsim check pooler`: detect external-pooler/session-feature compatibility risks.
 - `poolsim doctor`: explain whether a current pool is healthy.
@@ -182,6 +183,22 @@ poolsim --format json check pooler \
 ```
 
 Poolsim exits with code `2` for clear incompatibility, and the JSON output includes remediation-oriented findings.
+
+## Serverless Concurrency Example
+
+Calculate worst-case app-side pool footprint for a Lambda-style workload:
+
+```bash
+poolsim --format json plan serverless \
+  --platform aws-lambda \
+  --max-concurrent-invocations 120 \
+  --reserved-concurrency 80 \
+  --pool-size 2 \
+  --database-backend-limit 240 \
+  --warm-reuse-ratio 0.72
+```
+
+The key output is `worst_case_app_pool_connections`. Poolsim calculates it as `effective_concurrency * app_pool_size_per_environment`. If traffic uses an external pooler, Poolsim still reports the app-side footprint but leaves `direct_database_backend_upper_bound` as `null` until backend pooler evidence proves the real database footprint.
 
 ## Telemetry Diff Example
 

@@ -109,6 +109,7 @@ Available REST endpoints:
 - `POST /v1/otlp/recommend`
 - `POST /v1/classify/endpoint`
 - `POST /v1/check/pooler`
+- `POST /v1/plan/serverless`
 
 Available WebSocket endpoint:
 
@@ -160,6 +161,19 @@ curl -s \
 ```
 
 Use these endpoints before treating an external pooler as additional capacity. They are diagnostic helpers; they do not open database connections or modify production configuration.
+
+## Serverless Concurrency Planning Request
+
+Plan the deployment-wide app-side pool footprint for serverless and edge functions:
+
+```bash
+curl -s \
+  -X POST http://127.0.0.1:8080/v1/plan/serverless \
+  -H 'content-type: application/json' \
+  --data @docs/fixtures/serverless-concurrency.json
+```
+
+The response includes `effective_concurrency`, `worst_case_app_pool_connections`, `direct_database_backend_upper_bound`, `connection_churn_risk`, and remediation findings. When an external pooler is present, the direct backend upper bound is intentionally `null` until backend pooler telemetry or configuration evidence proves the real database footprint.
 
 ## Simulation Request
 

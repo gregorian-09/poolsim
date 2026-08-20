@@ -24,6 +24,7 @@ Checked-in request bodies for the documented HTTP and WebSocket examples live un
 - `docs/fixtures/web-ws-request.json`
 - `docs/fixtures/endpoint-classification.json`
 - `docs/fixtures/pooler-compatibility.json`
+- `docs/fixtures/serverless-concurrency.json`
 
 ## Base Routes
 
@@ -41,6 +42,7 @@ Available routes:
 - `POST /v1/otlp/recommend`
 - `POST /v1/classify/endpoint`
 - `POST /v1/check/pooler`
+- `POST /v1/plan/serverless`
 - `GET /v1/live` (WebSocket upgrade)
 
 All REST request bodies are JSON.
@@ -284,6 +286,49 @@ Response shape:
 - `incompatible_features`
 - `migration_direct_connection_required`
 - `long_running_direct_connection_required`
+- `findings`
+- `confidence`
+
+### `POST /v1/plan/serverless`
+
+Purpose:
+
+- calculate serverless app-side pool footprint across concurrent execution environments
+- compare direct database traffic against an effective backend connection limit
+- treat external poolers conservatively until backend pooler behavior is verified
+- report missing concurrency or pool-size evidence as `needs-review`
+
+Request model:
+
+- `ServerlessConcurrencyInput.platform`
+- `ServerlessConcurrencyInput.max_concurrent_invocations`
+- `ServerlessConcurrencyInput.reserved_concurrency`
+- `ServerlessConcurrencyInput.app_pool_size_per_environment`
+- `ServerlessConcurrencyInput.uses_external_pooler`
+- `ServerlessConcurrencyInput.external_pooler`
+- `ServerlessConcurrencyInput.database_backend_limit`
+- `ServerlessConcurrencyInput.warm_reuse_ratio`
+
+Example:
+
+```bash
+curl -s \
+  -X POST http://127.0.0.1:8080/v1/plan/serverless \
+  -H 'content-type: application/json' \
+  --data @docs/fixtures/serverless-concurrency.json
+```
+
+Response shape:
+
+- `status`
+- `platform`
+- `effective_concurrency`
+- `worst_case_app_pool_connections`
+- `direct_database_backend_upper_bound`
+- `database_backend_limit`
+- `uses_external_pooler`
+- `external_pooler`
+- `connection_churn_risk`
 - `findings`
 - `confidence`
 

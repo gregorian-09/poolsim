@@ -24,3 +24,4 @@ This directory contains checked-in sample inputs used by the documentation and v
 - `web-ws-request.json`: initial WebSocket request body for `GET /v1/live`
 - `endpoint-classification.json`: request body for `poolsim classify endpoint` and `POST /v1/classify/endpoint`
 - `pooler-compatibility.json`: request body for `poolsim check pooler` and `POST /v1/check/pooler`
+- `serverless-concurrency.json`: request body for `poolsim plan serverless` and `POST /v1/plan/serverless`
