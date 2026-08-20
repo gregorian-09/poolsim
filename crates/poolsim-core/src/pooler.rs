@@ -211,6 +211,21 @@ pub enum CompatibilityDecision {
     NeedsReview,
 }
 
+/// Status of observed external pooler evidence.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum PoolerEvidenceStatus {
+    /// Observed evidence does not show client waiting or backend saturation.
+    Healthy,
+    /// Clients are waiting for backend/server capacity.
+    ClientWaiting,
+    /// Backend/server usage is at or above the supplied backend limit.
+    BackendSaturated,
+    /// Evidence is incomplete or provider behavior needs review.
+    NeedsReview,
+}
+
 /// A compatibility or endpoint-classification finding.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[non_exhaustive]
@@ -400,6 +415,131 @@ pub struct PoolerCompatibilityReport {
     /// Findings explaining the decision.
     pub findings: Vec<PoolerFinding>,
     /// Evidence confidence for the decision.
+    pub confidence: EvidenceConfidence,
+}
+
+/// Observed pooler evidence from admin output or provider metrics.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PoolerEvidenceSnapshot {
+    /// Pooler family that produced the evidence.
+    pub pooler: ExternalPoolerKind,
+    /// Multiplexing mode in effect for this evidence.
+    pub mode: MultiplexingMode,
+    /// Optional service, database, user, or pool label.
+    #[serde(default)]
+    pub label: Option<String>,
+    /// Active/connected client-side connections.
+    #[serde(default)]
+    pub client_active: Option<u32>,
+    /// Client-side connections waiting for a backend/server connection.
+    #[serde(default)]
+    pub client_waiting: Option<u32>,
+    /// Active backend/server connections opened by the pooler.
+    #[serde(default)]
+    pub server_active: Option<u32>,
+    /// Idle backend/server connections held by the pooler.
+    #[serde(default)]
+    pub server_idle: Option<u32>,
+    /// Configured or provider-documented client connection cap.
+    #[serde(default)]
+    pub pooler_client_limit: Option<u32>,
+    /// Configured or provider-documented backend/server connection cap.
+    #[serde(default)]
+    pub pooler_backend_limit: Option<u32>,
+}
+
+impl PoolerEvidenceSnapshot {
+    /// Creates pooler evidence with the required pooler family and mode.
+    pub fn new(pooler: ExternalPoolerKind, mode: MultiplexingMode) -> Self {
+        Self {
+            pooler,
+            mode,
+            label: None,
+            client_active: None,
+            client_waiting: None,
+            server_active: None,
+            server_idle: None,
+            pooler_client_limit: None,
+            pooler_backend_limit: None,
+        }
+    }
+
+    /// Sets a report label.
+    #[must_use]
+    pub fn with_label(mut self, value: impl Into<String>) -> Self {
+        self.label = Some(value.into());
+        self
+    }
+
+    /// Sets observed active client-side connections.
+    #[must_use]
+    pub fn with_client_active(mut self, value: u32) -> Self {
+        self.client_active = Some(value);
+        self
+    }
+
+    /// Sets observed waiting client-side connections.
+    #[must_use]
+    pub fn with_client_waiting(mut self, value: u32) -> Self {
+        self.client_waiting = Some(value);
+        self
+    }
+
+    /// Sets observed active backend/server connections.
+    #[must_use]
+    pub fn with_server_active(mut self, value: u32) -> Self {
+        self.server_active = Some(value);
+        self
+    }
+
+    /// Sets observed idle backend/server connections.
+    #[must_use]
+    pub fn with_server_idle(mut self, value: u32) -> Self {
+        self.server_idle = Some(value);
+        self
+    }
+
+    /// Sets the pooler client connection limit.
+    #[must_use]
+    pub fn with_pooler_client_limit(mut self, value: u32) -> Self {
+        self.pooler_client_limit = Some(value);
+        self
+    }
+
+    /// Sets the pooler backend/server connection limit.
+    #[must_use]
+    pub fn with_pooler_backend_limit(mut self, value: u32) -> Self {
+        self.pooler_backend_limit = Some(value);
+        self
+    }
+}
+
+/// Summary of observed pooler client/backend evidence.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[non_exhaustive]
+pub struct PoolerEvidenceReport {
+    /// Overall observed evidence status.
+    pub status: PoolerEvidenceStatus,
+    /// Pooler family that produced the evidence.
+    pub pooler: ExternalPoolerKind,
+    /// Multiplexing mode in effect for this evidence.
+    pub mode: MultiplexingMode,
+    /// Optional service, database, user, or pool label.
+    pub label: Option<String>,
+    /// Total observed client connections, active plus waiting, when known.
+    pub observed_client_connections: Option<u32>,
+    /// Total observed backend/server connections, active plus idle, when known.
+    pub observed_backend_connections: Option<u32>,
+    /// Observed client waiting count.
+    pub client_waiting: Option<u32>,
+    /// Backend utilization ratio against the supplied backend limit, when known.
+    pub backend_utilization: Option<f64>,
+    /// Client utilization ratio against the supplied client limit, when known.
+    pub client_utilization: Option<f64>,
+    /// Findings that explain risks, missing evidence, and remediation.
+    pub findings: Vec<PoolerFinding>,
+    /// Confidence in this evidence summary.
     pub confidence: EvidenceConfidence,
 }
 
@@ -689,6 +829,103 @@ pub fn analyze_session_state_compatibility(
         effective_features,
         pooler_report,
         client_guidance,
+        confidence,
+    }
+}
+
+/// Summarizes observed external pooler evidence into capacity risk signals.
+pub fn summarize_pooler_evidence(input: &PoolerEvidenceSnapshot) -> PoolerEvidenceReport {
+    let observed_client_connections = input
+        .client_active
+        .zip(input.client_waiting)
+        .map(|(active, waiting)| active.saturating_add(waiting));
+    let observed_backend_connections = input
+        .server_active
+        .zip(input.server_idle)
+        .map(|(active, idle)| active.saturating_add(idle));
+    let backend_utilization = utilization(observed_backend_connections, input.pooler_backend_limit);
+    let client_utilization = utilization(observed_client_connections, input.pooler_client_limit);
+
+    let mut status = PoolerEvidenceStatus::Healthy;
+    let mut confidence = EvidenceConfidence::High;
+    let mut findings = Vec::new();
+
+    if input.pooler == ExternalPoolerKind::Unknown || input.mode == MultiplexingMode::Unknown {
+        status = PoolerEvidenceStatus::NeedsReview;
+        confidence = EvidenceConfidence::Low;
+        findings.push(PoolerFinding::new(
+            "POOLER_EVIDENCE_KIND_UNKNOWN",
+            RiskLevel::Medium,
+            "pooler family or multiplexing mode is unknown",
+            "classify the endpoint or provide explicit pooler and mode evidence",
+        ));
+    }
+
+    if input.client_active.is_none()
+        || input.client_waiting.is_none()
+        || input.server_active.is_none()
+        || input.server_idle.is_none()
+    {
+        status = max_evidence_status(status, PoolerEvidenceStatus::NeedsReview);
+        confidence = confidence_min(confidence, EvidenceConfidence::Medium);
+        findings.push(PoolerFinding::new(
+            "POOLER_EVIDENCE_COUNTS_INCOMPLETE",
+            RiskLevel::Medium,
+            "client or backend pooler counters are incomplete",
+            "provide active/waiting client counts and active/idle backend counts from pooler telemetry",
+        ));
+    }
+
+    if input.pooler_backend_limit.is_none() {
+        status = max_evidence_status(status, PoolerEvidenceStatus::NeedsReview);
+        confidence = confidence_min(confidence, EvidenceConfidence::Medium);
+        findings.push(PoolerFinding::new(
+            "POOLER_BACKEND_LIMIT_UNKNOWN",
+            RiskLevel::Medium,
+            "pooler backend/server connection limit is unknown",
+            "provide PgBouncer pool_size, Supavisor pool size, RDS Proxy max database connections, or equivalent provider evidence",
+        ));
+    }
+
+    if input.client_waiting.unwrap_or(0) > 0 {
+        status = max_evidence_status(status, PoolerEvidenceStatus::ClientWaiting);
+        findings.push(PoolerFinding::new(
+            "POOLER_CLIENTS_WAITING",
+            RiskLevel::High,
+            "clients are waiting for backend/server pooler capacity",
+            "inspect long transactions, query latency, backend pool limits, and session pinning before increasing application pool size",
+        ));
+    }
+
+    if backend_utilization.is_some_and(|rho| rho >= 1.0) {
+        status = PoolerEvidenceStatus::BackendSaturated;
+        findings.push(PoolerFinding::new(
+            "POOLER_BACKEND_SATURATED",
+            RiskLevel::Critical,
+            "observed backend/server connections are at or above the supplied backend limit",
+            "reduce client pressure, increase backend pool capacity only within the database budget, or split traffic by workload",
+        ));
+    } else if backend_utilization.is_some_and(|rho| rho >= 0.8) {
+        status = max_evidence_status(status, PoolerEvidenceStatus::NeedsReview);
+        findings.push(PoolerFinding::new(
+            "POOLER_BACKEND_NEAR_LIMIT",
+            RiskLevel::High,
+            "observed backend/server connections are using at least 80% of the supplied backend limit",
+            "leave headroom for bursts, failover, admin sessions, migrations, and other services",
+        ));
+    }
+
+    PoolerEvidenceReport {
+        status,
+        pooler: input.pooler,
+        mode: input.mode,
+        label: input.label.clone(),
+        observed_client_connections,
+        observed_backend_connections,
+        client_waiting: input.client_waiting,
+        backend_utilization,
+        client_utilization,
+        findings,
         confidence,
     }
 }
@@ -1024,6 +1261,36 @@ fn uses_prepared_without_evidence(input: &SessionStateCompatibilityInput) -> boo
                 == 0)
 }
 
+fn utilization(observed: Option<u32>, limit: Option<u32>) -> Option<f64> {
+    observed.zip(limit).and_then(|(observed, limit)| {
+        if limit == 0 {
+            None
+        } else {
+            Some(f64::from(observed) / f64::from(limit))
+        }
+    })
+}
+
+fn max_evidence_status(
+    current: PoolerEvidenceStatus,
+    candidate: PoolerEvidenceStatus,
+) -> PoolerEvidenceStatus {
+    if evidence_status_rank(candidate) > evidence_status_rank(current) {
+        candidate
+    } else {
+        current
+    }
+}
+
+fn evidence_status_rank(status: PoolerEvidenceStatus) -> u8 {
+    match status {
+        PoolerEvidenceStatus::Healthy => 0,
+        PoolerEvidenceStatus::NeedsReview => 1,
+        PoolerEvidenceStatus::ClientWaiting => 2,
+        PoolerEvidenceStatus::BackendSaturated => 3,
+    }
+}
+
 fn merge_client_decision(
     pooler_report: &PoolerCompatibilityReport,
     guidance: &[ClientCompatibilityGuidance],
@@ -1315,5 +1582,69 @@ mod tests {
             .client_guidance
             .iter()
             .any(|item| item.code == "CLIENT_POSTGREST_STATEMENT_POOLING_UNSUPPORTED"));
+    }
+
+    #[test]
+    fn pooler_evidence_summarizes_healthy_client_and_backend_counts() {
+        let report = summarize_pooler_evidence(
+            &PoolerEvidenceSnapshot::new(
+                ExternalPoolerKind::PgBouncer,
+                MultiplexingMode::Transaction,
+            )
+            .with_label("checkout-api")
+            .with_client_active(42)
+            .with_client_waiting(0)
+            .with_server_active(8)
+            .with_server_idle(7)
+            .with_pooler_client_limit(500)
+            .with_pooler_backend_limit(30),
+        );
+
+        assert_eq!(report.status, PoolerEvidenceStatus::Healthy);
+        assert_eq!(report.observed_client_connections, Some(42));
+        assert_eq!(report.observed_backend_connections, Some(15));
+        assert_eq!(report.backend_utilization, Some(0.5));
+        assert_eq!(report.client_utilization, Some(0.084));
+    }
+
+    #[test]
+    fn pooler_evidence_flags_waiting_clients_and_backend_saturation() {
+        let report = summarize_pooler_evidence(
+            &PoolerEvidenceSnapshot::new(
+                ExternalPoolerKind::PgBouncer,
+                MultiplexingMode::Transaction,
+            )
+            .with_client_active(100)
+            .with_client_waiting(5)
+            .with_server_active(25)
+            .with_server_idle(5)
+            .with_pooler_backend_limit(30),
+        );
+
+        assert_eq!(report.status, PoolerEvidenceStatus::BackendSaturated);
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "POOLER_CLIENTS_WAITING"));
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "POOLER_BACKEND_SATURATED"));
+    }
+
+    #[test]
+    fn pooler_evidence_incomplete_counts_need_review() {
+        let report = summarize_pooler_evidence(&PoolerEvidenceSnapshot::new(
+            ExternalPoolerKind::Unknown,
+            MultiplexingMode::Unknown,
+        ));
+
+        assert_eq!(report.status, PoolerEvidenceStatus::NeedsReview);
+        assert_eq!(report.confidence, EvidenceConfidence::Low);
+        assert!(report.observed_client_connections.is_none());
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "POOLER_EVIDENCE_COUNTS_INCOMPLETE"));
     }
 }

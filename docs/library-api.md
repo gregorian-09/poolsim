@@ -204,6 +204,7 @@ Public helpers:
 - `poolsim_core::pooler::classify_endpoint`
 - `poolsim_core::pooler::check_pooler_compatibility`
 - `poolsim_core::pooler::analyze_session_state_compatibility`
+- `poolsim_core::pooler::summarize_pooler_evidence`
 - `poolsim_core::pooler::redact_endpoint`
 
 Primary input/output types:
@@ -216,6 +217,8 @@ Primary input/output types:
 - `SessionStateCompatibilityInput`
 - `SessionStateCompatibilityReport`
 - `ClientCompatibilityGuidance`
+- `PoolerEvidenceSnapshot`
+- `PoolerEvidenceReport`
 - `PoolerFinding`
 
 Primary enums:
@@ -227,6 +230,7 @@ Primary enums:
 - `MultiplexingMode`
 - `SessionSemanticFeature`
 - `ClientLibraryKind`
+- `PoolerEvidenceStatus`
 - `CompatibilityDecision`
 - `EvidenceConfidence`
 
@@ -331,6 +335,34 @@ let report = analyze_session_state_compatibility(
 assert_ne!(report.compatible, CompatibilityDecision::Incompatible);
 assert_eq!(report.pooler_report.compatible, CompatibilityDecision::Compatible);
 assert!(!report.client_guidance.is_empty());
+```
+
+Pooler evidence example:
+
+```rust
+use poolsim_core::pooler::{
+    summarize_pooler_evidence,
+    ExternalPoolerKind,
+    MultiplexingMode,
+    PoolerEvidenceSnapshot,
+    PoolerEvidenceStatus,
+};
+
+let report = summarize_pooler_evidence(
+    &PoolerEvidenceSnapshot::new(
+        ExternalPoolerKind::PgBouncer,
+        MultiplexingMode::Transaction,
+    )
+    .with_client_active(42)
+    .with_client_waiting(0)
+    .with_server_active(8)
+    .with_server_idle(7)
+    .with_pooler_client_limit(500)
+    .with_pooler_backend_limit(30),
+);
+
+assert_eq!(report.status, PoolerEvidenceStatus::Healthy);
+assert_eq!(report.observed_backend_connections, Some(15));
 ```
 
 Important rule:

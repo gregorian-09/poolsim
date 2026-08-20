@@ -118,7 +118,7 @@ Use these modules for advanced workflows:
 - `poolsim_core::types`: public input and output structs.
 - `poolsim_core::telemetry`: telemetry snapshots and recommendation diffs.
 - `poolsim_core::otlp`: OpenTelemetry OTLP JSON metric extraction helpers.
-- `poolsim_core::pooler`: endpoint classification, redaction, external-pooler compatibility checks, and client-aware session-state analysis.
+- `poolsim_core::pooler`: endpoint classification, redaction, external-pooler compatibility checks, client-aware session-state analysis, and pooler evidence summaries.
 - `poolsim_core::serverless`: serverless and edge execution-environment connection-footprint planning.
 - `poolsim_core::ownership`: connection ownership graph across application pools, poolers, and database backends.
 - `poolsim_core::distribution`: latency distribution fitting.
