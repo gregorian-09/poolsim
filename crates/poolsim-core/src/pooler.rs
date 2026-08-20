@@ -8,7 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::types::RiskLevel;
+use crate::{error::PoolsimError, types::RiskLevel};
 
 /// Confidence assigned to topology and compatibility evidence.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -515,6 +515,126 @@ impl PoolerEvidenceSnapshot {
     }
 }
 
+/// One row parsed from PgBouncer `SHOW POOLS` output.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PgbouncerPoolRow {
+    /// PgBouncer database name for this `(database, user)` pool, when present.
+    #[serde(default)]
+    pub database: Option<String>,
+    /// PgBouncer user name for this `(database, user)` pool, when present.
+    #[serde(default)]
+    pub user: Option<String>,
+    /// PgBouncer `cl_active` count.
+    pub cl_active: u32,
+    /// PgBouncer `cl_waiting` count.
+    pub cl_waiting: u32,
+    /// PgBouncer `sv_active` count.
+    pub sv_active: u32,
+    /// PgBouncer `sv_idle` count.
+    pub sv_idle: u32,
+    /// PgBouncer `pool_mode` value for this row, when present.
+    #[serde(default)]
+    pub pool_mode: Option<MultiplexingMode>,
+}
+
+impl PgbouncerPoolRow {
+    /// Creates a PgBouncer `SHOW POOLS` row from the capacity counters poolsim needs.
+    pub fn new(cl_active: u32, cl_waiting: u32, sv_active: u32, sv_idle: u32) -> Self {
+        Self {
+            database: None,
+            user: None,
+            cl_active,
+            cl_waiting,
+            sv_active,
+            sv_idle,
+            pool_mode: None,
+        }
+    }
+
+    /// Sets the PgBouncer database label for this row.
+    #[must_use]
+    pub fn with_database(mut self, value: impl Into<String>) -> Self {
+        self.database = Some(value.into());
+        self
+    }
+
+    /// Sets the PgBouncer user label for this row.
+    #[must_use]
+    pub fn with_user(mut self, value: impl Into<String>) -> Self {
+        self.user = Some(value.into());
+        self
+    }
+
+    /// Sets the PgBouncer pool mode for this row.
+    #[must_use]
+    pub fn with_pool_mode(mut self, value: MultiplexingMode) -> Self {
+        self.pool_mode = Some(value);
+        self
+    }
+}
+
+/// Parsed PgBouncer `SHOW POOLS` snapshot plus optional capacity limits.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PgbouncerShowPoolsSnapshot {
+    /// Parsed `SHOW POOLS` rows.
+    pub rows: Vec<PgbouncerPoolRow>,
+    /// Optional report label such as service, cluster, environment, or capture name.
+    #[serde(default)]
+    pub label: Option<String>,
+    /// Override for the PgBouncer pooling mode when the capture does not include `pool_mode`.
+    #[serde(default)]
+    pub mode: Option<MultiplexingMode>,
+    /// Configured PgBouncer client connection cap, when known.
+    #[serde(default)]
+    pub pooler_client_limit: Option<u32>,
+    /// Configured PgBouncer backend/server pool cap, when known.
+    #[serde(default)]
+    pub pooler_backend_limit: Option<u32>,
+}
+
+impl PgbouncerShowPoolsSnapshot {
+    /// Creates a PgBouncer `SHOW POOLS` snapshot from parsed rows.
+    pub fn new(rows: Vec<PgbouncerPoolRow>) -> Self {
+        Self {
+            rows,
+            label: None,
+            mode: None,
+            pooler_client_limit: None,
+            pooler_backend_limit: None,
+        }
+    }
+
+    /// Sets a report label.
+    #[must_use]
+    pub fn with_label(mut self, value: impl Into<String>) -> Self {
+        self.label = Some(value.into());
+        self
+    }
+
+    /// Sets or overrides the pooling mode for the summarized evidence.
+    #[must_use]
+    pub fn with_mode(mut self, value: MultiplexingMode) -> Self {
+        self.mode = Some(value);
+        self
+    }
+
+    /// Sets the PgBouncer client connection limit.
+    #[must_use]
+    pub fn with_pooler_client_limit(mut self, value: u32) -> Self {
+        self.pooler_client_limit = Some(value);
+        self
+    }
+
+    /// Sets the PgBouncer backend/server connection limit.
+    #[must_use]
+    pub fn with_pooler_backend_limit(mut self, value: u32) -> Self {
+        self.pooler_backend_limit = Some(value);
+        self
+    }
+}
+
 /// Summary of observed pooler client/backend evidence.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[non_exhaustive]
@@ -928,6 +1048,288 @@ pub fn summarize_pooler_evidence(input: &PoolerEvidenceSnapshot) -> PoolerEviden
         findings,
         confidence,
     }
+}
+
+/// Parses PgBouncer `SHOW POOLS` output into normalized pool rows.
+///
+/// The parser accepts the two capture formats operators commonly use:
+///
+/// - default `psql` aligned output copied from a terminal
+/// - `psql --csv` output with a header row
+///
+/// # Errors
+///
+/// Returns [`PoolsimError`] when the capture has no usable header, omits the
+/// required PgBouncer counters, or contains non-integer counter values.
+pub fn parse_pgbouncer_show_pools(text: &str) -> Result<Vec<PgbouncerPoolRow>, PoolsimError> {
+    let (header_line, delimiter) =
+        find_pgbouncer_header(text).ok_or_else(|| invalid_pgbouncer_show_pools(
+            "PgBouncer SHOW POOLS output must include a header row containing cl_active, cl_waiting, sv_active, and sv_idle",
+        ))?;
+    let header = split_pgbouncer_record(header_line, delimiter)?;
+    let required = PgbouncerShowPoolsColumns::from_header(&header)?;
+    let mut rows = Vec::new();
+    let mut after_header = false;
+
+    for line in text.lines() {
+        if !after_header {
+            if line == header_line {
+                after_header = true;
+            }
+            continue;
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty()
+            || is_psql_separator(trimmed)
+            || (trimmed.starts_with('(') && trimmed.ends_with("row)"))
+            || (trimmed.starts_with('(') && trimmed.ends_with("rows)"))
+        {
+            continue;
+        }
+
+        let cells = split_pgbouncer_record(trimmed, delimiter)?;
+        if cells.len() < header.len() {
+            return Err(invalid_pgbouncer_show_pools(format!(
+                "PgBouncer SHOW POOLS row has {} columns but the header has {}",
+                cells.len(),
+                header.len()
+            )));
+        }
+        rows.push(required.row_from_cells(&cells)?);
+    }
+
+    if rows.is_empty() {
+        return Err(invalid_pgbouncer_show_pools(
+            "PgBouncer SHOW POOLS output did not include any data rows",
+        ));
+    }
+    Ok(rows)
+}
+
+/// Summarizes parsed PgBouncer `SHOW POOLS` rows into pooler evidence.
+///
+/// Rows are aggregated across PgBouncer's `(database, user)` pools because the
+/// evidence report describes total client pressure and total backend/server
+/// usage for the captured pooler.
+///
+/// # Errors
+///
+/// Returns [`PoolsimError`] if the snapshot contains no rows.
+pub fn summarize_pgbouncer_show_pools(
+    input: &PgbouncerShowPoolsSnapshot,
+) -> Result<PoolerEvidenceReport, PoolsimError> {
+    let Some(first) = input.rows.first() else {
+        return Err(invalid_pgbouncer_show_pools(
+            "PgBouncer SHOW POOLS snapshot must include at least one row",
+        ));
+    };
+
+    let client_active = input
+        .rows
+        .iter()
+        .fold(0_u32, |sum, row| sum.saturating_add(row.cl_active));
+    let client_waiting = input
+        .rows
+        .iter()
+        .fold(0_u32, |sum, row| sum.saturating_add(row.cl_waiting));
+    let server_active = input
+        .rows
+        .iter()
+        .fold(0_u32, |sum, row| sum.saturating_add(row.sv_active));
+    let server_idle = input
+        .rows
+        .iter()
+        .fold(0_u32, |sum, row| sum.saturating_add(row.sv_idle));
+    let mode = input
+        .mode
+        .or(first.pool_mode)
+        .unwrap_or(MultiplexingMode::Unknown);
+
+    let mut evidence = PoolerEvidenceSnapshot::new(ExternalPoolerKind::PgBouncer, mode)
+        .with_client_active(client_active)
+        .with_client_waiting(client_waiting)
+        .with_server_active(server_active)
+        .with_server_idle(server_idle);
+    if let Some(label) = &input.label {
+        evidence = evidence.with_label(label);
+    }
+    if let Some(limit) = input.pooler_client_limit {
+        evidence = evidence.with_pooler_client_limit(limit);
+    }
+    if let Some(limit) = input.pooler_backend_limit {
+        evidence = evidence.with_pooler_backend_limit(limit);
+    }
+    Ok(summarize_pooler_evidence(&evidence))
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PgbouncerShowPoolsColumns {
+    database: Option<usize>,
+    user: Option<usize>,
+    cl_active: usize,
+    cl_waiting: usize,
+    sv_active: usize,
+    sv_idle: usize,
+    pool_mode: Option<usize>,
+}
+
+impl PgbouncerShowPoolsColumns {
+    fn from_header(header: &[String]) -> Result<Self, PoolsimError> {
+        let normalized: Vec<String> = header.iter().map(|cell| normalize_column(cell)).collect();
+        let find = |name: &str| normalized.iter().position(|cell| cell == name);
+        Ok(Self {
+            database: find("database"),
+            user: find("user"),
+            cl_active: required_pgbouncer_column(&normalized, "cl_active")?,
+            cl_waiting: required_pgbouncer_column(&normalized, "cl_waiting")?,
+            sv_active: required_pgbouncer_column(&normalized, "sv_active")?,
+            sv_idle: required_pgbouncer_column(&normalized, "sv_idle")?,
+            pool_mode: find("pool_mode"),
+        })
+    }
+
+    fn row_from_cells(&self, cells: &[String]) -> Result<PgbouncerPoolRow, PoolsimError> {
+        let mut row = PgbouncerPoolRow::new(
+            parse_pgbouncer_count(cells, self.cl_active, "cl_active")?,
+            parse_pgbouncer_count(cells, self.cl_waiting, "cl_waiting")?,
+            parse_pgbouncer_count(cells, self.sv_active, "sv_active")?,
+            parse_pgbouncer_count(cells, self.sv_idle, "sv_idle")?,
+        );
+        row.database = optional_pgbouncer_cell(cells, self.database);
+        row.user = optional_pgbouncer_cell(cells, self.user);
+        row.pool_mode = optional_pgbouncer_mode(cells, self.pool_mode)?;
+        Ok(row)
+    }
+}
+
+fn find_pgbouncer_header(text: &str) -> Option<(&str, char)> {
+    text.lines().find_map(|line| {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || is_psql_separator(trimmed) {
+            return None;
+        }
+        if trimmed.contains('|') && trimmed.contains("cl_active") {
+            Some((line, '|'))
+        } else if trimmed.contains(',') && trimmed.contains("cl_active") {
+            Some((line, ','))
+        } else {
+            None
+        }
+    })
+}
+
+fn split_pgbouncer_record(line: &str, delimiter: char) -> Result<Vec<String>, PoolsimError> {
+    if delimiter == ',' {
+        split_csv_record(line)
+    } else {
+        Ok(line
+            .split(delimiter)
+            .map(|cell| cell.trim().to_string())
+            .collect())
+    }
+}
+
+fn split_csv_record(line: &str) -> Result<Vec<String>, PoolsimError> {
+    let mut cells = Vec::new();
+    let mut cell = String::new();
+    let mut chars = line.chars().peekable();
+    let mut in_quotes = false;
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' if in_quotes && chars.peek() == Some(&'"') => {
+                cell.push('"');
+                chars.next();
+            }
+            '"' => in_quotes = !in_quotes,
+            ',' if !in_quotes => {
+                cells.push(cell.trim().to_string());
+                cell.clear();
+            }
+            _ => cell.push(ch),
+        }
+    }
+
+    if in_quotes {
+        return Err(invalid_pgbouncer_show_pools(
+            "PgBouncer SHOW POOLS CSV row contains an unterminated quoted field",
+        ));
+    }
+
+    cells.push(cell.trim().to_string());
+    Ok(cells)
+}
+
+fn required_pgbouncer_column(header: &[String], name: &str) -> Result<usize, PoolsimError> {
+    header.iter().position(|cell| cell == name).ok_or_else(|| {
+        invalid_pgbouncer_show_pools(format!(
+            "PgBouncer SHOW POOLS output is missing required column {name}"
+        ))
+    })
+}
+
+fn parse_pgbouncer_count(
+    cells: &[String],
+    index: usize,
+    column: &'static str,
+) -> Result<u32, PoolsimError> {
+    cells
+        .get(index)
+        .ok_or_else(|| {
+            invalid_pgbouncer_show_pools(format!(
+                "PgBouncer SHOW POOLS row is missing required column {column}"
+            ))
+        })?
+        .parse::<u32>()
+        .map_err(|_| {
+            invalid_pgbouncer_show_pools(format!(
+                "PgBouncer SHOW POOLS column {column} must be an unsigned integer"
+            ))
+        })
+}
+
+fn optional_pgbouncer_cell(cells: &[String], index: Option<usize>) -> Option<String> {
+    index
+        .and_then(|idx| cells.get(idx))
+        .map(|cell| cell.trim())
+        .filter(|cell| !cell.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn optional_pgbouncer_mode(
+    cells: &[String],
+    index: Option<usize>,
+) -> Result<Option<MultiplexingMode>, PoolsimError> {
+    let Some(value) = optional_pgbouncer_cell(cells, index) else {
+        return Ok(None);
+    };
+    match value.to_ascii_lowercase().as_str() {
+        "session" => Ok(Some(MultiplexingMode::Session)),
+        "transaction" => Ok(Some(MultiplexingMode::Transaction)),
+        "statement" => Ok(Some(MultiplexingMode::Statement)),
+        "none" => Ok(Some(MultiplexingMode::None)),
+        "provider-managed" | "provider_managed" => Ok(Some(MultiplexingMode::ProviderManaged)),
+        "unknown" => Ok(Some(MultiplexingMode::Unknown)),
+        _ => Err(invalid_pgbouncer_show_pools(format!(
+            "PgBouncer SHOW POOLS pool_mode value {value:?} is not recognized"
+        ))),
+    }
+}
+
+fn normalize_column(cell: &str) -> String {
+    cell.trim()
+        .trim_matches('"')
+        .to_ascii_lowercase()
+        .replace('-', "_")
+}
+
+fn is_psql_separator(line: &str) -> bool {
+    line.chars()
+        .all(|ch| ch == '-' || ch == '+' || ch.is_whitespace())
+}
+
+fn invalid_pgbouncer_show_pools(message: impl Into<String>) -> PoolsimError {
+    PoolsimError::invalid_input("INVALID_PGBOUNCER_SHOW_POOLS", message, None)
 }
 
 /// Redacts credentials and secret-like query parameters from an endpoint string.
@@ -1646,5 +2048,90 @@ mod tests {
             .findings
             .iter()
             .any(|finding| finding.code == "POOLER_EVIDENCE_COUNTS_INCOMPLETE"));
+    }
+
+    #[test]
+    fn pgbouncer_show_pools_parser_accepts_psql_aligned_output() {
+        let rows = parse_pgbouncer_show_pools(
+            r#"
+ database | user | cl_active | cl_waiting | sv_active | sv_idle | pool_mode
+----------+------+-----------+------------+-----------+---------+-----------
+ app      | web  |        40 |          0 |         8 |       7 | transaction
+ app      | jobs |         2 |          1 |         1 |       0 | transaction
+(2 rows)
+"#,
+        )
+        .expect("aligned PgBouncer output should parse");
+
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].database.as_deref(), Some("app"));
+        assert_eq!(rows[0].user.as_deref(), Some("web"));
+        assert_eq!(rows[0].cl_active, 40);
+        assert_eq!(rows[0].pool_mode, Some(MultiplexingMode::Transaction));
+        assert_eq!(rows[1].cl_waiting, 1);
+    }
+
+    #[test]
+    fn pgbouncer_show_pools_parser_accepts_csv_output() {
+        let rows = parse_pgbouncer_show_pools(
+            r#"database,user,cl_active,cl_waiting,sv_active,sv_idle,pool_mode
+"checkout,primary","web",42,0,8,7,transaction
+"#,
+        )
+        .expect("CSV PgBouncer output should parse");
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].database.as_deref(), Some("checkout,primary"));
+        assert_eq!(rows[0].cl_active, 42);
+        assert_eq!(rows[0].sv_idle, 7);
+    }
+
+    #[test]
+    fn pgbouncer_show_pools_summary_aggregates_rows() {
+        let rows = vec![
+            PgbouncerPoolRow::new(40, 0, 8, 7)
+                .with_database("app")
+                .with_user("web")
+                .with_pool_mode(MultiplexingMode::Transaction),
+            PgbouncerPoolRow::new(2, 1, 1, 0)
+                .with_database("app")
+                .with_user("jobs")
+                .with_pool_mode(MultiplexingMode::Transaction),
+        ];
+        let report = summarize_pgbouncer_show_pools(
+            &PgbouncerShowPoolsSnapshot::new(rows)
+                .with_label("checkout-pgbouncer")
+                .with_pooler_client_limit(500)
+                .with_pooler_backend_limit(30),
+        )
+        .expect("PgBouncer summary should build");
+
+        assert_eq!(report.status, PoolerEvidenceStatus::ClientWaiting);
+        assert_eq!(report.pooler, ExternalPoolerKind::PgBouncer);
+        assert_eq!(report.mode, MultiplexingMode::Transaction);
+        assert_eq!(report.label.as_deref(), Some("checkout-pgbouncer"));
+        assert_eq!(report.observed_client_connections, Some(43));
+        assert_eq!(report.observed_backend_connections, Some(16));
+        assert_eq!(report.client_waiting, Some(1));
+    }
+
+    #[test]
+    fn pgbouncer_show_pools_parser_rejects_missing_required_columns() {
+        let err = parse_pgbouncer_show_pools(
+            r#"database,user,cl_active,cl_waiting,sv_active,pool_mode
+app,web,42,0,8,transaction
+"#,
+        )
+        .expect_err("missing sv_idle should fail");
+
+        assert_eq!(err.code(), "INVALID_PGBOUNCER_SHOW_POOLS");
+    }
+
+    #[test]
+    fn pgbouncer_show_pools_summary_rejects_empty_snapshots() {
+        let err = summarize_pgbouncer_show_pools(&PgbouncerShowPoolsSnapshot::new(Vec::new()))
+            .expect_err("empty PgBouncer snapshots should fail");
+
+        assert_eq!(err.code(), "INVALID_PGBOUNCER_SHOW_POOLS");
     }
 }
