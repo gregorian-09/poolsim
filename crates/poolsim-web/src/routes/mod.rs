@@ -14,6 +14,7 @@
 //! - `/v1/classify/endpoint`
 //! - `/v1/check/pooler`
 //! - `/v1/plan/serverless`
+//! - `/v1/graph/ownership`
 //!
 //! Request and response types live in the child modules, including:
 //!
@@ -32,6 +33,8 @@ pub mod check;
 pub mod classify;
 /// Fixed pool-size evaluation endpoint.
 pub mod evaluate;
+/// Connection graph endpoints.
+pub mod graph;
 /// Health endpoint.
 pub mod health;
 /// Live WebSocket streaming endpoint.

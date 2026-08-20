@@ -43,6 +43,10 @@ pub fn build_app(state: AppState, rate_limit_state: RateLimitState, cors_origins
             "/v1/plan/serverless",
             post(routes::plan::serverless_handler),
         )
+        .route(
+            "/v1/graph/ownership",
+            post(routes::graph::ownership_handler),
+        )
         .route("/v1/live", get(routes::live::handler))
         .with_state(state)
         .layer(from_fn_with_state(

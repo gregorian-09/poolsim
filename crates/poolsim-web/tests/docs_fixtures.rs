@@ -225,6 +225,18 @@ async fn docs_rest_fixtures_round_trip() {
     assert_eq!(serverless_json["status"], "pass");
     assert_eq!(serverless_json["effective_concurrency"], 80);
     assert_eq!(serverless_json["worst_case_app_pool_connections"], 160);
+
+    let (ownership_status, ownership_json) = json_request(
+        app.clone(),
+        "POST",
+        "/v1/graph/ownership",
+        fixture_json("docs/fixtures/connection-ownership.json"),
+    )
+    .await;
+    assert_eq!(ownership_status, StatusCode::OK);
+    assert_eq!(ownership_json["status"], "complete");
+    assert_eq!(ownership_json["app_connection_upper_bound"], 120);
+    assert_eq!(ownership_json["database_backend_upper_bound"], 90);
 }
 
 #[tokio::test]

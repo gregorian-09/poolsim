@@ -24,6 +24,10 @@ use args::{Cli, Commands, OutputFormat};
 use clap::Parser;
 use poolsim_core::{
     evaluate,
+    ownership::{
+        build_connection_ownership_graph, ConnectionOwnershipInput, ConnectionOwnershipReport,
+        ConnectionOwnershipStatus,
+    },
     pooler::{
         check_pooler_compatibility, classify_endpoint, EndpointClassificationInput,
         EndpointClassificationReport, PoolerCompatibilityInput, PoolerCompatibilityReport,
@@ -178,6 +182,27 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
                 let report = plan_serverless_concurrency(&input)?;
                 render_serverless_concurrency(&report, cli.format)?;
                 Ok(exit_code_for_serverless_status(
+                    report.status,
+                    cli.warn_exit,
+                ))
+            }
+        },
+        Commands::Graph(args) => match args.command {
+            args::GraphCommands::Ownership(args) => {
+                let mut input = ConnectionOwnershipInput::new();
+                input.service_name = args.service_name;
+                input.runtime_units = args.runtime_units;
+                input.app_pool_size_per_runtime_unit = args.app_pool_size_per_runtime_unit;
+                input.endpoint_kind = args.endpoint_kind.map(Into::into);
+                input.external_pooler = args.external_pooler.map(Into::into);
+                input.pooler_client_limit = args.pooler_client_limit;
+                input.pooler_backend_limit = args.pooler_backend_limit;
+                input.database_backend_limit = args.database_backend_limit;
+                input.session_pinning_risk = args.session_pinning_risk.map(Into::into);
+
+                let report = build_connection_ownership_graph(&input)?;
+                render_connection_ownership(&report, cli.format)?;
+                Ok(exit_code_for_connection_ownership_status(
                     report.status,
                     cli.warn_exit,
                 ))
@@ -462,6 +487,81 @@ fn render_serverless_concurrency(
     }
 }
 
+fn render_connection_ownership(
+    report: &ConnectionOwnershipReport,
+    format: OutputFormat,
+) -> Result<()> {
+    match format {
+        OutputFormat::Table => {
+            println!("status: {:?}", report.status);
+            println!("service_name: {:?}", report.service_name);
+            println!(
+                "app_connection_upper_bound: {:?}",
+                report.app_connection_upper_bound
+            );
+            println!(
+                "database_backend_upper_bound: {:?}",
+                report.database_backend_upper_bound
+            );
+            println!(
+                "database_backend_limit: {:?}",
+                report.database_backend_limit
+            );
+            println!("bottleneck_layer: {:?}", report.bottleneck_layer);
+            println!("confidence: {:?}", report.confidence);
+            for node in &report.nodes {
+                println!(
+                    "node: {} [{:?}] owner={} max={:?} consumes_db={}",
+                    node.id,
+                    node.layer_kind,
+                    node.owner,
+                    node.max_connections,
+                    node.consumes_database_connections
+                );
+            }
+            for edge in &report.edges {
+                println!(
+                    "edge: {} -> {} [{:?}] max={:?} consumes_db={}",
+                    edge.from,
+                    edge.to,
+                    edge.relationship,
+                    edge.worst_case_connections,
+                    edge.consumes_backend_capacity
+                );
+            }
+            for finding in &report.findings {
+                println!(
+                    "finding: {} [{:?}] {} -> {}",
+                    finding.code, finding.risk, finding.message, finding.remediation
+                );
+            }
+            Ok(())
+        }
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => {
+            println!("field,value");
+            println!("status,{:?}", report.status);
+            println!("service_name,{:?}", report.service_name);
+            println!(
+                "app_connection_upper_bound,{:?}",
+                report.app_connection_upper_bound
+            );
+            println!(
+                "database_backend_upper_bound,{:?}",
+                report.database_backend_upper_bound
+            );
+            println!("database_backend_limit,{:?}", report.database_backend_limit);
+            println!("bottleneck_layer,{:?}", report.bottleneck_layer);
+            println!("confidence,{:?}", report.confidence);
+            println!("node_count,{}", report.nodes.len());
+            println!("edge_count,{}", report.edges.len());
+            println!("finding_count,{}", report.findings.len());
+            Ok(())
+        }
+        OutputFormat::Html => render::html::print("Poolsim connection ownership graph", report),
+    }
+}
+
 fn render_endpoint_classification(
     report: &EndpointClassificationReport,
     format: OutputFormat,
@@ -678,6 +778,17 @@ fn exit_code_for_serverless_status(
         {
             ExitCode::from(3)
         }
+        _ => ExitCode::from(0),
+    }
+}
+
+fn exit_code_for_connection_ownership_status(
+    status: ConnectionOwnershipStatus,
+    warn_exit: bool,
+) -> ExitCode {
+    match status {
+        ConnectionOwnershipStatus::Unsafe => ExitCode::from(2),
+        ConnectionOwnershipStatus::NeedsReview if warn_exit => ExitCode::from(3),
         _ => ExitCode::from(0),
     }
 }

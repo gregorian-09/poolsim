@@ -792,6 +792,7 @@ fn docs_json_schemas_are_valid_json_and_match_fixture_shapes() {
         "docs/schemas/endpoint-classification.schema.json",
         "docs/schemas/pooler-compatibility.schema.json",
         "docs/schemas/serverless-concurrency.schema.json",
+        "docs/schemas/connection-ownership.schema.json",
     ];
 
     for path in schema_paths {
@@ -882,6 +883,14 @@ fn docs_json_schemas_are_valid_json_and_match_fixture_shapes() {
     .expect("serverless concurrency fixture should parse");
     assert!(serverless["platform"].is_string());
     assert!(serverless["app_pool_size_per_environment"].is_number());
+
+    let ownership: Value = serde_json::from_str(
+        &std::fs::read_to_string(workspace_root().join("docs/fixtures/connection-ownership.json"))
+            .expect("connection ownership fixture should be readable"),
+    )
+    .expect("connection ownership fixture should parse");
+    assert!(ownership["runtime_units"].is_number());
+    assert!(ownership["app_pool_size_per_runtime_unit"].is_number());
 }
 
 #[test]
@@ -1038,6 +1047,61 @@ fn docs_serverless_plan_examples_work() {
 }
 
 #[test]
+fn docs_connection_ownership_examples_work() {
+    let complete_output = run_cli(&[
+        "--format",
+        "json",
+        "graph",
+        "ownership",
+        "--service-name",
+        "checkout-api",
+        "--runtime-units",
+        "12",
+        "--pool-size",
+        "10",
+        "--endpoint-kind",
+        "database-proxy",
+        "--external-pooler",
+        "rds-proxy",
+        "--pooler-client-limit",
+        "1000",
+        "--pooler-backend-limit",
+        "90",
+        "--database-backend-limit",
+        "120",
+        "--session-pinning-risk",
+        "medium",
+    ]);
+    assert_success(&complete_output, "connection ownership complete example");
+    let complete: Value = serde_json::from_str(&stdout_utf8(&complete_output))
+        .expect("connection ownership output should parse");
+    assert_eq!(complete["status"], "complete");
+    assert_eq!(complete["app_connection_upper_bound"], 120);
+    assert_eq!(complete["database_backend_upper_bound"], 90);
+    assert!(complete["nodes"]
+        .as_array()
+        .is_some_and(|nodes| { nodes.iter().any(|node| node["id"] == "pooler-backend") }));
+
+    let unsafe_output = run_cli(&[
+        "--format",
+        "json",
+        "graph",
+        "ownership",
+        "--runtime-units",
+        "12",
+        "--pool-size",
+        "10",
+        "--database-backend-limit",
+        "100",
+    ]);
+    assert_eq!(unsafe_output.status.code(), Some(2));
+    let unsafe_report: Value = serde_json::from_str(&stdout_utf8(&unsafe_output))
+        .expect("unsafe ownership output should parse");
+    assert_eq!(unsafe_report["status"], "unsafe");
+    assert_eq!(unsafe_report["database_backend_upper_bound"], 120);
+}
+
+#[test]
 fn docs_html_output_examples_work_for_major_commands() {
     let commands: Vec<Vec<String>> = vec![
         vec![
@@ -1085,6 +1149,22 @@ fn docs_html_output_examples_work_for_major_commands() {
             "2".to_string(),
             "--database-backend-limit".to_string(),
             "200".to_string(),
+        ],
+        vec![
+            "graph".to_string(),
+            "ownership".to_string(),
+            "--runtime-units".to_string(),
+            "12".to_string(),
+            "--pool-size".to_string(),
+            "10".to_string(),
+            "--endpoint-kind".to_string(),
+            "database-proxy".to_string(),
+            "--external-pooler".to_string(),
+            "rds-proxy".to_string(),
+            "--pooler-backend-limit".to_string(),
+            "90".to_string(),
+            "--database-backend-limit".to_string(),
+            "120".to_string(),
         ],
         vec![
             "import".to_string(),

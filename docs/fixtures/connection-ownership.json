@@ -1,0 +1,11 @@
+{
+  "service_name": "checkout-api",
+  "runtime_units": 12,
+  "app_pool_size_per_runtime_unit": 10,
+  "endpoint_kind": "database-proxy",
+  "external_pooler": "rds-proxy",
+  "pooler_client_limit": 1000,
+  "pooler_backend_limit": 90,
+  "database_backend_limit": 120,
+  "session_pinning_risk": "Medium"
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gregorian-09/poolsim/docs/schemas/connection-ownership.schema.json",
+  "title": "Poolsim connection ownership graph request",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "service_name": { "type": "string" },
+    "runtime_units": { "type": "integer", "minimum": 1 },
+    "app_pool_size_per_runtime_unit": { "type": "integer", "minimum": 1 },
+    "endpoint_kind": {
+      "type": "string",
+      "enum": [
+        "direct-database",
+        "session-pooler",
+        "transaction-pooler",
+        "statement-pooler",
+        "database-proxy",
+        "edge-pooler",
+        "http-data-api",
+        "unknown"
+      ]
+    },
+    "external_pooler": {
+      "type": "string",
+      "enum": [
+        "pg-bouncer",
+        "rds-proxy",
+        "supavisor",
+        "prisma-postgres-pooler",
+        "neon-pooler",
+        "cloudflare-hyperdrive",
+        "unknown"
+      ]
+    },
+    "pooler_client_limit": { "type": "integer", "minimum": 1 },
+    "pooler_backend_limit": { "type": "integer", "minimum": 1 },
+    "database_backend_limit": { "type": "integer", "minimum": 1 },
+    "session_pinning_risk": {
+      "type": "string",
+      "enum": ["Low", "Medium", "High", "Critical"]
+    }
+  }
+}

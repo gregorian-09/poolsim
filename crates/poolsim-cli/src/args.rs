@@ -67,6 +67,7 @@ pub enum Commands {
     Compare(CompareArgs),
     Budget(BudgetArgs),
     Plan(PlanArgs),
+    Graph(GraphArgs),
     Classify(ClassifyArgs),
     Check(CheckArgs),
     Import(ImportArgs),
@@ -75,6 +76,98 @@ pub enum Commands {
     Doctor(DoctorArgs),
     GenerateConfig(GenerateConfigArgs),
     Init(InitArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct GraphArgs {
+    #[command(subcommand)]
+    pub command: GraphCommands,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum GraphCommands {
+    Ownership(ConnectionOwnershipArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct ConnectionOwnershipArgs {
+    #[arg(long)]
+    pub service_name: Option<String>,
+
+    #[arg(
+        long,
+        alias = "instances",
+        alias = "replicas",
+        alias = "execution-environments"
+    )]
+    pub runtime_units: Option<u32>,
+
+    #[arg(long, alias = "pool-size", alias = "pool-size-per-runtime-unit")]
+    pub app_pool_size_per_runtime_unit: Option<u32>,
+
+    #[arg(long, value_enum)]
+    pub endpoint_kind: Option<CliEndpointConnectionKind>,
+
+    #[arg(long, value_enum)]
+    pub external_pooler: Option<CliExternalPoolerKind>,
+
+    #[arg(long)]
+    pub pooler_client_limit: Option<u32>,
+
+    #[arg(long)]
+    pub pooler_backend_limit: Option<u32>,
+
+    #[arg(long)]
+    pub database_backend_limit: Option<u32>,
+
+    #[arg(long, value_enum)]
+    pub session_pinning_risk: Option<CliRiskLevel>,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliEndpointConnectionKind {
+    DirectDatabase,
+    SessionPooler,
+    TransactionPooler,
+    StatementPooler,
+    DatabaseProxy,
+    EdgePooler,
+    HttpDataApi,
+    Unknown,
+}
+
+impl From<CliEndpointConnectionKind> for poolsim_core::pooler::EndpointConnectionKind {
+    fn from(value: CliEndpointConnectionKind) -> Self {
+        match value {
+            CliEndpointConnectionKind::DirectDatabase => Self::DirectDatabase,
+            CliEndpointConnectionKind::SessionPooler => Self::SessionPooler,
+            CliEndpointConnectionKind::TransactionPooler => Self::TransactionPooler,
+            CliEndpointConnectionKind::StatementPooler => Self::StatementPooler,
+            CliEndpointConnectionKind::DatabaseProxy => Self::DatabaseProxy,
+            CliEndpointConnectionKind::EdgePooler => Self::EdgePooler,
+            CliEndpointConnectionKind::HttpDataApi => Self::HttpDataApi,
+            CliEndpointConnectionKind::Unknown => Self::Unknown,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliRiskLevel {
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+impl From<CliRiskLevel> for poolsim_core::types::RiskLevel {
+    fn from(value: CliRiskLevel) -> Self {
+        match value {
+            CliRiskLevel::Low => Self::Low,
+            CliRiskLevel::Medium => Self::Medium,
+            CliRiskLevel::High => Self::High,
+            CliRiskLevel::Critical => Self::Critical,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Args)]
