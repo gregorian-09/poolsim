@@ -1094,6 +1094,34 @@ fn docs_pooler_evidence_examples_work() {
 }
 
 #[test]
+fn docs_pgbouncer_show_pools_examples_work() {
+    let output = run_cli(&[
+        "--format",
+        "json",
+        "import",
+        "pgbouncer-pools",
+        "--file",
+        &fixture("docs/fixtures/pgbouncer-show-pools.csv"),
+        "--label",
+        "checkout-pgbouncer",
+        "--pooler-client-limit",
+        "500",
+        "--pooler-backend-limit",
+        "30",
+    ]);
+    assert_success(&output, "PgBouncer SHOW POOLS import");
+    let report: Value = serde_json::from_str(&stdout_utf8(&output))
+        .expect("PgBouncer SHOW POOLS output should parse");
+    assert_eq!(report["status"], "healthy");
+    assert_eq!(report["pooler"], "pg-bouncer");
+    assert_eq!(report["mode"], "transaction");
+    assert_eq!(report["label"], "checkout-pgbouncer");
+    assert_eq!(report["observed_client_connections"], 42);
+    assert_eq!(report["observed_backend_connections"], 15);
+    assert_eq!(report["backend_utilization"], 0.5);
+}
+
+#[test]
 fn docs_serverless_plan_examples_work() {
     let safe_output = run_cli(&[
         "--format",
@@ -1311,6 +1339,14 @@ fn docs_html_output_examples_work_for_major_commands() {
             "pooler-evidence".to_string(),
             "--config".to_string(),
             fixture("docs/fixtures/pooler-evidence.json"),
+        ],
+        vec![
+            "import".to_string(),
+            "pgbouncer-pools".to_string(),
+            "--file".to_string(),
+            fixture("docs/fixtures/pgbouncer-show-pools.csv"),
+            "--pooler-backend-limit".to_string(),
+            "30".to_string(),
         ],
         vec![
             "gate".to_string(),

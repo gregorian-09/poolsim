@@ -1,0 +1,3 @@
+database,user,cl_active,cl_waiting,sv_active,sv_idle,pool_mode
+checkout,web,40,0,8,7,transaction
+checkout,jobs,2,0,0,0,transaction

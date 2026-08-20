@@ -818,12 +818,31 @@ pub enum ImportCommands {
     Prometheus(PrometheusImportArgs),
     Otlp(OtlpImportArgs),
     PoolerEvidence(PoolerEvidenceImportArgs),
+    PgbouncerPools(PgbouncerPoolsImportArgs),
 }
 
 #[derive(Debug, Clone, Args)]
 pub struct PoolerEvidenceImportArgs {
     #[arg(long)]
     pub config: PathBuf,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct PgbouncerPoolsImportArgs {
+    #[arg(long, alias = "input")]
+    pub file: PathBuf,
+
+    #[arg(long)]
+    pub label: Option<String>,
+
+    #[arg(long, value_enum)]
+    pub mode: Option<CliMultiplexingMode>,
+
+    #[arg(long)]
+    pub pooler_client_limit: Option<u32>,
+
+    #[arg(long)]
+    pub pooler_backend_limit: Option<u32>,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -1367,7 +1386,8 @@ mod tests {
                 }
                 ImportCommands::Prometheus(_)
                 | ImportCommands::Otlp(_)
-                | ImportCommands::PoolerEvidence(_) => {
+                | ImportCommands::PoolerEvidence(_)
+                | ImportCommands::PgbouncerPools(_) => {
                     panic!("expected telemetry import")
                 }
             },
@@ -1430,6 +1450,39 @@ mod tests {
     }
 
     #[test]
+    fn parser_handles_import_pgbouncer_pools_subcommand() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "import",
+            "pgbouncer-pools",
+            "--file",
+            "show-pools.csv",
+            "--label",
+            "checkout-prod",
+            "--mode",
+            "transaction",
+            "--pooler-client-limit",
+            "500",
+            "--pooler-backend-limit",
+            "30",
+        ])
+        .expect("PgBouncer pools import args should parse");
+        match cli.command {
+            Commands::Import(args) => match args.command {
+                ImportCommands::PgbouncerPools(args) => {
+                    assert_eq!(args.file, PathBuf::from("show-pools.csv"));
+                    assert_eq!(args.label.as_deref(), Some("checkout-prod"));
+                    assert!(matches!(args.mode, Some(CliMultiplexingMode::Transaction)));
+                    assert_eq!(args.pooler_client_limit, Some(500));
+                    assert_eq!(args.pooler_backend_limit, Some(30));
+                }
+                _ => panic!("expected PgBouncer pools import"),
+            },
+            _ => panic!("expected import command"),
+        }
+    }
+
+    #[test]
     fn parser_handles_import_prometheus_subcommand() {
         let cli = Cli::try_parse_from([
             "poolsim",
@@ -1473,7 +1526,8 @@ mod tests {
                 }
                 ImportCommands::Telemetry(_)
                 | ImportCommands::Otlp(_)
-                | ImportCommands::PoolerEvidence(_) => {
+                | ImportCommands::PoolerEvidence(_)
+                | ImportCommands::PgbouncerPools(_) => {
                     panic!("expected prometheus import")
                 }
             },

@@ -30,7 +30,8 @@ use poolsim_core::{
     },
     pooler::{
         analyze_session_state_compatibility, check_pooler_compatibility, classify_endpoint,
-        summarize_pooler_evidence, EndpointClassificationInput, EndpointClassificationReport,
+        parse_pgbouncer_show_pools, summarize_pgbouncer_show_pools, summarize_pooler_evidence,
+        EndpointClassificationInput, EndpointClassificationReport, PgbouncerShowPoolsSnapshot,
         PoolerCompatibilityInput, PoolerCompatibilityReport, PoolerConfigSnapshot,
         PoolerEvidenceReport, PoolerEvidenceSnapshot, PoolerEvidenceStatus,
         SessionStateCompatibilityInput, SessionStateCompatibilityReport,
@@ -297,6 +298,12 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
             args::ImportCommands::PoolerEvidence(args) => {
                 let input = load_pooler_evidence_snapshot(&args.config)?;
                 let report = summarize_pooler_evidence(&input);
+                render_pooler_evidence(&report, cli.format)?;
+                Ok(exit_code_for_pooler_evidence(&report, cli.warn_exit))
+            }
+            args::ImportCommands::PgbouncerPools(args) => {
+                let input = load_pgbouncer_show_pools_snapshot(&args)?;
+                let report = summarize_pgbouncer_show_pools(&input)?;
                 render_pooler_evidence(&report, cli.format)?;
                 Ok(exit_code_for_pooler_evidence(&report, cli.warn_exit))
             }
@@ -998,6 +1005,37 @@ fn load_pooler_evidence_snapshot(path: &std::path::Path) -> Result<PoolerEvidenc
         .with_context(|| format!("failed to parse pooler evidence config {}", path.display()))
 }
 
+fn load_pgbouncer_show_pools_snapshot(
+    args: &args::PgbouncerPoolsImportArgs,
+) -> Result<PgbouncerShowPoolsSnapshot> {
+    let text = fs::read_to_string(&args.file).with_context(|| {
+        format!(
+            "failed to read PgBouncer SHOW POOLS file {}",
+            args.file.display()
+        )
+    })?;
+    let rows = parse_pgbouncer_show_pools(&text).with_context(|| {
+        format!(
+            "failed to parse PgBouncer SHOW POOLS file {}",
+            args.file.display()
+        )
+    })?;
+    let mut snapshot = PgbouncerShowPoolsSnapshot::new(rows);
+    if let Some(label) = &args.label {
+        snapshot = snapshot.with_label(label);
+    }
+    if let Some(mode) = args.mode {
+        snapshot = snapshot.with_mode(mode.into());
+    }
+    if let Some(limit) = args.pooler_client_limit {
+        snapshot = snapshot.with_pooler_client_limit(limit);
+    }
+    if let Some(limit) = args.pooler_backend_limit {
+        snapshot = snapshot.with_pooler_backend_limit(limit);
+    }
+    Ok(snapshot)
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -1017,7 +1055,8 @@ mod tests {
         BatchArgs, BudgetArgs, CliConfigFramework, CliDatabaseKind, CommonArgs, CompareArgs,
         DoctorArgs, DoctorSourceCommands, EvaluateArgs, GateArgs, GateSourceCommands,
         GenerateConfigArgs, GenerateConfigSourceCommands, GuardArgs, ImportArgs, ImportCommands,
-        InitArgs, OtlpImportArgs, PrometheusImportArgs, SimulateArgs, TelemetryImportArgs,
+        InitArgs, OtlpImportArgs, PgbouncerPoolsImportArgs, PrometheusImportArgs, SimulateArgs,
+        TelemetryImportArgs,
     };
 
     fn sample_config_json() -> String {
@@ -1747,6 +1786,26 @@ mod tests {
             warn_exit: true,
         };
         let _ = run_with_cli(cli).expect("otlp import should execute");
+
+        let pgbouncer_cfg = write_temp_file(
+            "main_pgbouncer_pools",
+            "txt",
+            "database,user,cl_active,cl_waiting,sv_active,sv_idle,pool_mode\napp,web,42,0,8,7,transaction\n",
+        );
+        let cli = Cli {
+            command: Commands::Import(ImportArgs {
+                command: ImportCommands::PgbouncerPools(PgbouncerPoolsImportArgs {
+                    file: pgbouncer_cfg.clone(),
+                    label: Some("checkout-pgbouncer".to_string()),
+                    mode: None,
+                    pooler_client_limit: Some(500),
+                    pooler_backend_limit: Some(30),
+                }),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: true,
+        };
+        let _ = run_with_cli(cli).expect("PgBouncer pools import should execute");
 
         let cli = Cli {
             command: Commands::Gate(GateArgs {
