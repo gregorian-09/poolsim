@@ -443,7 +443,8 @@ mod tests {
             .with_latency_percentiles(5.0, 10.0, 20.0)
             .with_pool_wait_p99_ms(2.0)
             .with_database_latency_p99_ms(18.0);
-        let mut report = crate::telemetry_quality::assess_telemetry_quality(&input).unwrap();
+        let mut report = crate::telemetry_quality::assess_telemetry_quality(&input)
+            .expect("complete quality input should assess");
         report.status = status;
         report
     }
@@ -457,7 +458,8 @@ mod tests {
         .with_database_budget(100, 10, 10)
         .with_replica_count(2)
         .with_current_total_connections(8);
-        let report = check_pool_scale_gate(&input).unwrap();
+        let report =
+            check_pool_scale_gate(&input).expect("rejected quality should produce a report");
         assert_eq!(report.status, PoolScaleGateStatus::Blocked);
         assert!(report
             .findings
@@ -474,7 +476,7 @@ mod tests {
         .with_database_budget(20, 2, 2)
         .with_replica_count(2)
         .with_current_total_connections(14);
-        let report = check_pool_scale_gate(&input).unwrap();
+        let report = check_pool_scale_gate(&input).expect("budget excess should produce a report");
         assert_eq!(report.projected_total_connections, Some(22));
         assert_eq!(report.effective_database_capacity, Some(16));
         assert_eq!(report.status, PoolScaleGateStatus::Blocked);
@@ -486,7 +488,7 @@ mod tests {
             recommendation(PoolSizeChange::Increase),
             quality(TelemetryQualityStatus::Valid),
         ))
-        .unwrap();
+        .expect("missing budget should produce a review report");
         assert_eq!(report.status, PoolScaleGateStatus::NeedsReview);
         assert_eq!(report.current_total_connections, Some(4));
         assert!(report
@@ -508,7 +510,7 @@ mod tests {
         .with_database_budget(50, 5, 5)
         .with_replica_count(2)
         .with_current_total_connections(8);
-        let report = check_pool_scale_gate(&input).unwrap();
+        let report = check_pool_scale_gate(&input).expect("complete scale evidence should pass");
         assert_eq!(report.status, PoolScaleGateStatus::Allowed);
         assert_eq!(report.additional_connections_total, 8);
         assert_eq!(report.projected_total_connections, Some(16));
@@ -521,7 +523,7 @@ mod tests {
             recommendation(PoolSizeChange::Decrease),
             quality(TelemetryQualityStatus::Rejected),
         ))
-        .unwrap();
+        .expect("non-increase should produce an allowed report");
         assert_eq!(report.status, PoolScaleGateStatus::Allowed);
         assert!(!report.scale_up_requested);
         assert_eq!(report.projected_total_connections, None);
@@ -535,7 +537,9 @@ mod tests {
         )
         .with_replica_count(0);
         assert_eq!(
-            check_pool_scale_gate(&zero).unwrap_err().code(),
+            check_pool_scale_gate(&zero)
+                .expect_err("zero replicas should be rejected")
+                .code(),
             "INVALID_REPLICA_COUNT"
         );
 
@@ -545,7 +549,9 @@ mod tests {
         )
         .with_database_budget(10, 6, 5);
         assert_eq!(
-            check_pool_scale_gate(&invalid).unwrap_err().code(),
+            check_pool_scale_gate(&invalid)
+                .expect_err("invalid budget should be rejected")
+                .code(),
             "INVALID_DATABASE_BUDGET"
         );
     }
