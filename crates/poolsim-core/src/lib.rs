@@ -5,6 +5,8 @@
 
 /// Advanced optional sizing helpers.
 pub mod advanced;
+/// Database and application-pool contention classification.
+pub mod contention;
 /// Distribution fitting and sampling utilities.
 pub mod distribution;
 /// Erlang-C queueing formulas.
