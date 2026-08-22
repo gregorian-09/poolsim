@@ -631,4 +631,35 @@ mod tests {
         .expect_err("non-finite duration should fail");
         assert_eq!(error.code(), "INVALID_TELEMETRY_QUALITY");
     }
+
+    #[test]
+    fn quality_validation_covers_drift_zero_and_percentile_order_errors() {
+        let report = assess_telemetry_quality(
+            &complete_input(TelemetryArrivalModel::OpenLoop)
+                .with_observed_requests_per_second(920.0),
+        )
+        .expect("rate drift should assess");
+        assert_eq!(report.status, TelemetryQualityStatus::NeedsReview);
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "OFFERED_RATE_DRIFT"));
+
+        for input in [
+            complete_input(TelemetryArrivalModel::OpenLoop).with_expected_requests_per_second(0.0),
+            complete_input(TelemetryArrivalModel::OpenLoop).with_duration_seconds(0.0),
+            complete_input(TelemetryArrivalModel::OpenLoop).with_sample_count(0),
+            complete_input(TelemetryArrivalModel::OpenLoop)
+                .with_latency_percentiles(10.0, 70.0, 30.0),
+        ] {
+            let error = assess_telemetry_quality(&input)
+                .expect_err("invalid quality input should be rejected");
+            assert_eq!(error.code(), "INVALID_TELEMETRY_QUALITY");
+        }
+
+        assert_eq!(
+            lower_confidence(EvidenceConfidence::High, EvidenceConfidence::High),
+            EvidenceConfidence::High
+        );
+    }
 }
