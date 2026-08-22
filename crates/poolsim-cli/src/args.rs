@@ -324,6 +324,10 @@ pub struct PoolScaleGateArgs {
     #[arg(long)]
     pub current_total_connections: Option<u32>,
 
+    /// Optional JSON database-contention report input used to suppress unsafe scale-ups.
+    #[arg(long)]
+    pub contention_config: Option<PathBuf>,
+
     #[command(subcommand)]
     pub source: GateSourceCommands,
 }
@@ -1271,6 +1275,7 @@ mod tests {
                     assert_eq!(args.safety_margin_connections, 5);
                     assert_eq!(args.replicas, 3);
                     assert_eq!(args.current_total_connections, Some(21));
+                    assert_eq!(args.contention_config, None);
                 }
                 _ => panic!("expected pool-scale check"),
             },

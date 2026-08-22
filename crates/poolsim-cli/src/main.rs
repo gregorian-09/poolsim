@@ -283,6 +283,11 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
                 if let Some(current_total) = args.current_total_connections {
                     gate_input = gate_input.with_current_total_connections(current_total);
                 }
+                if let Some(config) = args.contention_config {
+                    let contention_input = load_database_contention_input(&config)?;
+                    let contention_report = classify_database_contention(&contention_input)?;
+                    gate_input = gate_input.with_database_contention_report(contention_report);
+                }
                 let report = check_pool_scale_gate(&gate_input)?;
                 render_pool_scale_gate(&report, cli.format)?;
                 Ok(exit_code_for_pool_scale_gate(&report, cli.warn_exit))
@@ -2318,6 +2323,7 @@ mod tests {
                         safety_margin_connections: 5,
                         replicas: 3,
                         current_total_connections: Some(6),
+                        contention_config: None,
                         source: GateSourceCommands::Telemetry(TelemetryImportArgs {
                             config: increase_telemetry_cfg.clone(),
                             current_pool_size: None,
