@@ -21,6 +21,8 @@ pub mod otlp;
 pub mod ownership;
 /// Endpoint classification and external-pooler compatibility checks.
 pub mod pooler;
+/// Safety checks for recommendations that would increase an application pool.
+pub mod scale_gate;
 /// Sensitivity analysis routines.
 pub mod sensitivity;
 /// Serverless and edge execution-environment capacity planning.
