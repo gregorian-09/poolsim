@@ -817,6 +817,17 @@ mod tests {
             .iter()
             .any(|finding| finding.code == "OWNERSHIP_DATABASE_LIMIT_NEAR"));
 
+        let missing_database_limit = build_connection_ownership_graph(
+            &ConnectionOwnershipInput::new()
+                .with_runtime_units(2)
+                .with_app_pool_size_per_runtime_unit(2),
+        )
+        .expect("missing database limit should produce a review report");
+        assert!(missing_database_limit
+            .findings
+            .iter()
+            .any(|finding| finding.code == "OWNERSHIP_DATABASE_LIMIT_UNKNOWN"));
+
         for endpoint_kind in [
             EndpointConnectionKind::SessionPooler,
             EndpointConnectionKind::TransactionPooler,

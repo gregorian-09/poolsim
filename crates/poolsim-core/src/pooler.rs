@@ -3305,6 +3305,15 @@ app,web,42,0,8,transaction
             infer_provider_from_endpoint("postgres://u:p@db.example.com/db"),
             EndpointProviderKind::Unknown
         );
+        let unknown_report = classify_endpoint(&EndpointClassificationInput::new(
+            "postgres://db.example.com/db",
+        ));
+        assert_eq!(unknown_report.confidence, EvidenceConfidence::Low);
+        let hinted_report = classify_endpoint(
+            &EndpointClassificationInput::new("postgres://db.example.com/db")
+                .with_provider(EndpointProviderKind::AwsRds),
+        );
+        assert_eq!(hinted_report.confidence, EvidenceConfidence::High);
 
         assert_eq!(
             infer_endpoint_kind(
@@ -3534,6 +3543,16 @@ app,web,42,0,8,transaction
             SessionSemanticFeature::PreparedStatements,
             None,
         ));
+        assert!(feature_needs_review(
+            ExternalPoolerKind::Unknown,
+            MultiplexingMode::Transaction,
+            SessionSemanticFeature::PreparedStatements,
+            None,
+        ));
+        assert!(endpoint_workflow_compatible(
+            EndpointConnectionKind::TransactionPooler,
+            DatabaseWorkflowKind::ApiTraffic,
+        ));
         assert_eq!(
             default_client_features(ClientLibraryKind::Unknown),
             Vec::<SessionSemanticFeature>::new()
@@ -3561,6 +3580,11 @@ app,web,42,0,8,transaction
         assert!(optional_pgbouncer_float(&["bad".to_string()], Some(0), "avg").is_err());
         assert!(optional_pgbouncer_float(&["-1".to_string()], Some(0), "avg").is_err());
         assert_eq!(optional_pgbouncer_float(&[], None, "avg").unwrap(), None);
+        assert!(parse_pgbouncer_count(&[], 0, "cl_active").is_err());
+        assert!(parse_pgbouncer_stats_count(&[], 0, "total_query_count").is_err());
+
+        let quoted = split_csv_record("\"app\"\"east\",web").expect("escaped quote should parse");
+        assert_eq!(quoted, vec!["app\"east".to_string(), "web".to_string()]);
 
         assert!(parse_pgbouncer_show_pools("not a header\n").is_err());
         assert!(parse_pgbouncer_show_pools(
@@ -3589,6 +3613,9 @@ app,web,42,0,8,transaction
             "database,total_query_count,total_wait_time\na,bad,1\n"
         )
         .is_err());
+        assert!(
+            parse_pgbouncer_show_stats("database,total_query_count,total_wait_time\n").is_err()
+        );
         assert!(
             summarize_pgbouncer_show_stats(&PgbouncerShowStatsSnapshot::new(1.0, Vec::new(),))
                 .is_err()
