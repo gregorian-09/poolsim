@@ -62,6 +62,8 @@ Available subcommands:
 - `classify endpoint`
 - `check pooler`
 - `check session-state`
+- `check telemetry-quality`
+- `check pool-scale`
 - `import telemetry`
 - `import pooler-evidence`
 - `import pgbouncer-pools`
@@ -228,6 +230,71 @@ poolsim --format json check session-state \
 - `3`: needs review when `--warn-exit` is enabled.
 
 See [`session-state-compatibility.md`](session-state-compatibility.md) for detailed examples, source-backed rules, and limitations.
+
+## `check pool-scale`
+
+### Purpose
+
+Checks whether a telemetry recommendation that increases the pool is supported
+by telemetry-quality evidence and a replica-aware database connection budget.
+This is an additive, opt-in safety check. It does not change the recommendation
+and does not modify a running pool.
+
+### Example
+
+```bash
+poolsim --format json --warn-exit check pool-scale \
+  --quality-config docs/fixtures/telemetry-quality-open-loop.json \
+  --database-max-connections 100 \
+  --reserved-connections 10 \
+  --safety-margin-connections 10 \
+  --replicas 3 \
+  --current-total-connections 6 \
+  telemetry \
+  --config docs/fixtures/telemetry.json \
+  --current-pool-size 2
+```
+
+The nested source can be `telemetry`, `prometheus`, or `otlp`, using the same
+source flags described by the corresponding import command. The quality file
+contains a `TelemetryQualityInput`; the source file supplies the workload and
+pool data used to calculate the recommendation.
+
+### Gate Inputs
+
+- `--quality-config <path>`: telemetry-quality input JSON.
+- `--database-max-connections <integer>`: connection budget for this service.
+- `--reserved-connections <integer>`: slots excluded from application use;
+  defaults to `0`.
+- `--safety-margin-connections <integer>`: operational headroom excluded from
+  application use; defaults to `0`.
+- `--replicas <integer>`: replicas receiving the pool; defaults to `1`.
+- `--current-total-connections <integer>`: observed service total. If omitted,
+  the gate infers `current_pool_size * replicas` and requires review for a
+  scale-up.
+
+### Decision Rules
+
+For an increase, Poolsim computes `additional_connections_required * replicas`
+and compares `current_total_connections + additional_connections_total` with
+`database_max_connections - reserved_connections - safety_margin_connections`.
+Rejected quality evidence or a budget overrun returns `blocked`. Missing budget
+or inferred current totals return `needs-review`. Keep/decrease recommendations
+are allowed because this check only guards scale-ups.
+
+### Output And Exit Codes
+
+The report includes `status`, per-replica and aggregate connection deltas,
+projected total, effective capacity, nested `telemetry_quality`, findings, and
+confidence. Status values are `allowed`, `needs-review`, and `blocked`.
+
+- `0`: allowed, or needs-review without `--warn-exit`.
+- `2`: blocked.
+- `3`: needs-review with `--warn-exit`.
+- `1`: invalid input, malformed files, or recommendation failure.
+
+See [`pool-scale-safety.md`](pool-scale-safety.md) for the complete JSON
+contract, finding codes, Rust API, budget assumptions, CI usage, and limitations.
 
 ## `import pooler-evidence`
 

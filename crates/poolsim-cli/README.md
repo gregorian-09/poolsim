@@ -113,6 +113,7 @@ Operational commands:
 - `poolsim check pooler`: detect external-pooler/session-feature compatibility risks.
 - `poolsim check session-state`: add client-aware prepared-statement and session-state remediation for popular backend libraries.
 - `poolsim check telemetry-quality`: validate telemetry evidence and coordinated-omission risk before capacity planning.
+- `poolsim check pool-scale`: block unsafe pool increases using telemetry quality, replica count, and database connection headroom.
 - `poolsim import pooler-evidence`: summarize observed pooler client/backend counters from a JSON snapshot.
 - `poolsim import pgbouncer-pools`: parse captured PgBouncer `SHOW POOLS` output into the same pooler evidence report.
 - `poolsim import pgbouncer-timeseries`: compare two JSON PgBouncer time-series samples with reset-safe counter rates and queue-growth status.
@@ -269,6 +270,27 @@ timeouts, errors, pool-wait, database-latency, or arrival-model evidence. See
 [`docs/telemetry-quality.md`](../../docs/telemetry-quality.md) for the complete
 JSON contract, status semantics, finding codes, Rust examples, and Prometheus
 / OpenTelemetry collection guidance.
+
+Guard a recommendation before increasing a deployed pool:
+
+```bash
+poolsim --format json --warn-exit check pool-scale \
+  --quality-config docs/fixtures/telemetry-quality-open-loop.json \
+  --database-max-connections 100 \
+  --reserved-connections 10 \
+  --safety-margin-connections 10 \
+  --replicas 3 \
+  --current-total-connections 6 \
+  telemetry --config docs/fixtures/telemetry.json \
+  --current-pool-size 2
+```
+
+This command is deliberately separate from `gate` and `guard`. It blocks only
+unsafe scale-up recommendations, multiplies the per-replica delta by replica
+count, and requires review when database budget or directly observed connection
+totals are missing. See [`docs/pool-scale-safety.md`](../../docs/pool-scale-safety.md)
+for the full decision math, JSON contract, stable finding codes, Rust API,
+Prometheus/OTLP examples, and CI integration.
 
 ## Serverless Concurrency Example
 

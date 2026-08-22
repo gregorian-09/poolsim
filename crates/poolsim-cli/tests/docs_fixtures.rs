@@ -1715,3 +1715,39 @@ fn docs_telemetry_quality_example_accepts_complete_open_loop_evidence() {
     assert_eq!(report["observed_rate_ratio"], 1.0);
     assert!(report["findings"].as_array().is_some_and(Vec::is_empty));
 }
+
+#[test]
+fn docs_pool_scale_safety_example_reports_an_allowed_scale_up() {
+    let output = run_cli(&[
+        "--format",
+        "json",
+        "check",
+        "pool-scale",
+        "--quality-config",
+        &fixture("docs/fixtures/telemetry-quality-open-loop.json"),
+        "--database-max-connections",
+        "100",
+        "--reserved-connections",
+        "10",
+        "--safety-margin-connections",
+        "10",
+        "--replicas",
+        "3",
+        "--current-total-connections",
+        "6",
+        "telemetry",
+        "--config",
+        &fixture("docs/fixtures/telemetry.json"),
+        "--current-pool-size",
+        "2",
+    ]);
+
+    assert_success(&output, "pool scale safety docs example");
+    let report: Value = serde_json::from_str(&stdout_utf8(&output))
+        .expect("pool scale safety output should be JSON");
+    assert_eq!(report["status"], "allowed");
+    assert_eq!(report["scale_up_requested"], true);
+    assert_eq!(report["replica_count"], 3);
+    assert!(report["additional_connections_total"].as_u64().unwrap_or(0) > 0);
+    assert_eq!(report["effective_database_capacity"], 80);
+}

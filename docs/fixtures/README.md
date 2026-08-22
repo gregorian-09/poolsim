@@ -16,6 +16,7 @@ This directory contains checked-in sample inputs used by the documentation and v
 - `prometheus-responses.json`: offline Prometheus API response bundle for `poolsim import prometheus`, `poolsim gate prometheus`, `poolsim guard prometheus`, `poolsim doctor prometheus`, and `poolsim generate-config prometheus`
 - `otlp-metrics.json`: OpenTelemetry OTLP JSON metrics payload for `poolsim import otlp`, `poolsim gate otlp`, `poolsim guard otlp`, `poolsim doctor otlp`, and `poolsim generate-config otlp`
 - `telemetry-quality-open-loop.json`: complete open-loop evidence for `poolsim check telemetry-quality`
+- `telemetry.json`: recommendation input for `poolsim check pool-scale` and telemetry recommendation workflows
 - `gate-policy.toml`: CI capacity-gate and deployment-guard policy for `poolsim gate` and `poolsim guard`
 - `latencies.txt`: empirical latency sample file for `--samples-file`
 - `web-simulate.json`: request body for `POST /v1/simulate`

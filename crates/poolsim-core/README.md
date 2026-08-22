@@ -140,6 +140,49 @@ capacity decisions because it can hide stalls through coordinated omission.
 See [`docs/telemetry-quality.md`](../../docs/telemetry-quality.md) for the
 complete input contract, finding codes, CLI command, and collection guidance.
 
+### Pool Scale Safety Gate
+
+Use the additive scale-safety API when a recommendation may increase a deployed
+pool. It composes the existing telemetry recommendation diff with the quality
+report and replica-aware database budget evidence:
+
+```rust
+use poolsim_core::scale_gate::{
+    check_pool_scale_gate, PoolScaleGateInput, PoolScaleGateStatus,
+};
+
+# let recommendation = todo!();
+# let quality_report = todo!();
+let input = PoolScaleGateInput::new(recommendation, quality_report)
+    .with_database_budget(200, 20, 20)
+    .with_replica_count(6)
+    .with_current_total_connections(48);
+let report = check_pool_scale_gate(&input)?;
+if report.status == PoolScaleGateStatus::Blocked {
+    eprintln!("do not apply the pool increase");
+}
+# Ok::<(), poolsim_core::error::PoolsimError>(())
+```
+
+`PoolScaleGateInput::new` defaults to one replica and no declared database
+budget. `with_database_budget` sets the database maximum, reserved slots, and
+operational safety margin. `with_replica_count` makes the per-replica pool
+delta explicit. `with_current_total_connections` replaces the inferred
+`current_pool_size * replicas` estimate with a directly observed service total.
+
+`check_pool_scale_gate` returns `PoolScaleGateStatus::Allowed` when no increase
+is requested or all scale-up evidence fits the effective budget,
+`PoolScaleGateStatus::NeedsReview` when evidence is incomplete, and
+`PoolScaleGateStatus::Blocked` when telemetry is rejected or projected
+connections exceed the budget. The `PoolScaleGateReport` retains the complete
+`TelemetryQualityReport`, projections, confidence, and remediation-oriented
+`PoolScaleGateFinding` values. Invalid budgets, zero replicas, and arithmetic
+overflow return `PoolsimError` rather than wrapping.
+
+See [`docs/pool-scale-safety.md`](../../docs/pool-scale-safety.md) for the full
+API inventory, JSON/CSV/HTML output, stable finding codes, CI command, database
+headroom assumptions, and operational limitations.
+
 ### Downstream Pooler Diagnosis
 
 Compare application-pool pressure with the normalized pooler report without changing the existing evidence API:
