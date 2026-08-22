@@ -207,6 +207,7 @@ Public helpers:
 - `poolsim_core::pooler::summarize_pooler_evidence`
 - `poolsim_core::pooler::parse_pgbouncer_show_pools`
 - `poolsim_core::pooler::summarize_pgbouncer_show_pools`
+- `poolsim_core::pooler::diagnose_downstream_pooler`
 - `poolsim_core::pooler::redact_endpoint`
 
 Primary input/output types:
@@ -223,6 +224,9 @@ Primary input/output types:
 - `PoolerEvidenceReport`
 - `PgbouncerPoolRow`
 - `PgbouncerShowPoolsSnapshot`
+- `ApplicationPoolEvidence`
+- `DownstreamPoolerDiagnosisInput`
+- `DownstreamPoolerDiagnosisReport`
 - `PoolerFinding`
 
 Primary enums:
@@ -235,6 +239,7 @@ Primary enums:
 - `SessionSemanticFeature`
 - `ClientLibraryKind`
 - `PoolerEvidenceStatus`
+- `DownstreamPoolerDiagnosisStatus`
 - `CompatibilityDecision`
 - `EvidenceConfidence`
 

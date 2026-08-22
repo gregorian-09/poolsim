@@ -642,6 +642,35 @@ fn docs_doctor_examples_work() {
         .expect("doctor OTLP output should deserialize");
     assert_eq!(report["service_name"], "checkout-api");
     assert_eq!(report["window"], "5m");
+
+    let pgbouncer_output = run_cli(&[
+        "--format",
+        "json",
+        "doctor",
+        "pgbouncer-pools",
+        "--file",
+        &fixture("docs/fixtures/pgbouncer-show-pools.csv"),
+        "--label",
+        "checkout-production",
+        "--pooler-backend-limit",
+        "15",
+        "--application-active",
+        "4",
+        "--application-max",
+        "16",
+        "--application-waiting",
+        "0",
+    ]);
+    assert_eq!(
+        pgbouncer_output.status.code(),
+        Some(2),
+        "saturated downstream pooler docs example should return exit 2"
+    );
+    let report: Value = serde_json::from_str(&stdout_utf8(&pgbouncer_output))
+        .expect("doctor PgBouncer output should deserialize");
+    assert_eq!(report["status"], "downstream-pooler-saturated");
+    assert_eq!(report["application_utilization"], 0.25);
+    assert_eq!(report["pooler"]["observed_backend_connections"], 15);
 }
 
 #[test]

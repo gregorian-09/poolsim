@@ -115,6 +115,7 @@ Operational commands:
 - `poolsim import pooler-evidence`: summarize observed pooler client/backend counters from a JSON snapshot.
 - `poolsim import pgbouncer-pools`: parse captured PgBouncer `SHOW POOLS` output into the same pooler evidence report.
 - `poolsim doctor`: explain whether a current pool is healthy.
+- `poolsim doctor pgbouncer-pools`: compare application-pool counters with downstream PgBouncer client/backend evidence.
 - `poolsim generate-config`: produce framework-specific pool config snippets.
 
 Telemetry and CI commands:
@@ -220,6 +221,20 @@ poolsim --format json import pgbouncer-pools \
 Use `psql -p 6432 -d pgbouncer --csv -c "SHOW POOLS;"` for repeatable captures. The command also accepts default aligned `psql` table output for copy-paste diagnostics.
 
 Poolsim exits with code `2` for clear incompatibility, and the JSON output includes remediation-oriented findings.
+
+Diagnose whether application or downstream pooler capacity is the limiting layer:
+
+```bash
+poolsim --format json doctor pgbouncer-pools \
+  --file docs/fixtures/pgbouncer-show-pools.csv \
+  --label checkout-production \
+  --pooler-backend-limit 15 \
+  --application-active 4 \
+  --application-max 16 \
+  --application-waiting 0
+```
+
+The command preserves the nested `PoolerEvidenceReport` and adds a cross-layer status. `downstream-pooler-saturated` means the pooler backend reached its supplied limit; `downstream-pooler-waiting` means clients queued for backend capacity; `application-pool-saturated` means the app pool reached its own limit; and `needs-review` means the comparison lacks required evidence or is close to a limit. See [`docs/downstream-pooler-diagnosis.md`](../../docs/downstream-pooler-diagnosis.md) for all flags, output fields, precedence rules, and library examples.
 
 ## Serverless Concurrency Example
 

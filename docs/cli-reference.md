@@ -1554,6 +1554,35 @@ Uses the same flags as `import otlp`:
 - `--p99-metric`
 - telemetry metadata, pool, and simulation-option flags
 
+#### `doctor pgbouncer-pools`
+
+Compares application-pool counters with a captured PgBouncer `SHOW POOLS` result:
+
+```bash
+poolsim --format json doctor pgbouncer-pools \
+  --file docs/fixtures/pgbouncer-show-pools.csv \
+  --pooler-backend-limit 15 \
+  --application-active 4 \
+  --application-max 16 \
+  --application-waiting 0
+```
+
+Pooler input flags are the same as `import pgbouncer-pools`:
+
+- `--file <path>` or `--input <path>`
+- `--label <value>`
+- `--mode <value>`
+- `--pooler-client-limit <n>`
+- `--pooler-backend-limit <n>`
+
+Application evidence flags are:
+
+- `--application-active <n>`
+- `--application-max <n>`
+- `--application-waiting <n>`
+
+The JSON report has `status`, `application_utilization`, `application_waiting`, the nested normalized `pooler` report, cross-layer `findings`, and `confidence`. `downstream-pooler-saturated` and `application-pool-saturated` return exit code `2`; `downstream-pooler-waiting` and `needs-review` return `3` only with `--warn-exit`. See [`downstream-pooler-diagnosis.md`](downstream-pooler-diagnosis.md) for status precedence and response interpretation.
+
 ## `generate-config`
 
 ### Purpose

@@ -70,6 +70,41 @@ assert_eq!(report.observed_backend_connections, Some(15));
 
 The parser accepts `psql --csv` output and default aligned `psql` table output. The summarizer aggregates PgBouncer's per-`(database, user)` rows into total client and backend pressure.
 
+### Downstream Pooler Diagnosis
+
+Compare application-pool pressure with the normalized pooler report without changing the existing evidence API:
+
+```rust
+use poolsim_core::pooler::{
+    diagnose_downstream_pooler, ApplicationPoolEvidence,
+    DownstreamPoolerDiagnosisInput, DownstreamPoolerDiagnosisStatus,
+    summarize_pooler_evidence, ExternalPoolerKind, MultiplexingMode,
+    PoolerEvidenceSnapshot,
+};
+
+let pooler_report = summarize_pooler_evidence(
+    &PoolerEvidenceSnapshot::new(
+        ExternalPoolerKind::PgBouncer,
+        MultiplexingMode::Transaction,
+    )
+    .with_client_active(8)
+    .with_client_waiting(0)
+    .with_server_active(4)
+    .with_server_idle(4)
+    .with_pooler_backend_limit(16),
+);
+let report = diagnose_downstream_pooler(&DownstreamPoolerDiagnosisInput::new(
+    ApplicationPoolEvidence::new(4, 16),
+    pooler_report,
+));
+assert_eq!(
+    report.status,
+    DownstreamPoolerDiagnosisStatus::Healthy
+);
+```
+
+Use this when an application reports connection waits but a downstream PgBouncer or managed pooler may be the real bottleneck. The report retains the complete `PoolerEvidenceReport`, computes application utilization when active and maximum counts are known, and emits independent findings when both layers are constrained. See [`docs/downstream-pooler-diagnosis.md`](../../docs/downstream-pooler-diagnosis.md) for the full API and operational guidance.
+
 ### Better Foundation For Non-Rust Integrations
 
 The core crate is still pure sizing logic, but `0.3.0` makes it easier for other surfaces to build on top of it. The release now has documented adoption paths for:

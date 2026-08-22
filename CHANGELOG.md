@@ -13,6 +13,7 @@ The format is based on Keep a Changelog, and this project uses Semantic Versioni
 - Client-aware session-state compatibility checks through `poolsim check session-state`, `POST /v1/check/session-state`, and `poolsim_core::pooler::analyze_session_state_compatibility`.
 - Pooler evidence import through `poolsim import pooler-evidence` and `poolsim_core::pooler::summarize_pooler_evidence` for observed client/backend pooler counters.
 - PgBouncer `SHOW POOLS` import through `poolsim import pgbouncer-pools`, `poolsim_core::pooler::parse_pgbouncer_show_pools`, and `poolsim_core::pooler::summarize_pgbouncer_show_pools`.
+- Downstream pooler diagnosis through `poolsim doctor pgbouncer-pools` and `poolsim_core::pooler::diagnose_downstream_pooler`, including application-vs-pooler status, utilization, confidence, and remediation findings.
 - Source-backed client guidance for Prisma, node-postgres, `sqlx`, SQLAlchemy asyncpg, PostgREST, PgJDBC, generic PostgreSQL clients, PgBouncer prepared-statement tracking, Supavisor transaction mode, and RDS Proxy pinning review.
 - Secret-safe endpoint redaction for classification reports, including user-info and secret-like query parameters.
 - Serverless concurrency planning through `poolsim plan serverless`, `POST /v1/plan/serverless`, and `poolsim_core::serverless::plan_serverless_concurrency`.
