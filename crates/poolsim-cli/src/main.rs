@@ -2776,6 +2776,14 @@ mod tests {
         assert!(load_database_contention_input(&invalid_contention).is_err());
         assert!(load_pgbouncer_time_series_sample(&invalid_timeseries).is_err());
         assert!(
+            load_database_contention_input(&unique_temp_path("missing_contention", "json"))
+                .is_err()
+        );
+        assert!(
+            load_pgbouncer_time_series_sample(&unique_temp_path("missing_timeseries", "json"))
+                .is_err()
+        );
+        assert!(
             load_pgbouncer_show_pools_snapshot(&PgbouncerPoolsImportArgs {
                 file: unique_temp_path("missing_pools", "txt"),
                 label: None,
