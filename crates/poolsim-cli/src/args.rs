@@ -760,6 +760,25 @@ pub enum DoctorSourceCommands {
     Telemetry(TelemetryImportArgs),
     Prometheus(PrometheusImportArgs),
     Otlp(OtlpImportArgs),
+    PgbouncerPools(PgbouncerPoolsDoctorArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct PgbouncerPoolsDoctorArgs {
+    #[command(flatten)]
+    pub pooler: PgbouncerPoolsImportArgs,
+
+    /// Active connections reported by the application pool.
+    #[arg(long)]
+    pub application_active: Option<u32>,
+
+    /// Configured maximum connections for the application pool.
+    #[arg(long)]
+    pub application_max: Option<u32>,
+
+    /// Application requests waiting for a pool connection.
+    #[arg(long)]
+    pub application_waiting: Option<u32>,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -1679,8 +1698,48 @@ mod tests {
                     assert_eq!(prometheus.current_pool_size, 12);
                     assert_eq!(prometheus.max_server_connections, 100);
                 }
-                DoctorSourceCommands::Telemetry(_) | DoctorSourceCommands::Otlp(_) => {
+                DoctorSourceCommands::Telemetry(_)
+                | DoctorSourceCommands::Otlp(_)
+                | DoctorSourceCommands::PgbouncerPools(_) => {
                     panic!("expected prometheus source")
+                }
+            },
+            _ => panic!("expected doctor command"),
+        }
+    }
+
+    #[test]
+    fn parser_handles_doctor_pgbouncer_pools_subcommand() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "doctor",
+            "pgbouncer-pools",
+            "--file",
+            "show-pools.csv",
+            "--application-active",
+            "4",
+            "--application-max",
+            "16",
+            "--application-waiting",
+            "1",
+            "--pooler-backend-limit",
+            "30",
+        ])
+        .expect("doctor PgBouncer pools args should parse");
+
+        match cli.command {
+            Commands::Doctor(args) => match args.source {
+                DoctorSourceCommands::PgbouncerPools(args) => {
+                    assert_eq!(args.pooler.file, PathBuf::from("show-pools.csv"));
+                    assert_eq!(args.application_active, Some(4));
+                    assert_eq!(args.application_max, Some(16));
+                    assert_eq!(args.application_waiting, Some(1));
+                    assert_eq!(args.pooler.pooler_backend_limit, Some(30));
+                }
+                DoctorSourceCommands::Telemetry(_)
+                | DoctorSourceCommands::Prometheus(_)
+                | DoctorSourceCommands::Otlp(_) => {
+                    panic!("expected PgBouncer doctor source")
                 }
             },
             _ => panic!("expected doctor command"),

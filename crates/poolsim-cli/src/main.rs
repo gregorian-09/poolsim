@@ -30,7 +30,9 @@ use poolsim_core::{
     },
     pooler::{
         analyze_session_state_compatibility, check_pooler_compatibility, classify_endpoint,
-        parse_pgbouncer_show_pools, summarize_pgbouncer_show_pools, summarize_pooler_evidence,
+        diagnose_downstream_pooler, parse_pgbouncer_show_pools, summarize_pgbouncer_show_pools,
+        summarize_pooler_evidence, ApplicationPoolEvidence, DownstreamPoolerDiagnosisInput,
+        DownstreamPoolerDiagnosisReport, DownstreamPoolerDiagnosisStatus,
         EndpointClassificationInput, EndpointClassificationReport, PgbouncerShowPoolsSnapshot,
         PoolerCompatibilityInput, PoolerCompatibilityReport, PoolerConfigSnapshot,
         PoolerEvidenceReport, PoolerEvidenceSnapshot, PoolerEvidenceStatus,
@@ -350,6 +352,22 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
                     prometheus::resolve_prometheus_input(&source)?
                 }
                 args::DoctorSourceCommands::Otlp(source) => otlp::resolve_otlp_input(&source)?,
+                args::DoctorSourceCommands::PgbouncerPools(source) => {
+                    let pooler_input = load_pgbouncer_show_pools_snapshot(&source.pooler)?;
+                    let pooler_report = summarize_pgbouncer_show_pools(&pooler_input)?;
+                    let mut application = ApplicationPoolEvidence::default()
+                        .with_active(source.application_active)
+                        .with_limit(source.application_max);
+                    if let Some(waiting) = source.application_waiting {
+                        application = application.with_waiting(waiting);
+                    }
+                    let report = diagnose_downstream_pooler(&DownstreamPoolerDiagnosisInput::new(
+                        application,
+                        pooler_report,
+                    ));
+                    render_downstream_pooler_diagnosis(&report, cli.format)?;
+                    return Ok(exit_code_for_downstream_pooler(&report, cli.warn_exit));
+                }
             };
             let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
             let report = doctor::build_doctor_report(recommendation);
@@ -782,6 +800,50 @@ fn render_pooler_evidence(report: &PoolerEvidenceReport, format: OutputFormat) -
     }
 }
 
+fn render_downstream_pooler_diagnosis(
+    report: &DownstreamPoolerDiagnosisReport,
+    format: OutputFormat,
+) -> Result<()> {
+    match format {
+        OutputFormat::Table => {
+            println!("status: {:?}", report.status);
+            println!(
+                "application_utilization: {:?}",
+                report.application_utilization
+            );
+            println!("application_waiting: {:?}", report.application_waiting);
+            println!("pooler_status: {:?}", report.pooler.status);
+            println!("pooler: {:?}", report.pooler.pooler);
+            println!("pooler_mode: {:?}", report.pooler.mode);
+            println!("confidence: {:?}", report.confidence);
+            for finding in &report.findings {
+                println!(
+                    "finding: {} [{:?}] {} -> {}",
+                    finding.code, finding.risk, finding.message, finding.remediation
+                );
+            }
+            Ok(())
+        }
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => {
+            println!("field,value");
+            println!("status,{:?}", report.status);
+            println!(
+                "application_utilization,{:?}",
+                report.application_utilization
+            );
+            println!("application_waiting,{:?}", report.application_waiting);
+            println!("pooler_status,{:?}", report.pooler.status);
+            println!("pooler,{:?}", report.pooler.pooler);
+            println!("pooler_mode,{:?}", report.pooler.mode);
+            println!("confidence,{:?}", report.confidence);
+            println!("finding_count,{}", report.findings.len());
+            Ok(())
+        }
+        OutputFormat::Html => render::html::print("Poolsim downstream pooler diagnosis", report),
+    }
+}
+
 fn render_telemetry(recommendation: &TelemetryRecommendation, format: OutputFormat) -> Result<()> {
     match format {
         OutputFormat::Table => render::table::telemetry(recommendation),
@@ -980,6 +1042,23 @@ fn exit_code_for_pooler_evidence(report: &PoolerEvidenceReport, warn_exit: bool)
     }
 }
 
+fn exit_code_for_downstream_pooler(
+    report: &DownstreamPoolerDiagnosisReport,
+    warn_exit: bool,
+) -> ExitCode {
+    match report.status {
+        DownstreamPoolerDiagnosisStatus::DownstreamPoolerSaturated
+        | DownstreamPoolerDiagnosisStatus::ApplicationPoolSaturated => ExitCode::from(2),
+        DownstreamPoolerDiagnosisStatus::DownstreamPoolerWaiting
+        | DownstreamPoolerDiagnosisStatus::NeedsReview
+            if warn_exit =>
+        {
+            ExitCode::from(3)
+        }
+        _ => ExitCode::from(0),
+    }
+}
+
 fn pooler_config_from_args(
     max_prepared_statements: Option<u32>,
     resets_session_state: Option<bool>,
@@ -1055,8 +1134,8 @@ mod tests {
         BatchArgs, BudgetArgs, CliConfigFramework, CliDatabaseKind, CommonArgs, CompareArgs,
         DoctorArgs, DoctorSourceCommands, EvaluateArgs, GateArgs, GateSourceCommands,
         GenerateConfigArgs, GenerateConfigSourceCommands, GuardArgs, ImportArgs, ImportCommands,
-        InitArgs, OtlpImportArgs, PgbouncerPoolsImportArgs, PrometheusImportArgs, SimulateArgs,
-        TelemetryImportArgs,
+        InitArgs, OtlpImportArgs, PgbouncerPoolsDoctorArgs, PgbouncerPoolsImportArgs,
+        PrometheusImportArgs, SimulateArgs, TelemetryImportArgs,
     };
 
     fn sample_config_json() -> String {
@@ -2037,6 +2116,31 @@ mod tests {
             warn_exit: false,
         };
         let _ = run_with_cli(cli).expect("doctor otlp should execute");
+
+        let pgbouncer_pools = write_temp_file(
+            "main_doctor_pgbouncer",
+            "csv",
+            "database,user,cl_active,cl_waiting,sv_active,sv_idle,pool_mode\ncheckout,web,40,4,30,0,transaction\n",
+        );
+        let cli = Cli {
+            command: Commands::Doctor(DoctorArgs {
+                source: DoctorSourceCommands::PgbouncerPools(PgbouncerPoolsDoctorArgs {
+                    pooler: PgbouncerPoolsImportArgs {
+                        file: pgbouncer_pools,
+                        label: Some("checkout-prod".to_string()),
+                        mode: None,
+                        pooler_client_limit: None,
+                        pooler_backend_limit: Some(30),
+                    },
+                    application_active: Some(4),
+                    application_max: Some(16),
+                    application_waiting: Some(0),
+                }),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: true,
+        };
+        let _ = run_with_cli(cli).expect("doctor PgBouncer pools should execute");
 
         let init_config = unique_temp_path("main_init_config", "json");
         let init_policy = unique_temp_path("main_init_policy", "toml");
