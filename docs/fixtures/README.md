@@ -26,6 +26,7 @@ This directory contains checked-in sample inputs used by the documentation and v
 - `pooler-compatibility.json`: request body for `poolsim check pooler` and `POST /v1/check/pooler`
 - `pooler-evidence.json`: input for `poolsim import pooler-evidence`
 - `pgbouncer-show-pools.csv`: captured PgBouncer `SHOW POOLS` CSV input for `poolsim import pgbouncer-pools`
+- `pgbouncer-timeseries-previous.json` and `pgbouncer-timeseries-current.json`: timestamped PgBouncer counter/gauge samples for `poolsim import pgbouncer-timeseries`
 - `session-state-compatibility.json`: request body for `poolsim check session-state` and `POST /v1/check/session-state`
 - `serverless-concurrency.json`: request body for `poolsim plan serverless` and `POST /v1/plan/serverless`
 - `connection-ownership.json`: request body for `poolsim graph ownership` and `POST /v1/graph/ownership`

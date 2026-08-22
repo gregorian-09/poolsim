@@ -1,0 +1,8 @@
+{
+  "timestamp_seconds": 1700000010,
+  "label": "checkout-pgbouncer",
+  "total_query_count": 1200,
+  "total_wait_time_us": 70000,
+  "maxwait_seconds": 0.8,
+  "client_waiting": 4
+}
