@@ -45,6 +45,7 @@ use poolsim_core::{
     },
     simulate, sweep_with_options,
     telemetry::{recommend_from_telemetry, TelemetryRecommendation},
+    telemetry_quality::{assess_telemetry_quality, TelemetryQualityReport, TelemetryQualityStatus},
     types::{EvaluationResult, RiskLevel, SaturationLevel, SensitivityRow, SimulationReport},
 };
 
@@ -268,6 +269,12 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
                     &report,
                     cli.warn_exit,
                 ))
+            }
+            args::CheckCommands::TelemetryQuality(args) => {
+                let input = load_telemetry_quality_input(&args.config)?;
+                let report = assess_telemetry_quality(&input)?;
+                render_telemetry_quality(&report, cli.format)?;
+                Ok(exit_code_for_telemetry_quality(&report, cli.warn_exit))
             }
         },
         Commands::Import(args) => match args.command {
@@ -808,6 +815,43 @@ fn render_pooler_evidence(report: &PoolerEvidenceReport, format: OutputFormat) -
     }
 }
 
+fn render_telemetry_quality(report: &TelemetryQualityReport, format: OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Table => {
+            println!("status: {:?}", report.status);
+            println!("arrival_model: {:?}", report.arrival_model);
+            println!("observed_rate_ratio: {:?}", report.observed_rate_ratio);
+            println!(
+                "coordinated_omission_risk: {:?}",
+                report.coordinated_omission_risk
+            );
+            println!("confidence: {:?}", report.confidence);
+            for finding in &report.findings {
+                println!(
+                    "finding: {} [{:?}] {} -> {}",
+                    finding.code, finding.risk, finding.message, finding.remediation
+                );
+            }
+            Ok(())
+        }
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => {
+            println!("field,value");
+            println!("status,{:?}", report.status);
+            println!("arrival_model,{:?}", report.arrival_model);
+            println!("observed_rate_ratio,{:?}", report.observed_rate_ratio);
+            println!(
+                "coordinated_omission_risk,{:?}",
+                report.coordinated_omission_risk
+            );
+            println!("confidence,{:?}", report.confidence);
+            println!("finding_count,{}", report.findings.len());
+            Ok(())
+        }
+        OutputFormat::Html => render::html::print("Poolsim telemetry quality report", report),
+    }
+}
+
 fn render_downstream_pooler_diagnosis(
     report: &DownstreamPoolerDiagnosisReport,
     format: OutputFormat,
@@ -1132,6 +1176,14 @@ fn exit_code_for_downstream_pooler(
     }
 }
 
+fn exit_code_for_telemetry_quality(report: &TelemetryQualityReport, warn_exit: bool) -> ExitCode {
+    match report.status {
+        TelemetryQualityStatus::Rejected => ExitCode::from(2),
+        TelemetryQualityStatus::NeedsReview if warn_exit => ExitCode::from(3),
+        _ => ExitCode::from(0),
+    }
+}
+
 fn exit_code_for_pgbouncer_time_series(
     report: &PgbouncerTimeSeriesDeltaReport,
     warn_exit: bool,
@@ -1172,6 +1224,19 @@ fn load_pooler_evidence_snapshot(path: &std::path::Path) -> Result<PoolerEvidenc
         .with_context(|| format!("failed to read pooler evidence config {}", path.display()))?;
     serde_json::from_str(&text)
         .with_context(|| format!("failed to parse pooler evidence config {}", path.display()))
+}
+
+fn load_telemetry_quality_input(
+    path: &std::path::Path,
+) -> Result<poolsim_core::telemetry_quality::TelemetryQualityInput> {
+    let text = fs::read_to_string(path)
+        .with_context(|| format!("failed to read telemetry quality config {}", path.display()))?;
+    serde_json::from_str(&text).with_context(|| {
+        format!(
+            "failed to parse telemetry quality config {}",
+            path.display()
+        )
+    })
 }
 
 fn load_pgbouncer_time_series_sample(path: &std::path::Path) -> Result<PgbouncerTimeSeriesSample> {
@@ -1236,11 +1301,12 @@ mod tests {
 
     use super::*;
     use crate::args::{
-        BatchArgs, BudgetArgs, CliConfigFramework, CliDatabaseKind, CommonArgs, CompareArgs,
-        DoctorArgs, DoctorSourceCommands, EvaluateArgs, GateArgs, GateSourceCommands,
-        GenerateConfigArgs, GenerateConfigSourceCommands, GuardArgs, ImportArgs, ImportCommands,
-        InitArgs, OtlpImportArgs, PgbouncerPoolsDoctorArgs, PgbouncerPoolsImportArgs,
-        PgbouncerTimeseriesImportArgs, PrometheusImportArgs, SimulateArgs, TelemetryImportArgs,
+        BatchArgs, BudgetArgs, CheckArgs, CheckCommands, CliConfigFramework, CliDatabaseKind,
+        CommonArgs, CompareArgs, DoctorArgs, DoctorSourceCommands, EvaluateArgs, GateArgs,
+        GateSourceCommands, GenerateConfigArgs, GenerateConfigSourceCommands, GuardArgs,
+        ImportArgs, ImportCommands, InitArgs, OtlpImportArgs, PgbouncerPoolsDoctorArgs,
+        PgbouncerPoolsImportArgs, PgbouncerTimeseriesImportArgs, PrometheusImportArgs,
+        SimulateArgs, TelemetryImportArgs, TelemetryQualityCheckArgs,
     };
 
     fn sample_config_json() -> String {
@@ -1926,6 +1992,42 @@ mod tests {
             warn_exit: true,
         };
         let _ = run_with_cli(cli).expect("telemetry import should execute");
+
+        let quality_cfg = write_temp_file(
+            "main_telemetry_quality",
+            "json",
+            r#"{
+                "arrival_model": "open-loop",
+                "expected_requests_per_second": 1000.0,
+                "observed_requests_per_second": 1000.0,
+                "duration_seconds": 60.0,
+                "sample_count": 60000,
+                "timeout_count": 2,
+                "error_count": 5,
+                "latency_p50_ms": 10.0,
+                "latency_p95_ms": 30.0,
+                "latency_p99_ms": 70.0,
+                "pool_wait_p99_ms": 4.0,
+                "database_latency_p99_ms": 18.0
+            }"#,
+        );
+        for format in [
+            OutputFormat::Table,
+            OutputFormat::Json,
+            OutputFormat::Csv,
+            OutputFormat::Html,
+        ] {
+            let cli = Cli {
+                command: Commands::Check(CheckArgs {
+                    command: CheckCommands::TelemetryQuality(TelemetryQualityCheckArgs {
+                        config: quality_cfg.clone(),
+                    }),
+                }),
+                format,
+                warn_exit: true,
+            };
+            let _ = run_with_cli(cli).expect("telemetry quality check should execute");
+        }
 
         let prometheus_cfg =
             write_temp_file("main_prometheus", "json", &prometheus_response_json());

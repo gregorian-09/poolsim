@@ -285,6 +285,14 @@ pub struct CheckArgs {
 pub enum CheckCommands {
     Pooler(PoolerCheckArgs),
     SessionState(SessionStateCheckArgs),
+    TelemetryQuality(TelemetryQualityCheckArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct TelemetryQualityCheckArgs {
+    /// JSON file containing a `poolsim_core::telemetry_quality::TelemetryQualityInput`.
+    #[arg(long)]
+    pub config: PathBuf,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -1163,6 +1171,28 @@ mod tests {
                     assert_eq!(args.resets_session_state, Some(true));
                 }
                 _ => panic!("expected session-state check"),
+            },
+            _ => panic!("expected check command"),
+        }
+    }
+
+    #[test]
+    fn parser_handles_telemetry_quality_check_subcommand() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "check",
+            "telemetry-quality",
+            "--config",
+            "quality.json",
+        ])
+        .expect("telemetry-quality check should parse");
+
+        match cli.command {
+            Commands::Check(args) => match args.command {
+                CheckCommands::TelemetryQuality(args) => {
+                    assert_eq!(args.config, PathBuf::from("quality.json"));
+                }
+                _ => panic!("expected telemetry-quality check"),
             },
             _ => panic!("expected check command"),
         }
