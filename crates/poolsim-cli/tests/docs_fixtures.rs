@@ -1691,7 +1691,7 @@ fn docs_pgbouncer_time_series_example_reports_queue_growth() {
     assert_eq!(report["current_client_waiting"], 4);
     assert!(report["findings"]
         .as_array()
-        .is_some_and(|findings| findings.iter().any(|finding| {
-            finding["code"] == "PGBOUNCER_QUEUE_GROWING"
-        })));
+        .is_some_and(|findings| findings
+            .iter()
+            .any(|finding| { finding["code"] == "PGBOUNCER_QUEUE_GROWING" })));
 }
