@@ -2249,6 +2249,63 @@ mod tests {
                 .expect("downstream diagnosis should render");
             render_pgbouncer_time_series(&timeseries, format).expect("time-series should render");
         }
+
+        let unsafe_ownership = build_connection_ownership_graph(
+            &ConnectionOwnershipInput::new()
+                .with_runtime_units(12)
+                .with_app_pool_size_per_runtime_unit(10)
+                .with_database_backend_limit(100),
+        )
+        .expect("unsafe ownership graph should build");
+        let incompatible_pooler = check_pooler_compatibility(
+            &PoolerCompatibilityInput::new(
+                poolsim_core::pooler::ExternalPoolerKind::PgBouncer,
+                poolsim_core::pooler::MultiplexingMode::Transaction,
+            )
+            .with_features(vec![
+                poolsim_core::pooler::SessionSemanticFeature::TemporaryTables,
+            ]),
+        );
+        let guidance_session =
+            analyze_session_state_compatibility(&SessionStateCompatibilityInput::new(
+                poolsim_core::pooler::ClientLibraryKind::Prisma,
+                poolsim_core::pooler::ExternalPoolerKind::Supavisor,
+                poolsim_core::pooler::MultiplexingMode::Transaction,
+            ));
+        let waiting_evidence = summarize_pooler_evidence(
+            &PoolerEvidenceSnapshot::new(
+                poolsim_core::pooler::ExternalPoolerKind::PgBouncer,
+                poolsim_core::pooler::MultiplexingMode::Transaction,
+            )
+            .with_client_active(20)
+            .with_client_waiting(2)
+            .with_server_active(10)
+            .with_server_idle(0)
+            .with_pooler_backend_limit(20),
+        );
+        let incomplete_quality = assess_telemetry_quality(
+            &poolsim_core::telemetry_quality::TelemetryQualityInput::new(
+                poolsim_core::telemetry_quality::TelemetryArrivalModel::OpenLoop,
+            ),
+        )
+        .expect("incomplete quality should assess");
+        let saturated_downstream =
+            diagnose_downstream_pooler(&DownstreamPoolerDiagnosisInput::new(
+                ApplicationPoolEvidence::new(10, 10).with_waiting(2),
+                waiting_evidence.clone(),
+            ));
+        render_connection_ownership(&unsafe_ownership, OutputFormat::Table)
+            .expect("unsafe ownership should render");
+        render_pooler_compatibility(&incompatible_pooler, OutputFormat::Table)
+            .expect("incompatible pooler should render");
+        render_session_state_compatibility(&guidance_session, OutputFormat::Table)
+            .expect("guidance session should render");
+        render_pooler_evidence(&waiting_evidence, OutputFormat::Table)
+            .expect("waiting evidence should render");
+        render_telemetry_quality(&incomplete_quality, OutputFormat::Table)
+            .expect("incomplete quality should render");
+        render_downstream_pooler_diagnosis(&saturated_downstream, OutputFormat::Table)
+            .expect("saturated downstream should render");
     }
 
     #[test]
@@ -2300,7 +2357,7 @@ mod tests {
                     reserved_concurrency: None,
                     app_pool_size_per_environment: Some(2),
                     uses_external_pooler: false,
-                    external_pooler: None,
+                    external_pooler: Some(crate::args::CliExternalPoolerKind::RdsProxy),
                     database_backend_limit: Some(100),
                     warm_reuse_ratio: Some(0.8),
                 }),
@@ -2544,29 +2601,150 @@ mod tests {
         .expect("current sample should deserialize");
         let timeseries =
             diff_pgbouncer_time_series(&previous, &current).expect("time-series should build");
-        let _ = exit_code_for_pooler_compatibility(&pooler, true);
-        let _ = exit_code_for_session_state_compatibility(&session, true);
-        let _ = exit_code_for_pooler_evidence(
-            &summarize_pooler_evidence(
-                &PoolerEvidenceSnapshot::new(
-                    crate::args::CliExternalPoolerKind::PgBouncer.into(),
-                    crate::args::CliMultiplexingMode::Transaction.into(),
-                )
-                .with_client_active(2)
-                .with_client_waiting(0)
-                .with_server_active(2)
-                .with_server_idle(8)
-                .with_pooler_client_limit(20)
-                .with_pooler_backend_limit(20),
-            ),
-            true,
+        let queue_present_previous: PgbouncerTimeSeriesSample =
+            serde_json::from_value(serde_json::json!({
+                "timestamp_seconds": 1.0,
+                "total_query_count": 1,
+                "total_wait_time_us": 1,
+                "maxwait_seconds": 0.5,
+                "client_waiting": 0
+            }))
+            .expect("queue-present previous sample should deserialize");
+        let queue_present_current: PgbouncerTimeSeriesSample =
+            serde_json::from_value(serde_json::json!({
+                "timestamp_seconds": 2.0,
+                "total_query_count": 2,
+                "total_wait_time_us": 2,
+                "maxwait_seconds": 0.5,
+                "client_waiting": 0
+            }))
+            .expect("queue-present current sample should deserialize");
+        let queue_present =
+            diff_pgbouncer_time_series(&queue_present_previous, &queue_present_current)
+                .expect("queue-present time-series should build");
+        let counter_reset_previous: PgbouncerTimeSeriesSample =
+            serde_json::from_value(serde_json::json!({
+                "timestamp_seconds": 1.0,
+                "total_query_count": 10,
+                "total_wait_time_us": 10,
+                "maxwait_seconds": 0.0,
+                "client_waiting": 0
+            }))
+            .expect("counter-reset previous sample should deserialize");
+        let counter_reset_current: PgbouncerTimeSeriesSample =
+            serde_json::from_value(serde_json::json!({
+                "timestamp_seconds": 2.0,
+                "total_query_count": 1,
+                "total_wait_time_us": 1,
+                "maxwait_seconds": 0.0,
+                "client_waiting": 0
+            }))
+            .expect("counter-reset current sample should deserialize");
+        let counter_reset =
+            diff_pgbouncer_time_series(&counter_reset_previous, &counter_reset_current)
+                .expect("counter-reset time-series should build");
+        let review_previous: PgbouncerTimeSeriesSample =
+            serde_json::from_value(serde_json::json!({
+                "timestamp_seconds": 1.0,
+                "total_query_count": 1,
+                "total_wait_time_us": 1
+            }))
+            .expect("review previous sample should deserialize");
+        let review_current: PgbouncerTimeSeriesSample = serde_json::from_value(serde_json::json!({
+            "timestamp_seconds": 2.0,
+            "total_query_count": 2,
+            "total_wait_time_us": 2
+        }))
+        .expect("review current sample should deserialize");
+        let needs_review_timeseries = diff_pgbouncer_time_series(&review_previous, &review_current)
+            .expect("review time-series should build");
+        let incompatible_pooler = check_pooler_compatibility(
+            &PoolerCompatibilityInput::new(
+                crate::args::CliExternalPoolerKind::PgBouncer.into(),
+                crate::args::CliMultiplexingMode::Transaction.into(),
+            )
+            .with_features(vec![
+                poolsim_core::pooler::SessionSemanticFeature::TemporaryTables,
+            ]),
         );
+        let incompatible_session =
+            analyze_session_state_compatibility(&SessionStateCompatibilityInput::new(
+                crate::args::CliClientLibraryKind::Prisma.into(),
+                crate::args::CliExternalPoolerKind::Supavisor.into(),
+                crate::args::CliMultiplexingMode::Transaction.into(),
+            ));
+        let waiting_evidence = summarize_pooler_evidence(
+            &PoolerEvidenceSnapshot::new(
+                crate::args::CliExternalPoolerKind::PgBouncer.into(),
+                crate::args::CliMultiplexingMode::Transaction.into(),
+            )
+            .with_client_active(20)
+            .with_client_waiting(2)
+            .with_server_active(10)
+            .with_server_idle(0)
+            .with_pooler_backend_limit(20),
+        );
+        let saturated_evidence = summarize_pooler_evidence(
+            &PoolerEvidenceSnapshot::new(
+                crate::args::CliExternalPoolerKind::PgBouncer.into(),
+                crate::args::CliMultiplexingMode::Transaction.into(),
+            )
+            .with_client_active(2)
+            .with_client_waiting(0)
+            .with_server_active(20)
+            .with_server_idle(0)
+            .with_pooler_backend_limit(20),
+        );
+        let review_downstream = diagnose_downstream_pooler(&DownstreamPoolerDiagnosisInput::new(
+            ApplicationPoolEvidence::default(),
+            waiting_evidence.clone(),
+        ));
+        let rejected_quality = assess_telemetry_quality(
+            &poolsim_core::telemetry_quality::TelemetryQualityInput::new(
+                poolsim_core::telemetry_quality::TelemetryArrivalModel::ClosedLoop,
+            ),
+        )
+        .expect("rejected quality should assess");
+        let review_quality = assess_telemetry_quality(
+            &poolsim_core::telemetry_quality::TelemetryQualityInput::new(
+                poolsim_core::telemetry_quality::TelemetryArrivalModel::OpenLoop,
+            ),
+        )
+        .expect("review quality should assess");
+        let mut scale_recommendation = sample_recommendation();
+        scale_recommendation.diff.recommended_pool_size = 10;
+        scale_recommendation.diff.pool_size_delta = 2;
+        scale_recommendation.diff.change = PoolSizeChange::Increase;
+        scale_recommendation.diff.additional_connections_required = 2;
+        let blocked_scale = check_pool_scale_gate(
+            &PoolScaleGateInput::new(scale_recommendation, quality.clone())
+                .with_replica_count(1)
+                .with_database_contention_report(contention.clone()),
+        )
+        .expect("blocked scale report should build");
+        let mismatch_endpoint = classify_endpoint(
+            &EndpointClassificationInput::new("postgres://pooler.supabase.com/db")
+                .with_workflow(poolsim_core::pooler::DatabaseWorkflowKind::Migration),
+        );
+        let _ = exit_code_for_pooler_compatibility(&incompatible_pooler, true);
+        let _ = exit_code_for_pooler_compatibility(&pooler, true);
+        let _ = exit_code_for_session_state_compatibility(&incompatible_session, true);
+        let _ = exit_code_for_session_state_compatibility(&session, true);
+        let _ = exit_code_for_pooler_evidence(&saturated_evidence, true);
+        let _ = exit_code_for_pooler_evidence(&waiting_evidence, true);
         let _ = exit_code_for_downstream_pooler(&downstream, true);
-        let _ = exit_code_for_telemetry_quality(&quality, true);
+        let _ = exit_code_for_downstream_pooler(&review_downstream, true);
+        let _ = exit_code_for_telemetry_quality(&rejected_quality, true);
+        let _ = exit_code_for_telemetry_quality(&review_quality, true);
+        let _ = exit_code_for_pool_scale_gate(&blocked_scale, true);
         let _ = exit_code_for_pool_scale_gate(&scale_gate, true);
         let _ = exit_code_for_database_contention(&contention, true);
-        let _ = exit_code_for_pgbouncer_time_series(&timeseries, true);
+        let _ = exit_code_for_endpoint_classification(&mismatch_endpoint, true);
         let _ = exit_code_for_endpoint_classification(&endpoint, true);
+        let _ = exit_code_for_pgbouncer_time_series(&queue_present, true);
+        let _ = exit_code_for_pgbouncer_time_series(&counter_reset, true);
+        let _ = exit_code_for_pgbouncer_time_series(&needs_review_timeseries, true);
+        let _ = exit_code_for_pgbouncer_time_series(&timeseries, false);
         let _ = pooler_config_from_args(None, None);
         let _ = pooler_config_from_args(Some(10), Some(true));
 
