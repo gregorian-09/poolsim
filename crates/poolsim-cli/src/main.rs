@@ -30,12 +30,13 @@ use poolsim_core::{
     },
     pooler::{
         analyze_session_state_compatibility, check_pooler_compatibility, classify_endpoint,
-        diagnose_downstream_pooler, parse_pgbouncer_show_pools, summarize_pgbouncer_show_pools,
-        summarize_pooler_evidence, ApplicationPoolEvidence, DownstreamPoolerDiagnosisInput,
-        DownstreamPoolerDiagnosisReport, DownstreamPoolerDiagnosisStatus,
-        EndpointClassificationInput, EndpointClassificationReport, PgbouncerShowPoolsSnapshot,
-        PoolerCompatibilityInput, PoolerCompatibilityReport, PoolerConfigSnapshot,
-        PoolerEvidenceReport, PoolerEvidenceSnapshot, PoolerEvidenceStatus,
+        diagnose_downstream_pooler, diff_pgbouncer_time_series, parse_pgbouncer_show_pools,
+        summarize_pgbouncer_show_pools, summarize_pooler_evidence, ApplicationPoolEvidence,
+        DownstreamPoolerDiagnosisInput, DownstreamPoolerDiagnosisReport,
+        DownstreamPoolerDiagnosisStatus, EndpointClassificationInput, EndpointClassificationReport,
+        PgbouncerShowPoolsSnapshot, PgbouncerTimeSeriesDeltaReport, PgbouncerTimeSeriesSample,
+        PgbouncerTimeSeriesStatus, PoolerCompatibilityInput, PoolerCompatibilityReport,
+        PoolerConfigSnapshot, PoolerEvidenceReport, PoolerEvidenceSnapshot, PoolerEvidenceStatus,
         SessionStateCompatibilityInput, SessionStateCompatibilityReport,
     },
     serverless::{
@@ -308,6 +309,13 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
                 let report = summarize_pgbouncer_show_pools(&input)?;
                 render_pooler_evidence(&report, cli.format)?;
                 Ok(exit_code_for_pooler_evidence(&report, cli.warn_exit))
+            }
+            args::ImportCommands::PgbouncerTimeseries(args) => {
+                let previous = load_pgbouncer_time_series_sample(&args.previous)?;
+                let current = load_pgbouncer_time_series_sample(&args.current)?;
+                let report = diff_pgbouncer_time_series(&previous, &current)?;
+                render_pgbouncer_time_series(&report, cli.format)?;
+                Ok(exit_code_for_pgbouncer_time_series(&report, cli.warn_exit))
             }
         },
         Commands::Gate(args) => {
@@ -844,6 +852,71 @@ fn render_downstream_pooler_diagnosis(
     }
 }
 
+fn render_pgbouncer_time_series(
+    report: &PgbouncerTimeSeriesDeltaReport,
+    format: OutputFormat,
+) -> Result<()> {
+    match format {
+        OutputFormat::Table => {
+            println!("status: {:?}", report.status);
+            println!("interval_seconds: {:.3}", report.interval_seconds);
+            println!("query_rate_per_second: {:.3}", report.query_rate_per_second);
+            println!(
+                "wait_time_rate_us_per_second: {:.3}",
+                report.wait_time_rate_us_per_second
+            );
+            println!(
+                "average_wait_ms_per_query: {:?}",
+                report.average_wait_ms_per_query
+            );
+            println!(
+                "current_maxwait_seconds: {:?}",
+                report.current_maxwait_seconds
+            );
+            println!("maxwait_delta_seconds: {:?}", report.maxwait_delta_seconds);
+            println!(
+                "current_client_waiting: {:?}",
+                report.current_client_waiting
+            );
+            println!("counter_resets: {:?}", report.counter_resets);
+            println!("confidence: {:?}", report.confidence);
+            for finding in &report.findings {
+                println!(
+                    "finding: {} [{:?}] {} -> {}",
+                    finding.code, finding.risk, finding.message, finding.remediation
+                );
+            }
+            Ok(())
+        }
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => {
+            println!("field,value");
+            println!("status,{:?}", report.status);
+            println!("interval_seconds,{:.3}", report.interval_seconds);
+            println!("query_rate_per_second,{:.3}", report.query_rate_per_second);
+            println!(
+                "wait_time_rate_us_per_second,{:.3}",
+                report.wait_time_rate_us_per_second
+            );
+            println!(
+                "average_wait_ms_per_query,{:?}",
+                report.average_wait_ms_per_query
+            );
+            println!(
+                "current_maxwait_seconds,{:?}",
+                report.current_maxwait_seconds
+            );
+            println!("maxwait_delta_seconds,{:?}", report.maxwait_delta_seconds);
+            println!("current_client_waiting,{:?}", report.current_client_waiting);
+            println!("counter_resets,{:?}", report.counter_resets);
+            println!("confidence,{:?}", report.confidence);
+            println!("finding_count,{}", report.findings.len());
+            Ok(())
+        }
+        OutputFormat::Html => render::html::print("Poolsim PgBouncer time-series report", report),
+    }
+}
+
 fn render_telemetry(recommendation: &TelemetryRecommendation, format: OutputFormat) -> Result<()> {
     match format {
         OutputFormat::Table => render::table::telemetry(recommendation),
@@ -1059,6 +1132,23 @@ fn exit_code_for_downstream_pooler(
     }
 }
 
+fn exit_code_for_pgbouncer_time_series(
+    report: &PgbouncerTimeSeriesDeltaReport,
+    warn_exit: bool,
+) -> ExitCode {
+    match report.status {
+        PgbouncerTimeSeriesStatus::QueueGrowing => ExitCode::from(2),
+        PgbouncerTimeSeriesStatus::QueuePresent
+        | PgbouncerTimeSeriesStatus::CounterReset
+        | PgbouncerTimeSeriesStatus::NeedsReview
+            if warn_exit =>
+        {
+            ExitCode::from(3)
+        }
+        _ => ExitCode::from(0),
+    }
+}
+
 fn pooler_config_from_args(
     max_prepared_statements: Option<u32>,
     resets_session_state: Option<bool>,
@@ -1082,6 +1172,21 @@ fn load_pooler_evidence_snapshot(path: &std::path::Path) -> Result<PoolerEvidenc
         .with_context(|| format!("failed to read pooler evidence config {}", path.display()))?;
     serde_json::from_str(&text)
         .with_context(|| format!("failed to parse pooler evidence config {}", path.display()))
+}
+
+fn load_pgbouncer_time_series_sample(path: &std::path::Path) -> Result<PgbouncerTimeSeriesSample> {
+    let text = fs::read_to_string(path).with_context(|| {
+        format!(
+            "failed to read PgBouncer time-series sample {}",
+            path.display()
+        )
+    })?;
+    serde_json::from_str(&text).with_context(|| {
+        format!(
+            "failed to parse PgBouncer time-series sample {}",
+            path.display()
+        )
+    })
 }
 
 fn load_pgbouncer_show_pools_snapshot(
@@ -1135,7 +1240,7 @@ mod tests {
         DoctorArgs, DoctorSourceCommands, EvaluateArgs, GateArgs, GateSourceCommands,
         GenerateConfigArgs, GenerateConfigSourceCommands, GuardArgs, ImportArgs, ImportCommands,
         InitArgs, OtlpImportArgs, PgbouncerPoolsDoctorArgs, PgbouncerPoolsImportArgs,
-        PrometheusImportArgs, SimulateArgs, TelemetryImportArgs,
+        PgbouncerTimeseriesImportArgs, PrometheusImportArgs, SimulateArgs, TelemetryImportArgs,
     };
 
     fn sample_config_json() -> String {
@@ -1885,6 +1990,49 @@ mod tests {
             warn_exit: true,
         };
         let _ = run_with_cli(cli).expect("PgBouncer pools import should execute");
+
+        let pgbouncer_previous = write_temp_file(
+            "main_pgbouncer_previous",
+            "json",
+            r#"{
+                "timestamp_seconds": 100.0,
+                "label": "checkout-pgbouncer",
+                "total_query_count": 1000,
+                "total_wait_time_us": 20000,
+                "maxwait_seconds": 0.1,
+                "client_waiting": 1
+            }"#,
+        );
+        let pgbouncer_current = write_temp_file(
+            "main_pgbouncer_current",
+            "json",
+            r#"{
+                "timestamp_seconds": 110.0,
+                "label": "checkout-pgbouncer",
+                "total_query_count": 1200,
+                "total_wait_time_us": 70000,
+                "maxwait_seconds": 0.8,
+                "client_waiting": 4
+            }"#,
+        );
+        for format in [
+            OutputFormat::Table,
+            OutputFormat::Json,
+            OutputFormat::Csv,
+            OutputFormat::Html,
+        ] {
+            let cli = Cli {
+                command: Commands::Import(ImportArgs {
+                    command: ImportCommands::PgbouncerTimeseries(PgbouncerTimeseriesImportArgs {
+                        previous: pgbouncer_previous.clone(),
+                        current: pgbouncer_current.clone(),
+                    }),
+                }),
+                format,
+                warn_exit: true,
+            };
+            let _ = run_with_cli(cli).expect("PgBouncer time-series import should execute");
+        }
 
         let cli = Cli {
             command: Commands::Gate(GateArgs {

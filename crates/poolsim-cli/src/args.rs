@@ -838,6 +838,7 @@ pub enum ImportCommands {
     Otlp(OtlpImportArgs),
     PoolerEvidence(PoolerEvidenceImportArgs),
     PgbouncerPools(PgbouncerPoolsImportArgs),
+    PgbouncerTimeseries(PgbouncerTimeseriesImportArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -862,6 +863,17 @@ pub struct PgbouncerPoolsImportArgs {
 
     #[arg(long)]
     pub pooler_backend_limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct PgbouncerTimeseriesImportArgs {
+    /// JSON file containing the previous [`poolsim_core::pooler::PgbouncerTimeSeriesSample`].
+    #[arg(long)]
+    pub previous: PathBuf,
+
+    /// JSON file containing the current [`poolsim_core::pooler::PgbouncerTimeSeriesSample`].
+    #[arg(long)]
+    pub current: PathBuf,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -1406,7 +1418,8 @@ mod tests {
                 ImportCommands::Prometheus(_)
                 | ImportCommands::Otlp(_)
                 | ImportCommands::PoolerEvidence(_)
-                | ImportCommands::PgbouncerPools(_) => {
+                | ImportCommands::PgbouncerPools(_)
+                | ImportCommands::PgbouncerTimeseries(_) => {
                     panic!("expected telemetry import")
                 }
             },
@@ -1502,6 +1515,31 @@ mod tests {
     }
 
     #[test]
+    fn parser_handles_import_pgbouncer_timeseries_subcommand() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "import",
+            "pgbouncer-timeseries",
+            "--previous",
+            "previous.json",
+            "--current",
+            "current.json",
+        ])
+        .expect("PgBouncer time-series import args should parse");
+
+        match cli.command {
+            Commands::Import(args) => match args.command {
+                ImportCommands::PgbouncerTimeseries(args) => {
+                    assert_eq!(args.previous, PathBuf::from("previous.json"));
+                    assert_eq!(args.current, PathBuf::from("current.json"));
+                }
+                _ => panic!("expected PgBouncer time-series import"),
+            },
+            _ => panic!("expected import command"),
+        }
+    }
+
+    #[test]
     fn parser_handles_import_prometheus_subcommand() {
         let cli = Cli::try_parse_from([
             "poolsim",
@@ -1546,7 +1584,8 @@ mod tests {
                 ImportCommands::Telemetry(_)
                 | ImportCommands::Otlp(_)
                 | ImportCommands::PoolerEvidence(_)
-                | ImportCommands::PgbouncerPools(_) => {
+                | ImportCommands::PgbouncerPools(_)
+                | ImportCommands::PgbouncerTimeseries(_) => {
                     panic!("expected prometheus import")
                 }
             },
