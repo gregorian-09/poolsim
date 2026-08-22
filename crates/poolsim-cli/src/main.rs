@@ -2667,6 +2667,10 @@ mod tests {
                 poolsim_core::pooler::SessionSemanticFeature::TemporaryTables,
             ]),
         );
+        let review_pooler = check_pooler_compatibility(&PoolerCompatibilityInput::new(
+            crate::args::CliExternalPoolerKind::Unknown.into(),
+            crate::args::CliMultiplexingMode::Unknown.into(),
+        ));
         let incompatible_session =
             analyze_session_state_compatibility(&SessionStateCompatibilityInput::new(
                 crate::args::CliClientLibraryKind::Prisma.into(),
@@ -2727,6 +2731,7 @@ mod tests {
                 .with_workflow(poolsim_core::pooler::DatabaseWorkflowKind::Migration),
         );
         let _ = exit_code_for_pooler_compatibility(&incompatible_pooler, true);
+        let _ = exit_code_for_pooler_compatibility(&review_pooler, true);
         let _ = exit_code_for_pooler_compatibility(&pooler, true);
         let _ = exit_code_for_session_state_compatibility(&incompatible_session, true);
         let _ = exit_code_for_session_state_compatibility(&session, true);
@@ -2745,6 +2750,68 @@ mod tests {
         let _ = exit_code_for_pgbouncer_time_series(&counter_reset, true);
         let _ = exit_code_for_pgbouncer_time_series(&needs_review_timeseries, true);
         let _ = exit_code_for_pgbouncer_time_series(&timeseries, false);
+        let healthy_contention = classify_database_contention(
+            &poolsim_core::contention::DatabaseContentionInput::new()
+                .with_pool_wait_p99_ms(1.0)
+                .with_database_latency_p99_ms(1.0)
+                .with_active_sessions(10)
+                .with_max_connections(100)
+                .with_database_cpu_utilization(0.1)
+                .with_database_io_utilization(0.1),
+        )
+        .expect("healthy contention should classify");
+        let _ = exit_code_for_database_contention(&healthy_contention, true);
+
+        let invalid_quality = write_temp_file("main_dispatch_invalid_quality", "json", "not-json");
+        let invalid_contention =
+            write_temp_file("main_dispatch_invalid_contention", "json", "not-json");
+        let invalid_timeseries =
+            write_temp_file("main_dispatch_invalid_timeseries", "json", "not-json");
+        let invalid_pools = write_temp_file(
+            "main_dispatch_invalid_pools",
+            "txt",
+            "not a PgBouncer capture",
+        );
+        assert!(load_telemetry_quality_input(&invalid_quality).is_err());
+        assert!(load_database_contention_input(&invalid_contention).is_err());
+        assert!(load_pgbouncer_time_series_sample(&invalid_timeseries).is_err());
+        assert!(
+            load_pgbouncer_show_pools_snapshot(&PgbouncerPoolsImportArgs {
+                file: unique_temp_path("missing_pools", "txt"),
+                label: None,
+                mode: None,
+                pooler_client_limit: None,
+                pooler_backend_limit: None,
+            })
+            .is_err()
+        );
+        assert!(
+            load_pgbouncer_show_pools_snapshot(&PgbouncerPoolsImportArgs {
+                file: invalid_pools.clone(),
+                label: None,
+                mode: None,
+                pooler_client_limit: None,
+                pooler_backend_limit: None,
+            })
+            .is_err()
+        );
+        let valid_pools = write_temp_file(
+            "main_dispatch_valid_pools",
+            "txt",
+            "database,user,cl_active,cl_waiting,sv_active,sv_idle,pool_mode\napp,web,1,0,1,1,transaction\n",
+        );
+        let loaded_pools = load_pgbouncer_show_pools_snapshot(&PgbouncerPoolsImportArgs {
+            file: valid_pools.clone(),
+            label: Some("loaded".to_string()),
+            mode: Some(crate::args::CliMultiplexingMode::Transaction),
+            pooler_client_limit: Some(10),
+            pooler_backend_limit: Some(10),
+        })
+        .expect("valid PgBouncer snapshot should load");
+        assert_eq!(
+            loaded_pools.mode,
+            Some(poolsim_core::pooler::MultiplexingMode::Transaction)
+        );
         let _ = pooler_config_from_args(None, None);
         let _ = pooler_config_from_args(Some(10), Some(true));
 
@@ -2756,6 +2823,11 @@ mod tests {
             prometheus_config,
             otlp_config,
             evidence_config,
+            invalid_quality,
+            invalid_contention,
+            invalid_timeseries,
+            invalid_pools,
+            valid_pools,
         ] {
             remove_if_exists(&path);
         }
