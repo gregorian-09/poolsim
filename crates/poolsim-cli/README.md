@@ -114,6 +114,7 @@ Operational commands:
 - `poolsim check session-state`: add client-aware prepared-statement and session-state remediation for popular backend libraries.
 - `poolsim check telemetry-quality`: validate telemetry evidence and coordinated-omission risk before capacity planning.
 - `poolsim check pool-scale`: block unsafe pool increases using telemetry quality, replica count, and database connection headroom.
+- `poolsim check db-contention`: distinguish pool starvation from database lock, transaction, deadlock, latency, and resource contention.
 - `poolsim import pooler-evidence`: summarize observed pooler client/backend counters from a JSON snapshot.
 - `poolsim import pgbouncer-pools`: parse captured PgBouncer `SHOW POOLS` output into the same pooler evidence report.
 - `poolsim import pgbouncer-timeseries`: compare two JSON PgBouncer time-series samples with reset-safe counter rates and queue-growth status.
@@ -281,6 +282,7 @@ poolsim --format json --warn-exit check pool-scale \
   --safety-margin-connections 10 \
   --replicas 3 \
   --current-total-connections 6 \
+  --contention-config docs/fixtures/database-contention.json \
   telemetry --config docs/fixtures/telemetry.json \
   --current-pool-size 2
 ```
@@ -291,6 +293,21 @@ count, and requires review when database budget or directly observed connection
 totals are missing. See [`docs/pool-scale-safety.md`](../../docs/pool-scale-safety.md)
 for the full decision math, JSON contract, stable finding codes, Rust API,
 Prometheus/OTLP examples, and CI integration.
+
+Diagnose database-side causes before increasing a pool:
+
+```bash
+poolsim --format json --warn-exit check db-contention \
+  --config docs/fixtures/database-contention.json
+```
+
+The classifier consumes normalized evidence from PostgreSQL, MySQL, managed
+database, or pooler adapters. It returns `database-contention` and exit `2`
+for material lock waits, idle transactions, deadlocks, near-limit resources,
+or unexplained backend latency; `needs-review` is used when the evidence is
+incomplete. See [`docs/db-contention.md`](../../docs/db-contention.md) for
+collection mappings, thresholds, stable finding codes, complete Rust API
+examples, and operational limitations.
 
 ## Serverless Concurrency Example
 

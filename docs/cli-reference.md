@@ -64,6 +64,7 @@ Available subcommands:
 - `check session-state`
 - `check telemetry-quality`
 - `check pool-scale`
+- `check db-contention`
 - `import telemetry`
 - `import pooler-evidence`
 - `import pgbouncer-pools`
@@ -272,6 +273,9 @@ pool data used to calculate the recommendation.
 - `--current-total-connections <integer>`: observed service total. If omitted,
   the gate infers `current_pool_size * replicas` and requires review for a
   scale-up.
+- `--contention-config <path>`: optional normalized database-contention input.
+  A material database-side contention report blocks a scale-up before budget
+  approval; incomplete evidence produces a review finding.
 
 ### Decision Rules
 
@@ -286,7 +290,10 @@ are allowed because this check only guards scale-ups.
 
 The report includes `status`, per-replica and aggregate connection deltas,
 projected total, effective capacity, nested `telemetry_quality`, findings, and
-confidence. Status values are `allowed`, `needs-review`, and `blocked`.
+confidence. When `--contention-config` is supplied, it also includes the
+`database_contention` report and may contain `DATABASE_CONTENTION_DETECTED` or
+`DATABASE_CONTENTION_NEEDS_REVIEW`. Status values are `allowed`,
+`needs-review`, and `blocked`.
 
 - `0`: allowed, or needs-review without `--warn-exit`.
 - `2`: blocked.
@@ -295,6 +302,54 @@ confidence. Status values are `allowed`, `needs-review`, and `blocked`.
 
 See [`pool-scale-safety.md`](pool-scale-safety.md) for the complete JSON
 contract, finding codes, Rust API, budget assumptions, CI usage, and limitations.
+
+## `check db-contention`
+
+### Purpose
+
+Classifies normalized database and application-pool evidence so lock waits,
+idle transactions, deadlocks, backend latency, and near-limit database
+resources are not mistaken for simple pool starvation.
+
+### Example
+
+```bash
+poolsim --format json --warn-exit check db-contention \
+  --config docs/fixtures/database-contention.json
+```
+
+The JSON file contains a `poolsim_core::contention::DatabaseContentionInput`.
+It can be produced from PostgreSQL `pg_stat_activity`/`pg_locks`, MySQL
+Performance Schema, managed database metrics, or pooler telemetry. Poolsim
+does not connect to a database or assume that missing values are zero.
+
+### Input Fields
+
+- `pool_wait_p99_ms`: p99 application-pool acquisition wait.
+- `database_latency_p99_ms`: p99 database service latency.
+- `lock_waiting_sessions`: current database lock-waiting sessions.
+- `idle_in_transaction_sessions`: sessions idle inside open transactions.
+- `longest_idle_in_transaction_seconds`: longest idle transaction age.
+- `deadlocks_per_second`: deadlock rate for the observation window.
+- `active_sessions` and `max_connections`: compatible-scope connection counts.
+- `database_cpu_utilization` and `database_io_utilization`: normalized fractions.
+- `policy`: optional threshold overrides.
+
+### Status And Exit Codes
+
+- `healthy`: complete evidence shows no material contention; exit `0`.
+- `pool-starvation`: pool wait is elevated while supplied database evidence is
+  healthy; exit `0`.
+- `database-contention`: database-side contention is material; exit `2`.
+- `needs-review`: evidence is incomplete; exit `3` with `--warn-exit`, otherwise
+  exit `0`.
+- Invalid files or values return exit `1`.
+
+The report includes `dominant_cause`, `suppress_pool_increase`, confidence,
+evidence category count, and remediation findings. See
+[`db-contention.md`](db-contention.md) for provider collection mappings,
+threshold policy, all public Rust symbols, stable finding codes, CI usage, and
+limitations.
 
 ## `import pooler-evidence`
 

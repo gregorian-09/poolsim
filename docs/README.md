@@ -23,6 +23,7 @@ This folder contains user-facing documentation for the current Poolsim capabilit
 - [`continuous-recommendations.md`](continuous-recommendations.md): Opt-in worker for repeated recommendation diff events and webhook delivery.
 - [`telemetry-quality.md`](telemetry-quality.md): Validate arrival model, offered rate, failure signals, pool wait, database latency, and coordinated-omission risk before capacity planning.
 - [`pool-scale-safety.md`](pool-scale-safety.md): Block unsafe pool increases with telemetry-quality, replica, and database connection-budget evidence.
+- [`db-contention.md`](db-contention.md): Distinguish pool starvation from lock waits, idle transactions, deadlocks, backend latency, and database resource saturation.
 - [`../integrations/grafana/README.md`](../integrations/grafana/README.md): Grafana panel package for rendering `poolsim-web` sensitivity rows as a heatmap.
 - [`../benchmarks/README.md`](../benchmarks/README.md): Benchmark result contract and summarizer for comparing Poolsim predictions to real pool runs.
 - [`deployed-pool-survey.md`](deployed-pool-survey.md): Opt-in anonymized survey payload generator for pool configuration statistics.

@@ -1751,3 +1751,28 @@ fn docs_pool_scale_safety_example_reports_an_allowed_scale_up() {
     assert!(report["additional_connections_total"].as_u64().unwrap_or(0) > 0);
     assert_eq!(report["effective_database_capacity"], 80);
 }
+
+#[test]
+fn docs_database_contention_example_blocks_pool_increase() {
+    let output = run_cli(&[
+        "--format",
+        "json",
+        "--warn-exit",
+        "check",
+        "db-contention",
+        "--config",
+        &fixture("docs/fixtures/database-contention.json"),
+    ]);
+
+    assert_eq!(output.status.code(), Some(2));
+    let report: Value = serde_json::from_str(&stdout_utf8(&output))
+        .expect("database contention output should be JSON");
+    assert_eq!(report["status"], "database-contention");
+    assert_eq!(report["dominant_cause"], "lock-contention");
+    assert_eq!(report["suppress_pool_increase"], true);
+    assert!(report["findings"].as_array().is_some_and(|findings| {
+        findings
+            .iter()
+            .any(|finding| finding["code"] == "LOCK_WAITING_SESSIONS")
+    }));
+}

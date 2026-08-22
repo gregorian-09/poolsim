@@ -147,12 +147,51 @@ pool. It composes the existing telemetry recommendation diff with the quality
 report and replica-aware database budget evidence:
 
 ```rust
+use poolsim_core::{
+    telemetry::{recommend_from_telemetry, TelemetrySnapshot},
+    telemetry_quality::{
+        assess_telemetry_quality, TelemetryArrivalModel, TelemetryQualityInput,
+    },
+    types::{PoolConfig, SimulationOptions, WorkloadConfig},
+};
 use poolsim_core::scale_gate::{
     check_pool_scale_gate, PoolScaleGateInput, PoolScaleGateStatus,
 };
 
-# let recommendation = todo!();
-# let quality_report = todo!();
+let snapshot = TelemetrySnapshot {
+    service_name: Some("checkout-api".to_string()),
+    window: Some("1h".to_string()),
+    observed_at: None,
+    current_pool_size: 4,
+    workload: WorkloadConfig {
+        requests_per_second: 120.0,
+        latency_p50_ms: 5.0,
+        latency_p95_ms: 20.0,
+        latency_p99_ms: 45.0,
+        raw_samples_ms: None,
+        step_load_profile: None,
+    },
+    pool: PoolConfig {
+        max_server_connections: 100,
+        connection_overhead_ms: 1.0,
+        idle_timeout_ms: None,
+        min_pool_size: 2,
+        max_pool_size: 12,
+    },
+};
+let recommendation = recommend_from_telemetry(&snapshot, &SimulationOptions::default())?;
+let quality_report = assess_telemetry_quality(
+    &TelemetryQualityInput::new(TelemetryArrivalModel::OpenLoop)
+        .with_expected_requests_per_second(120.0)
+        .with_observed_requests_per_second(120.0)
+        .with_duration_seconds(60.0)
+        .with_sample_count(7_200)
+        .with_timeout_count(0)
+        .with_error_count(0)
+        .with_latency_percentiles(5.0, 20.0, 45.0)
+        .with_pool_wait_p99_ms(4.0)
+        .with_database_latency_p99_ms(18.0),
+)?;
 let input = PoolScaleGateInput::new(recommendation, quality_report)
     .with_database_budget(200, 20, 20)
     .with_replica_count(6)
@@ -169,6 +208,10 @@ budget. `with_database_budget` sets the database maximum, reserved slots, and
 operational safety margin. `with_replica_count` makes the per-replica pool
 delta explicit. `with_current_total_connections` replaces the inferred
 `current_pool_size * replicas` estimate with a directly observed service total.
+`with_database_contention_report` optionally adds a report from
+`classify_database_contention`; a `DatabaseContention` report blocks a scale-up
+with the stable `DATABASE_CONTENTION_DETECTED` finding, while incomplete
+contention evidence produces `DATABASE_CONTENTION_NEEDS_REVIEW`.
 
 `check_pool_scale_gate` returns `PoolScaleGateStatus::Allowed` when no increase
 is requested or all scale-up evidence fits the effective budget,
@@ -182,6 +225,42 @@ overflow return `PoolsimError` rather than wrapping.
 See [`docs/pool-scale-safety.md`](../../docs/pool-scale-safety.md) for the full
 API inventory, JSON/CSV/HTML output, stable finding codes, CI command, database
 headroom assumptions, and operational limitations.
+
+### Database Contention Classification
+
+Classify normalized database evidence before treating application-pool wait as
+proof that the pool is too small:
+
+```rust
+use poolsim_core::contention::{
+    classify_database_contention, DatabaseContentionInput,
+    DatabaseContentionStatus,
+};
+
+let input = DatabaseContentionInput::new()
+    .with_pool_wait_p99_ms(80.0)
+    .with_database_latency_p99_ms(120.0)
+    .with_lock_waiting_sessions(3)
+    .with_idle_in_transaction_sessions(0)
+    .with_deadlocks_per_second(0.0)
+    .with_active_sessions(70)
+    .with_max_connections(100);
+let report = classify_database_contention(&input)?;
+assert_eq!(report.status, DatabaseContentionStatus::DatabaseContention);
+# Ok::<(), poolsim_core::error::PoolsimError>(())
+```
+
+The classifier distinguishes `pool-starvation` from lock contention, idle
+transactions, deadlocks, database connection/CPU/I/O saturation, and elevated
+database latency. It returns `needs-review` when the evidence is incomplete;
+missing fields are never silently treated as healthy zeroes. Thresholds can be
+customized with `DatabaseContentionPolicy` and `DatabaseContentionInput::with_policy`.
+The report exposes `suppress_pool_increase` so higher-level automation can
+avoid the unsafe "just add connections" response.
+
+See [`docs/db-contention.md`](../../docs/db-contention.md) for PostgreSQL and
+MySQL collection mappings, threshold defaults, JSON/CLI output, all public
+builders, finding codes, and limitations.
 
 ### Downstream Pooler Diagnosis
 

@@ -1,0 +1,11 @@
+{
+  "pool_wait_p99_ms": 80.0,
+  "database_latency_p99_ms": 120.0,
+  "lock_waiting_sessions": 3,
+  "idle_in_transaction_sessions": 0,
+  "deadlocks_per_second": 0.0,
+  "active_sessions": 70,
+  "max_connections": 100,
+  "database_cpu_utilization": 0.70,
+  "database_io_utilization": 0.60
+}

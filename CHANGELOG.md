@@ -17,6 +17,7 @@ The format is based on Keep a Changelog, and this project uses Semantic Versioni
 - PgBouncer time-series evidence through `poolsim import pgbouncer-timeseries`, reset-safe counter deltas, `SHOW STATS` parsing, and `maxwait`/`cl_waiting` queue-growth findings.
 - Telemetry-quality preflight through `poolsim check telemetry-quality` and `poolsim_core::telemetry_quality::assess_telemetry_quality`, including offered-rate validation, missing-signal findings, and coordinated-omission detection.
 - Pool scale-safety gate through `poolsim check pool-scale` and `poolsim_core::scale_gate::check_pool_scale_gate`, combining telemetry quality with replica-aware database connection headroom to block unsafe increases without changing existing recommendations.
+- Database contention classification through `poolsim check db-contention` and `poolsim_core::contention::classify_database_contention`, distinguishing pool starvation from lock waits, idle transactions, deadlocks, backend latency, and near-limit database resources.
 - Source-backed client guidance for Prisma, node-postgres, `sqlx`, SQLAlchemy asyncpg, PostgREST, PgJDBC, generic PostgreSQL clients, PgBouncer prepared-statement tracking, Supavisor transaction mode, and RDS Proxy pinning review.
 - Secret-safe endpoint redaction for classification reports, including user-info and secret-like query parameters.
 - Serverless concurrency planning through `poolsim plan serverless`, `POST /v1/plan/serverless`, and `poolsim_core::serverless::plan_serverless_concurrency`.
