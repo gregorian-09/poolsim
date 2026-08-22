@@ -23,6 +23,9 @@ use anyhow::{Context, Result};
 use args::{Cli, Commands, OutputFormat};
 use clap::Parser;
 use poolsim_core::{
+    contention::{
+        classify_database_contention, DatabaseContentionReport, DatabaseContentionStatus,
+    },
     evaluate,
     ownership::{
         build_connection_ownership_graph, ConnectionOwnershipInput, ConnectionOwnershipReport,
@@ -234,6 +237,12 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
             }
         },
         Commands::Check(args) => match args.command {
+            args::CheckCommands::DbContention(args) => {
+                let input = load_database_contention_input(&args.config)?;
+                let report = classify_database_contention(&input)?;
+                render_database_contention(&report, cli.format)?;
+                Ok(exit_code_for_database_contention(&report, cli.warn_exit))
+            }
             args::CheckCommands::Pooler(args) => {
                 let mut input = PoolerCompatibilityInput::new(args.pooler.into(), args.mode.into())
                     .with_features(args.features_used.into_iter().map(Into::into).collect());
@@ -1087,6 +1096,40 @@ fn render_pool_scale_gate(
     }
 }
 
+fn render_database_contention(
+    report: &DatabaseContentionReport,
+    format: OutputFormat,
+) -> Result<()> {
+    match format {
+        OutputFormat::Table => {
+            println!("status: {:?}", report.status);
+            println!("dominant_cause: {:?}", report.dominant_cause);
+            println!("suppress_pool_increase: {}", report.suppress_pool_increase);
+            println!("evidence_categories: {}", report.evidence_categories);
+            println!("confidence: {:?}", report.confidence);
+            for finding in &report.findings {
+                println!(
+                    "finding: {} [{:?}] {} -> {}",
+                    finding.code, finding.risk, finding.message, finding.remediation
+                );
+            }
+            Ok(())
+        }
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => {
+            println!("field,value");
+            println!("status,{:?}", report.status);
+            println!("dominant_cause,{:?}", report.dominant_cause);
+            println!("suppress_pool_increase,{}", report.suppress_pool_increase);
+            println!("evidence_categories,{}", report.evidence_categories);
+            println!("confidence,{:?}", report.confidence);
+            println!("finding_count,{}", report.findings.len());
+            Ok(())
+        }
+        OutputFormat::Html => render::html::print("Poolsim database contention report", report),
+    }
+}
+
 fn render_guard(report: &guard::GuardReport, format: OutputFormat) -> Result<()> {
     match format {
         OutputFormat::Table => render::table::guard(report),
@@ -1301,6 +1344,17 @@ fn exit_code_for_pool_scale_gate(
     }
 }
 
+fn exit_code_for_database_contention(
+    report: &DatabaseContentionReport,
+    warn_exit: bool,
+) -> ExitCode {
+    match report.status {
+        DatabaseContentionStatus::DatabaseContention => ExitCode::from(2),
+        DatabaseContentionStatus::NeedsReview if warn_exit => ExitCode::from(3),
+        _ => ExitCode::from(0),
+    }
+}
+
 fn exit_code_for_pgbouncer_time_series(
     report: &PgbouncerTimeSeriesDeltaReport,
     warn_exit: bool,
@@ -1351,6 +1405,23 @@ fn load_telemetry_quality_input(
     serde_json::from_str(&text).with_context(|| {
         format!(
             "failed to parse telemetry quality config {}",
+            path.display()
+        )
+    })
+}
+
+fn load_database_contention_input(
+    path: &std::path::Path,
+) -> Result<poolsim_core::contention::DatabaseContentionInput> {
+    let text = fs::read_to_string(path).with_context(|| {
+        format!(
+            "failed to read database contention config {}",
+            path.display()
+        )
+    })?;
+    serde_json::from_str(&text).with_context(|| {
+        format!(
+            "failed to parse database contention config {}",
             path.display()
         )
     })
@@ -1419,11 +1490,12 @@ mod tests {
     use super::*;
     use crate::args::{
         BatchArgs, BudgetArgs, CheckArgs, CheckCommands, CliConfigFramework, CliDatabaseKind,
-        CommonArgs, CompareArgs, DoctorArgs, DoctorSourceCommands, EvaluateArgs, GateArgs,
-        GateSourceCommands, GenerateConfigArgs, GenerateConfigSourceCommands, GuardArgs,
-        ImportArgs, ImportCommands, InitArgs, OtlpImportArgs, PgbouncerPoolsDoctorArgs,
-        PgbouncerPoolsImportArgs, PgbouncerTimeseriesImportArgs, PoolScaleGateArgs,
-        PrometheusImportArgs, SimulateArgs, TelemetryImportArgs, TelemetryQualityCheckArgs,
+        CommonArgs, CompareArgs, DatabaseContentionCheckArgs, DoctorArgs, DoctorSourceCommands,
+        EvaluateArgs, GateArgs, GateSourceCommands, GenerateConfigArgs,
+        GenerateConfigSourceCommands, GuardArgs, ImportArgs, ImportCommands, InitArgs,
+        OtlpImportArgs, PgbouncerPoolsDoctorArgs, PgbouncerPoolsImportArgs,
+        PgbouncerTimeseriesImportArgs, PoolScaleGateArgs, PrometheusImportArgs, SimulateArgs,
+        TelemetryImportArgs, TelemetryQualityCheckArgs,
     };
 
     fn sample_config_json() -> String {
@@ -1907,6 +1979,15 @@ mod tests {
                 .with_current_total_connections(8),
         )
         .expect("scale gate should build");
+        let contention = classify_database_contention(
+            &poolsim_core::contention::DatabaseContentionInput::new()
+                .with_pool_wait_p99_ms(80.0)
+                .with_database_latency_p99_ms(120.0)
+                .with_lock_waiting_sessions(2)
+                .with_idle_in_transaction_sessions(0)
+                .with_deadlocks_per_second(0.0),
+        )
+        .expect("contention report should build");
 
         render_simulation(&report, OutputFormat::Json).expect("json simulation should render");
         render_simulation(&report, OutputFormat::Csv).expect("csv simulation should render");
@@ -1921,6 +2002,15 @@ mod tests {
             .expect("table pool scale gate should render");
         render_pool_scale_gate(&scale_gate, OutputFormat::Html)
             .expect("html pool scale gate should render");
+
+        render_database_contention(&contention, OutputFormat::Json)
+            .expect("json database contention should render");
+        render_database_contention(&contention, OutputFormat::Csv)
+            .expect("csv database contention should render");
+        render_database_contention(&contention, OutputFormat::Table)
+            .expect("table database contention should render");
+        render_database_contention(&contention, OutputFormat::Html)
+            .expect("html database contention should render");
 
         render_evaluation(&evaluation, OutputFormat::Json).expect("json evaluation should render");
         render_evaluation(&evaluation, OutputFormat::Csv).expect("csv evaluation should render");
@@ -2172,6 +2262,39 @@ mod tests {
                 warn_exit: true,
             };
             let _ = run_with_cli(cli).expect("telemetry quality check should execute");
+        }
+
+        let contention_cfg = write_temp_file(
+            "main_database_contention",
+            "json",
+            r#"{
+                "pool_wait_p99_ms": 80.0,
+                "database_latency_p99_ms": 120.0,
+                "lock_waiting_sessions": 3,
+                "idle_in_transaction_sessions": 0,
+                "deadlocks_per_second": 0.0,
+                "active_sessions": 70,
+                "max_connections": 100,
+                "database_cpu_utilization": 0.7,
+                "database_io_utilization": 0.6
+            }"#,
+        );
+        for format in [
+            OutputFormat::Table,
+            OutputFormat::Json,
+            OutputFormat::Csv,
+            OutputFormat::Html,
+        ] {
+            let cli = Cli {
+                command: Commands::Check(CheckArgs {
+                    command: CheckCommands::DbContention(DatabaseContentionCheckArgs {
+                        config: contention_cfg.clone(),
+                    }),
+                }),
+                format,
+                warn_exit: true,
+            };
+            let _ = run_with_cli(cli).expect("database contention check should execute");
         }
 
         let increase_telemetry_cfg = write_temp_file(

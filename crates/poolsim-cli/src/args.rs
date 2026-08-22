@@ -284,10 +284,18 @@ pub struct CheckArgs {
 #[derive(Debug, Clone, Subcommand)]
 #[allow(clippy::large_enum_variant)]
 pub enum CheckCommands {
+    DbContention(DatabaseContentionCheckArgs),
     Pooler(PoolerCheckArgs),
     PoolScale(PoolScaleGateArgs),
     SessionState(SessionStateCheckArgs),
     TelemetryQuality(TelemetryQualityCheckArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct DatabaseContentionCheckArgs {
+    /// JSON file containing a `poolsim_core::contention::DatabaseContentionInput`.
+    #[arg(long)]
+    pub config: PathBuf,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -1265,6 +1273,28 @@ mod tests {
                     assert_eq!(args.current_total_connections, Some(21));
                 }
                 _ => panic!("expected pool-scale check"),
+            },
+            _ => panic!("expected check command"),
+        }
+    }
+
+    #[test]
+    fn parser_handles_database_contention_check_subcommand() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "check",
+            "db-contention",
+            "--config",
+            "contention.json",
+        ])
+        .expect("db-contention check should parse");
+
+        match cli.command {
+            Commands::Check(args) => match args.command {
+                CheckCommands::DbContention(args) => {
+                    assert_eq!(args.config, PathBuf::from("contention.json"));
+                }
+                _ => panic!("expected db-contention check"),
             },
             _ => panic!("expected check command"),
         }
