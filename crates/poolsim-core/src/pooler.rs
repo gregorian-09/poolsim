@@ -3222,4 +3222,441 @@ app,web,42,0,8,transaction
 
         assert_eq!(err.code(), "INVALID_PGBOUNCER_SHOW_POOLS");
     }
+
+    #[test]
+    fn pooler_builders_and_provider_matrix_cover_supported_evidence() {
+        let endpoint = EndpointClassificationInput::new("postgres://db.example.com")
+            .with_provider(EndpointProviderKind::AwsRds)
+            .with_workflow(DatabaseWorkflowKind::ApiTraffic);
+        assert_eq!(endpoint.provider, Some(EndpointProviderKind::AwsRds));
+
+        let config = PoolerConfigSnapshot::new()
+            .with_max_prepared_statements(10)
+            .with_resets_session_state(true);
+        assert_eq!(config.resets_session_state, Some(true));
+
+        let compatibility = PoolerCompatibilityInput::new(
+            ExternalPoolerKind::PgBouncer,
+            MultiplexingMode::Transaction,
+        )
+        .with_workflow(DatabaseWorkflowKind::Migration)
+        .with_pooler_config(config.clone());
+        assert_eq!(
+            compatibility.workflow,
+            Some(DatabaseWorkflowKind::Migration)
+        );
+
+        let row = PgbouncerPoolRow::new(1, 0, 1, 1)
+            .with_database("app")
+            .with_user("web")
+            .with_pool_mode(MultiplexingMode::Session);
+        let snapshot = PgbouncerShowPoolsSnapshot::new(vec![row])
+            .with_mode(MultiplexingMode::Session)
+            .with_pooler_client_limit(20)
+            .with_pooler_backend_limit(10);
+        assert_eq!(snapshot.mode, Some(MultiplexingMode::Session));
+
+        let stats = PgbouncerStatsRow::new(2, 10).with_avg_wait_time_us(5.0);
+        assert_eq!(stats.avg_wait_time_us, Some(5.0));
+
+        let application = ApplicationPoolEvidence::new(2, 4)
+            .with_waiting(1)
+            .with_active(Some(3))
+            .with_limit(Some(5));
+        assert_eq!(application.active, Some(3));
+        assert_eq!(application.limit, Some(5));
+
+        let session = SessionStateCompatibilityInput::new(
+            ClientLibraryKind::GenericPostgres,
+            ExternalPoolerKind::PgBouncer,
+            MultiplexingMode::Session,
+        )
+        .with_workflow(DatabaseWorkflowKind::ApiTraffic)
+        .with_pooler_config(config);
+        assert_eq!(session.workflow, Some(DatabaseWorkflowKind::ApiTraffic));
+
+        for endpoint in [
+            "postgres://u:p@accelerate.prisma-data.net/db",
+            "postgres://u:p@db.cloudflare-hyperdrive.com/db",
+            "postgres://u:p@db.rds.amazonaws.com/db",
+            "postgres://u:p@db.example.com:6432/db",
+            "postgres://u:p@db.example.com/db",
+        ] {
+            let _ = infer_provider_from_endpoint(endpoint);
+        }
+
+        assert_eq!(
+            infer_provider_from_endpoint("postgres://u:p@accelerate.prisma-data.net/db"),
+            EndpointProviderKind::PrismaPostgres
+        );
+        assert_eq!(
+            infer_provider_from_endpoint("postgres://u:p@db.cloudflare-hyperdrive.com/db"),
+            EndpointProviderKind::CloudflareHyperdrive
+        );
+        assert_eq!(
+            infer_provider_from_endpoint("postgres://u:p@db.rds.amazonaws.com/db"),
+            EndpointProviderKind::AwsRds
+        );
+        assert_eq!(
+            infer_provider_from_endpoint("postgres://u:p@db.example.com:6432/db"),
+            EndpointProviderKind::PgBouncer
+        );
+        assert_eq!(
+            infer_provider_from_endpoint("postgres://u:p@db.example.com/db"),
+            EndpointProviderKind::Unknown
+        );
+
+        assert_eq!(
+            infer_endpoint_kind(
+                "postgres://u:p@pooler.supabase.com/db",
+                EndpointProviderKind::Supabase
+            ),
+            EndpointConnectionKind::SessionPooler
+        );
+        assert_eq!(
+            infer_endpoint_kind(
+                "postgres://u:p@db.supabase.co/db",
+                EndpointProviderKind::Supabase
+            ),
+            EndpointConnectionKind::DirectDatabase
+        );
+        assert_eq!(
+            infer_endpoint_kind(
+                "postgres://u:p@supabase.example/db",
+                EndpointProviderKind::Supabase
+            ),
+            EndpointConnectionKind::Unknown
+        );
+        assert_eq!(
+            infer_endpoint_kind(
+                "postgres://u:p@pooler.neon.tech/db",
+                EndpointProviderKind::Neon
+            ),
+            EndpointConnectionKind::TransactionPooler
+        );
+        assert_eq!(
+            infer_endpoint_kind("postgres://u:p@db.neon.tech/db", EndpointProviderKind::Neon),
+            EndpointConnectionKind::DirectDatabase
+        );
+        assert_eq!(
+            infer_endpoint_kind("postgres://u:p@neon.example/db", EndpointProviderKind::Neon),
+            EndpointConnectionKind::Unknown
+        );
+        assert_eq!(
+            infer_endpoint_kind(
+                "prisma+postgres://accelerate/db",
+                EndpointProviderKind::PrismaPostgres
+            ),
+            EndpointConnectionKind::HttpDataApi
+        );
+        assert_eq!(
+            infer_endpoint_kind(
+                "postgres://pool.example/db",
+                EndpointProviderKind::PrismaPostgres
+            ),
+            EndpointConnectionKind::TransactionPooler
+        );
+        assert_eq!(
+            infer_endpoint_kind(
+                "postgres://db.example/db",
+                EndpointProviderKind::PrismaPostgres
+            ),
+            EndpointConnectionKind::Unknown
+        );
+        assert_eq!(
+            infer_endpoint_kind("postgres://db.example/db", EndpointProviderKind::AwsRds),
+            EndpointConnectionKind::DirectDatabase
+        );
+        assert_eq!(
+            infer_endpoint_kind(
+                "https://db.cloudflare.com",
+                EndpointProviderKind::CloudflareHyperdrive
+            ),
+            EndpointConnectionKind::EdgePooler
+        );
+        for (endpoint, expected) in [
+            ("statement", EndpointConnectionKind::StatementPooler),
+            ("transaction", EndpointConnectionKind::TransactionPooler),
+            ("session", EndpointConnectionKind::SessionPooler),
+            ("other", EndpointConnectionKind::Unknown),
+        ] {
+            assert_eq!(
+                infer_endpoint_kind(endpoint, EndpointProviderKind::PgBouncer),
+                expected
+            );
+        }
+        assert_eq!(
+            infer_endpoint_kind("unknown", EndpointProviderKind::Unknown),
+            EndpointConnectionKind::Unknown
+        );
+    }
+
+    #[test]
+    fn pooler_compatibility_and_diagnosis_cover_review_and_healthy_paths() {
+        let review = check_pooler_compatibility(&PoolerCompatibilityInput::new(
+            ExternalPoolerKind::Unknown,
+            MultiplexingMode::Unknown,
+        ));
+        assert_eq!(review.compatible, CompatibilityDecision::NeedsReview);
+        assert_eq!(review.confidence, EvidenceConfidence::Low);
+
+        let near_limit = summarize_pooler_evidence(
+            &PoolerEvidenceSnapshot::new(
+                ExternalPoolerKind::PgBouncer,
+                MultiplexingMode::Transaction,
+            )
+            .with_server_active(24)
+            .with_server_idle(0)
+            .with_pooler_backend_limit(30),
+        );
+        assert_eq!(near_limit.status, PoolerEvidenceStatus::NeedsReview);
+        assert!(near_limit
+            .findings
+            .iter()
+            .any(|finding| finding.code == "POOLER_BACKEND_NEAR_LIMIT"));
+
+        let healthy = diagnose_downstream_pooler(&DownstreamPoolerDiagnosisInput::new(
+            ApplicationPoolEvidence::new(2, 10),
+            summarize_pooler_evidence(
+                &PoolerEvidenceSnapshot::new(
+                    ExternalPoolerKind::PgBouncer,
+                    MultiplexingMode::Transaction,
+                )
+                .with_client_active(2)
+                .with_client_waiting(0)
+                .with_server_active(2)
+                .with_server_idle(8)
+                .with_pooler_client_limit(20)
+                .with_pooler_backend_limit(20),
+            ),
+        ));
+        assert_eq!(healthy.status, DownstreamPoolerDiagnosisStatus::Healthy);
+
+        let application_saturated =
+            diagnose_downstream_pooler(&DownstreamPoolerDiagnosisInput::new(
+                ApplicationPoolEvidence::new(10, 10),
+                summarize_pooler_evidence(
+                    &PoolerEvidenceSnapshot::new(
+                        ExternalPoolerKind::PgBouncer,
+                        MultiplexingMode::Transaction,
+                    )
+                    .with_client_active(2)
+                    .with_client_waiting(0)
+                    .with_server_active(2)
+                    .with_server_idle(8)
+                    .with_pooler_client_limit(20)
+                    .with_pooler_backend_limit(20),
+                ),
+            ));
+        assert_eq!(
+            application_saturated.status,
+            DownstreamPoolerDiagnosisStatus::ApplicationPoolSaturated
+        );
+
+        let _ = analyze_session_state_compatibility(
+            &SessionStateCompatibilityInput::new(
+                ClientLibraryKind::GenericPostgres,
+                ExternalPoolerKind::PgBouncer,
+                MultiplexingMode::Transaction,
+            )
+            .with_workflow(DatabaseWorkflowKind::Migration),
+        );
+        assert_eq!(
+            evidence_status_rank(PoolerEvidenceStatus::BackendSaturated),
+            3
+        );
+        assert_eq!(utilization(Some(1), Some(0)), None);
+        assert_eq!(
+            merge_client_decision(
+                &PoolerCompatibilityReport {
+                    compatible: CompatibilityDecision::Compatible,
+                    incompatible_features: Vec::new(),
+                    migration_direct_connection_required: false,
+                    long_running_direct_connection_required: false,
+                    findings: Vec::new(),
+                    confidence: EvidenceConfidence::High,
+                },
+                &[],
+                EvidenceConfidence::High,
+            ),
+            CompatibilityDecision::Compatible
+        );
+        assert_eq!(
+            confidence_min(EvidenceConfidence::High, EvidenceConfidence::High),
+            EvidenceConfidence::High
+        );
+    }
+
+    #[test]
+    fn pooler_client_guidance_and_parser_errors_cover_edge_inputs() {
+        for client in [
+            ClientLibraryKind::SqlalchemyAsyncpg,
+            ClientLibraryKind::PgJdbc,
+            ClientLibraryKind::Unknown,
+        ] {
+            let report = analyze_session_state_compatibility(
+                &SessionStateCompatibilityInput::new(
+                    client,
+                    ExternalPoolerKind::RdsProxy,
+                    MultiplexingMode::Transaction,
+                )
+                .with_features(vec![SessionSemanticFeature::PreparedStatements]),
+            );
+            assert!(!report.client_guidance.is_empty());
+        }
+
+        for feature in [
+            SessionSemanticFeature::NotifyOnly,
+            SessionSemanticFeature::Unknown,
+        ] {
+            assert!(!feature_incompatible(
+                ExternalPoolerKind::PgBouncer,
+                MultiplexingMode::Transaction,
+                feature,
+                None,
+            ));
+        }
+        assert!(!feature_incompatible(
+            ExternalPoolerKind::RdsProxy,
+            MultiplexingMode::Session,
+            SessionSemanticFeature::TemporaryTables,
+            None,
+        ));
+        assert!(feature_needs_review(
+            ExternalPoolerKind::RdsProxy,
+            MultiplexingMode::Unknown,
+            SessionSemanticFeature::Unknown,
+            None,
+        ));
+        assert!(feature_needs_review(
+            ExternalPoolerKind::RdsProxy,
+            MultiplexingMode::Transaction,
+            SessionSemanticFeature::PreparedStatements,
+            None,
+        ));
+        assert_eq!(
+            default_client_features(ClientLibraryKind::Unknown),
+            Vec::<SessionSemanticFeature>::new()
+        );
+        assert_eq!(
+            confidence_min(EvidenceConfidence::High, EvidenceConfidence::High),
+            EvidenceConfidence::High
+        );
+
+        for mode in [
+            "session",
+            "transaction",
+            "statement",
+            "none",
+            "provider-managed",
+            "provider_managed",
+            "unknown",
+        ] {
+            assert!(optional_pgbouncer_mode(&[mode.to_string()], Some(0)).is_ok());
+        }
+        assert!(optional_pgbouncer_mode(&["invalid".to_string()], Some(0)).is_err());
+        assert_eq!(optional_pgbouncer_mode(&[], None).unwrap(), None);
+        assert_eq!(optional_pgbouncer_cell(&[" ".to_string()], Some(0)), None);
+        assert_eq!(optional_pgbouncer_cell(&[], Some(0)), None);
+        assert!(optional_pgbouncer_float(&["bad".to_string()], Some(0), "avg").is_err());
+        assert!(optional_pgbouncer_float(&["-1".to_string()], Some(0), "avg").is_err());
+        assert_eq!(optional_pgbouncer_float(&[], None, "avg").unwrap(), None);
+
+        assert!(parse_pgbouncer_show_pools("not a header\n").is_err());
+        assert!(parse_pgbouncer_show_pools(
+            "database,user,cl_active,cl_waiting,sv_active,sv_idle\n"
+        )
+        .is_err());
+        assert!(parse_pgbouncer_show_pools(
+            "database,user,cl_active,cl_waiting,sv_active,sv_idle\na,b,1\n"
+        )
+        .is_err());
+        assert!(parse_pgbouncer_show_pools(
+            "database,user,cl_active,cl_waiting,sv_active,sv_idle\na,b,bad,0,1,1\n"
+        )
+        .is_err());
+        assert!(parse_pgbouncer_show_pools(
+            "database,user,cl_active,cl_waiting,sv_active,sv_idle,pool_mode\n\"unterminated,a,1,0,1,1,transaction\n"
+        )
+        .is_err());
+
+        assert!(parse_pgbouncer_show_stats("not a header\n").is_err());
+        assert!(
+            parse_pgbouncer_show_stats("database,total_query_count,total_wait_time\na,1\n")
+                .is_err()
+        );
+        assert!(parse_pgbouncer_show_stats(
+            "database,total_query_count,total_wait_time\na,bad,1\n"
+        )
+        .is_err());
+        assert!(
+            summarize_pgbouncer_show_stats(&PgbouncerShowStatsSnapshot::new(1.0, Vec::new(),))
+                .is_err()
+        );
+        assert!(summarize_pgbouncer_show_stats(
+            &PgbouncerShowStatsSnapshot::new(1.0, vec![PgbouncerStatsRow::new(1, 1)])
+                .with_maxwait_seconds(-1.0),
+        )
+        .is_err());
+
+        let previous = PgbouncerTimeSeriesSample {
+            timestamp_seconds: f64::NAN,
+            label: None,
+            total_query_count: 1,
+            total_wait_time_us: 1,
+            maxwait_seconds: Some(0.0),
+            client_waiting: Some(0),
+        };
+        let current = PgbouncerTimeSeriesSample {
+            timestamp_seconds: 2.0,
+            ..previous.clone()
+        };
+        assert!(diff_pgbouncer_time_series(&previous, &current).is_err());
+        let previous = PgbouncerTimeSeriesSample {
+            timestamp_seconds: 1.0,
+            ..current.clone()
+        };
+        let current = PgbouncerTimeSeriesSample {
+            timestamp_seconds: 2.0,
+            maxwait_seconds: Some(-1.0),
+            ..current
+        };
+        assert!(diff_pgbouncer_time_series(&previous, &current).is_err());
+
+        let queue_present = diff_pgbouncer_time_series(
+            &PgbouncerTimeSeriesSample {
+                timestamp_seconds: 1.0,
+                label: None,
+                total_query_count: 1,
+                total_wait_time_us: 1,
+                maxwait_seconds: Some(0.5),
+                client_waiting: Some(0),
+            },
+            &PgbouncerTimeSeriesSample {
+                timestamp_seconds: 2.0,
+                label: None,
+                total_query_count: 2,
+                total_wait_time_us: 2,
+                maxwait_seconds: Some(0.5),
+                client_waiting: Some(0),
+            },
+        )
+        .expect("queue-present diff should build");
+        assert_eq!(
+            queue_present.status,
+            PgbouncerTimeSeriesStatus::QueuePresent
+        );
+
+        assert_eq!(
+            redact_userinfo("postgres://db.example.com/db"),
+            "postgres://db.example.com/db"
+        );
+        assert_eq!(redact_userinfo("db.example.com"), "db.example.com");
+        assert_eq!(
+            redact_query("flag&password=secret&token=&mode=fast"),
+            "flag&password=<redacted>&token=<redacted>&mode=fast"
+        );
+        assert_eq!(normalize_column(" total-query-count "), "total_query_count");
+        assert!(is_psql_separator("---+---"));
+    }
 }
