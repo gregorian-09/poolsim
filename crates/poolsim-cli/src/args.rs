@@ -282,10 +282,42 @@ pub struct CheckArgs {
 }
 
 #[derive(Debug, Clone, Subcommand)]
+#[allow(clippy::large_enum_variant)]
 pub enum CheckCommands {
     Pooler(PoolerCheckArgs),
+    PoolScale(PoolScaleGateArgs),
     SessionState(SessionStateCheckArgs),
     TelemetryQuality(TelemetryQualityCheckArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct PoolScaleGateArgs {
+    /// JSON file containing a `poolsim_core::telemetry_quality::TelemetryQualityInput`.
+    #[arg(long)]
+    pub quality_config: PathBuf,
+
+    /// Database connection limit available to this service allocation.
+    #[arg(long)]
+    pub database_max_connections: Option<u32>,
+
+    /// Database connection slots reserved for administration or other workloads.
+    #[arg(long, default_value_t = 0)]
+    pub reserved_connections: u32,
+
+    /// Operational headroom excluded from the application connection budget.
+    #[arg(long, default_value_t = 0)]
+    pub safety_margin_connections: u32,
+
+    /// Number of application replicas receiving the recommended pool.
+    #[arg(long, default_value_t = 1)]
+    pub replicas: u32,
+
+    /// Directly observed current service connection total.
+    #[arg(long)]
+    pub current_total_connections: Option<u32>,
+
+    #[command(subcommand)]
+    pub source: GateSourceCommands,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -1193,6 +1225,46 @@ mod tests {
                     assert_eq!(args.config, PathBuf::from("quality.json"));
                 }
                 _ => panic!("expected telemetry-quality check"),
+            },
+            _ => panic!("expected check command"),
+        }
+    }
+
+    #[test]
+    fn parser_handles_pool_scale_check_subcommand() {
+        let cli = Cli::try_parse_from([
+            "poolsim",
+            "check",
+            "pool-scale",
+            "--quality-config",
+            "quality.json",
+            "--database-max-connections",
+            "100",
+            "--reserved-connections",
+            "10",
+            "--safety-margin-connections",
+            "5",
+            "--replicas",
+            "3",
+            "--current-total-connections",
+            "21",
+            "telemetry",
+            "--config",
+            "telemetry.json",
+        ])
+        .expect("pool-scale check should parse");
+
+        match cli.command {
+            Commands::Check(args) => match args.command {
+                CheckCommands::PoolScale(args) => {
+                    assert_eq!(args.quality_config, PathBuf::from("quality.json"));
+                    assert_eq!(args.database_max_connections, Some(100));
+                    assert_eq!(args.reserved_connections, 10);
+                    assert_eq!(args.safety_margin_connections, 5);
+                    assert_eq!(args.replicas, 3);
+                    assert_eq!(args.current_total_connections, Some(21));
+                }
+                _ => panic!("expected pool-scale check"),
             },
             _ => panic!("expected check command"),
         }

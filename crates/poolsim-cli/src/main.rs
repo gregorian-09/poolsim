@@ -39,6 +39,7 @@ use poolsim_core::{
         PoolerConfigSnapshot, PoolerEvidenceReport, PoolerEvidenceSnapshot, PoolerEvidenceStatus,
         SessionStateCompatibilityInput, SessionStateCompatibilityReport,
     },
+    scale_gate::{check_pool_scale_gate, PoolScaleGateInput, PoolScaleGateStatus},
     serverless::{
         plan_serverless_concurrency, ServerlessConcurrencyInput, ServerlessConcurrencyReport,
         ServerlessConcurrencyStatus,
@@ -247,6 +248,35 @@ fn run_with_cli(cli: Cli) -> Result<ExitCode> {
                 let report = check_pooler_compatibility(&input);
                 render_pooler_compatibility(&report, cli.format)?;
                 Ok(exit_code_for_pooler_compatibility(&report, cli.warn_exit))
+            }
+            args::CheckCommands::PoolScale(args) => {
+                let quality_input = load_telemetry_quality_input(&args.quality_config)?;
+                let quality_report = assess_telemetry_quality(&quality_input)?;
+                let input = match args.source {
+                    args::GateSourceCommands::Telemetry(source) => {
+                        config::resolve_telemetry_input(&source)?
+                    }
+                    args::GateSourceCommands::Prometheus(source) => {
+                        prometheus::resolve_prometheus_input(&source)?
+                    }
+                    args::GateSourceCommands::Otlp(source) => otlp::resolve_otlp_input(&source)?,
+                };
+                let recommendation = recommend_from_telemetry(&input.snapshot, &input.options)?;
+                let mut gate_input = PoolScaleGateInput::new(recommendation, quality_report)
+                    .with_replica_count(args.replicas);
+                if let Some(max_connections) = args.database_max_connections {
+                    gate_input = gate_input.with_database_budget(
+                        max_connections,
+                        args.reserved_connections,
+                        args.safety_margin_connections,
+                    );
+                }
+                if let Some(current_total) = args.current_total_connections {
+                    gate_input = gate_input.with_current_total_connections(current_total);
+                }
+                let report = check_pool_scale_gate(&gate_input)?;
+                render_pool_scale_gate(&report, cli.format)?;
+                Ok(exit_code_for_pool_scale_gate(&report, cli.warn_exit))
             }
             args::CheckCommands::SessionState(args) => {
                 let mut input = SessionStateCompatibilityInput::new(
@@ -981,6 +1011,82 @@ fn render_gate(report: &gate::GateReport, format: OutputFormat) -> Result<()> {
     }
 }
 
+fn render_pool_scale_gate(
+    report: &poolsim_core::scale_gate::PoolScaleGateReport,
+    format: OutputFormat,
+) -> Result<()> {
+    match format {
+        OutputFormat::Table => {
+            println!("status: {:?}", report.status);
+            println!("scale_up_requested: {}", report.scale_up_requested);
+            println!("current_pool_size: {}", report.current_pool_size);
+            println!("recommended_pool_size: {}", report.recommended_pool_size);
+            println!(
+                "additional_connections_per_replica: {}",
+                report.additional_connections_per_replica
+            );
+            println!(
+                "additional_connections_total: {}",
+                report.additional_connections_total
+            );
+            println!("replica_count: {}", report.replica_count);
+            println!(
+                "current_total_connections: {:?}",
+                report.current_total_connections
+            );
+            println!(
+                "projected_total_connections: {:?}",
+                report.projected_total_connections
+            );
+            println!(
+                "effective_database_capacity: {:?}",
+                report.effective_database_capacity
+            );
+            println!("confidence: {:?}", report.confidence);
+            for finding in &report.findings {
+                println!(
+                    "finding: {} [{:?}] {} -> {}",
+                    finding.code, finding.risk, finding.message, finding.remediation
+                );
+            }
+            Ok(())
+        }
+        OutputFormat::Json => render::json::print(report),
+        OutputFormat::Csv => {
+            println!("field,value");
+            println!("status,{:?}", report.status);
+            println!("scale_up_requested,{}", report.scale_up_requested);
+            println!("current_pool_size,{}", report.current_pool_size);
+            println!("recommended_pool_size,{}", report.recommended_pool_size);
+            println!(
+                "additional_connections_per_replica,{}",
+                report.additional_connections_per_replica
+            );
+            println!(
+                "additional_connections_total,{}",
+                report.additional_connections_total
+            );
+            println!("replica_count,{}", report.replica_count);
+            println!(
+                "current_total_connections,{:?}",
+                report.current_total_connections
+            );
+            println!(
+                "projected_total_connections,{:?}",
+                report.projected_total_connections
+            );
+            println!(
+                "effective_database_capacity,{:?}",
+                report.effective_database_capacity
+            );
+            println!("confidence,{:?}", report.confidence);
+            println!("finding_count,{}", report.findings.len());
+            Ok(())
+        }
+        OutputFormat::Html => render::html::print("Poolsim pool scale-safety report", report),
+    }
+}
+
 fn render_guard(report: &guard::GuardReport, format: OutputFormat) -> Result<()> {
     match format {
         OutputFormat::Table => render::table::guard(report),
@@ -1184,6 +1290,17 @@ fn exit_code_for_telemetry_quality(report: &TelemetryQualityReport, warn_exit: b
     }
 }
 
+fn exit_code_for_pool_scale_gate(
+    report: &poolsim_core::scale_gate::PoolScaleGateReport,
+    warn_exit: bool,
+) -> ExitCode {
+    match report.status {
+        PoolScaleGateStatus::Blocked => ExitCode::from(2),
+        PoolScaleGateStatus::NeedsReview if warn_exit => ExitCode::from(3),
+        _ => ExitCode::from(0),
+    }
+}
+
 fn exit_code_for_pgbouncer_time_series(
     report: &PgbouncerTimeSeriesDeltaReport,
     warn_exit: bool,
@@ -1305,8 +1422,8 @@ mod tests {
         CommonArgs, CompareArgs, DoctorArgs, DoctorSourceCommands, EvaluateArgs, GateArgs,
         GateSourceCommands, GenerateConfigArgs, GenerateConfigSourceCommands, GuardArgs,
         ImportArgs, ImportCommands, InitArgs, OtlpImportArgs, PgbouncerPoolsDoctorArgs,
-        PgbouncerPoolsImportArgs, PgbouncerTimeseriesImportArgs, PrometheusImportArgs,
-        SimulateArgs, TelemetryImportArgs, TelemetryQualityCheckArgs,
+        PgbouncerPoolsImportArgs, PgbouncerTimeseriesImportArgs, PoolScaleGateArgs,
+        PrometheusImportArgs, SimulateArgs, TelemetryImportArgs, TelemetryQualityCheckArgs,
     };
 
     fn sample_config_json() -> String {
@@ -1771,11 +1888,39 @@ mod tests {
         let evaluation = sample_evaluation();
         let rows = sample_rows();
         let reports = vec![report.clone(), report.clone()];
+        let quality_input = poolsim_core::telemetry_quality::TelemetryQualityInput::new(
+            poolsim_core::telemetry_quality::TelemetryArrivalModel::OpenLoop,
+        )
+        .with_expected_requests_per_second(100.0)
+        .with_observed_requests_per_second(100.0)
+        .with_duration_seconds(60.0)
+        .with_sample_count(6_000)
+        .with_timeout_count(0)
+        .with_error_count(0)
+        .with_latency_percentiles(5.0, 10.0, 20.0)
+        .with_pool_wait_p99_ms(2.0)
+        .with_database_latency_p99_ms(18.0);
+        let quality = assess_telemetry_quality(&quality_input).expect("quality should assess");
+        let scale_gate = check_pool_scale_gate(
+            &PoolScaleGateInput::new(sample_recommendation(), quality)
+                .with_database_budget(100, 10, 5)
+                .with_current_total_connections(8),
+        )
+        .expect("scale gate should build");
 
         render_simulation(&report, OutputFormat::Json).expect("json simulation should render");
         render_simulation(&report, OutputFormat::Csv).expect("csv simulation should render");
         render_simulation(&report, OutputFormat::Table).expect("table simulation should render");
         render_simulation(&report, OutputFormat::Html).expect("html simulation should render");
+
+        render_pool_scale_gate(&scale_gate, OutputFormat::Json)
+            .expect("json pool scale gate should render");
+        render_pool_scale_gate(&scale_gate, OutputFormat::Csv)
+            .expect("csv pool scale gate should render");
+        render_pool_scale_gate(&scale_gate, OutputFormat::Table)
+            .expect("table pool scale gate should render");
+        render_pool_scale_gate(&scale_gate, OutputFormat::Html)
+            .expect("html pool scale gate should render");
 
         render_evaluation(&evaluation, OutputFormat::Json).expect("json evaluation should render");
         render_evaluation(&evaluation, OutputFormat::Csv).expect("csv evaluation should render");
@@ -2027,6 +2172,39 @@ mod tests {
                 warn_exit: true,
             };
             let _ = run_with_cli(cli).expect("telemetry quality check should execute");
+        }
+
+        let increase_telemetry_cfg = write_temp_file(
+            "main_pool_scale_telemetry",
+            "json",
+            &telemetry_config_json()
+                .replace("\"current_pool_size\": 8", "\"current_pool_size\": 2"),
+        );
+        for format in [
+            OutputFormat::Table,
+            OutputFormat::Json,
+            OutputFormat::Csv,
+            OutputFormat::Html,
+        ] {
+            let cli = Cli {
+                command: Commands::Check(CheckArgs {
+                    command: CheckCommands::PoolScale(PoolScaleGateArgs {
+                        quality_config: quality_cfg.clone(),
+                        database_max_connections: Some(100),
+                        reserved_connections: 10,
+                        safety_margin_connections: 5,
+                        replicas: 3,
+                        current_total_connections: Some(6),
+                        source: GateSourceCommands::Telemetry(TelemetryImportArgs {
+                            config: increase_telemetry_cfg.clone(),
+                            current_pool_size: None,
+                        }),
+                    }),
+                }),
+                format,
+                warn_exit: true,
+            };
+            let _ = run_with_cli(cli).expect("pool scale check should execute");
         }
 
         let prometheus_cfg =
