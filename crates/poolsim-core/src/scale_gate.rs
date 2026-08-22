@@ -8,6 +8,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    contention::{DatabaseContentionReport, DatabaseContentionStatus},
     error::PoolsimError,
     pooler::EvidenceConfidence,
     telemetry::{PoolSizeChange, TelemetryRecommendation},
@@ -81,6 +82,9 @@ pub struct PoolScaleGateInput {
     /// Current total connections consumed by this service, when observed directly.
     #[serde(default)]
     pub current_total_connections: Option<u32>,
+    /// Optional database-contention report to apply before approving a scale-up.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub database_contention: Option<DatabaseContentionReport>,
 }
 
 impl PoolScaleGateInput {
@@ -97,6 +101,7 @@ impl PoolScaleGateInput {
             safety_margin_connections: 0,
             replica_count: default_replica_count(),
             current_total_connections: None,
+            database_contention: None,
         }
     }
 
@@ -125,6 +130,13 @@ impl PoolScaleGateInput {
     #[must_use]
     pub fn with_current_total_connections(mut self, current_total_connections: u32) -> Self {
         self.current_total_connections = Some(current_total_connections);
+        self
+    }
+
+    /// Adds an optional database-contention report to the scale-up decision.
+    #[must_use]
+    pub fn with_database_contention_report(mut self, report: DatabaseContentionReport) -> Self {
+        self.database_contention = Some(report);
         self
     }
 }
@@ -156,6 +168,9 @@ pub struct PoolScaleGateReport {
     /// Effective application capacity after reserved slots and safety margin.
     #[serde(default)]
     pub effective_database_capacity: Option<u32>,
+    /// Optional database-contention report used by the decision.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub database_contention: Option<DatabaseContentionReport>,
     /// Original telemetry-quality evidence used by the decision.
     pub telemetry_quality: TelemetryQualityReport,
     /// Explanations and remediations for the decision.
@@ -294,6 +309,30 @@ pub fn check_pool_scale_gate(
             TelemetryQualityStatus::Valid => {}
         }
 
+        if let Some(contention) = &input.database_contention {
+            match contention.status {
+                DatabaseContentionStatus::DatabaseContention => {
+                    status = PoolScaleGateStatus::Blocked;
+                    findings.push(PoolScaleGateFinding::new(
+                        "DATABASE_CONTENTION_DETECTED",
+                        RiskLevel::Critical,
+                        "database contention evidence indicates that increasing the application pool is unsafe",
+                        "resolve lock waits, idle transactions, deadlocks, or backend saturation before increasing pool size",
+                    ));
+                }
+                DatabaseContentionStatus::NeedsReview => {
+                    status = max_status(status, PoolScaleGateStatus::NeedsReview);
+                    findings.push(PoolScaleGateFinding::new(
+                        "DATABASE_CONTENTION_NEEDS_REVIEW",
+                        RiskLevel::Medium,
+                        "database contention evidence is incomplete and cannot safely justify a scale-up",
+                        "collect the missing database-side evidence before approving the increase",
+                    ));
+                }
+                DatabaseContentionStatus::Healthy | DatabaseContentionStatus::PoolStarvation => {}
+            }
+        }
+
         if input.database_max_connections.is_none() {
             status = max_status(status, PoolScaleGateStatus::NeedsReview);
             confidence = lower_confidence(confidence, EvidenceConfidence::Medium);
@@ -344,6 +383,7 @@ pub fn check_pool_scale_gate(
         current_total_connections,
         projected_total_connections,
         effective_database_capacity,
+        database_contention: input.database_contention.clone(),
         telemetry_quality: input.telemetry_quality.clone(),
         findings,
         confidence,
@@ -480,6 +520,32 @@ mod tests {
         assert_eq!(report.projected_total_connections, Some(22));
         assert_eq!(report.effective_database_capacity, Some(16));
         assert_eq!(report.status, PoolScaleGateStatus::Blocked);
+    }
+
+    #[test]
+    fn blocks_scale_up_when_contention_report_is_database_contention() {
+        let contention = crate::contention::classify_database_contention(
+            &crate::contention::DatabaseContentionInput::new()
+                .with_lock_waiting_sessions(2)
+                .with_idle_in_transaction_sessions(0)
+                .with_deadlocks_per_second(0.0)
+                .with_database_latency_p99_ms(20.0),
+        )
+        .expect("contention report should classify");
+        let input = PoolScaleGateInput::new(
+            recommendation(PoolSizeChange::Increase),
+            quality(TelemetryQualityStatus::Valid),
+        )
+        .with_database_budget(100, 10, 10)
+        .with_current_total_connections(8)
+        .with_database_contention_report(contention);
+        let report = check_pool_scale_gate(&input).expect("contention gate should report");
+        assert_eq!(report.status, PoolScaleGateStatus::Blocked);
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "DATABASE_CONTENTION_DETECTED"));
+        assert!(report.database_contention.is_some());
     }
 
     #[test]
