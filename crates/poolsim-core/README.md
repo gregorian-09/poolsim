@@ -70,6 +70,45 @@ assert_eq!(report.observed_backend_connections, Some(15));
 
 The parser accepts `psql --csv` output and default aligned `psql` table output. The summarizer aggregates PgBouncer's per-`(database, user)` rows into total client and backend pressure.
 
+### PgBouncer Time-Series Evidence
+
+For sustained queue diagnosis, parse `SHOW STATS`, build timestamped samples,
+and compare them without treating cumulative counters as instantaneous rates:
+
+```rust
+use poolsim_core::pooler::{
+    diff_pgbouncer_time_series, parse_pgbouncer_show_stats,
+    summarize_pgbouncer_show_stats, PgbouncerShowStatsSnapshot,
+    PgbouncerTimeSeriesStatus,
+};
+
+let rows = parse_pgbouncer_show_stats(
+    "database,total_query_count,total_wait_time\ncheckout,1000,20000\n",
+)?;
+let previous = summarize_pgbouncer_show_stats(
+    &PgbouncerShowStatsSnapshot::new(100.0, rows)
+        .with_maxwait_seconds(0.1)
+        .with_client_waiting(1),
+)?;
+let rows = parse_pgbouncer_show_stats(
+    "database,total_query_count,total_wait_time\ncheckout,1200,70000\n",
+)?;
+let current = summarize_pgbouncer_show_stats(
+    &PgbouncerShowStatsSnapshot::new(110.0, rows)
+        .with_maxwait_seconds(0.8)
+        .with_client_waiting(4),
+)?;
+let report = diff_pgbouncer_time_series(&previous, &current)?;
+assert_eq!(report.status, PgbouncerTimeSeriesStatus::QueueGrowing);
+# Ok::<(), poolsim_core::error::PoolsimError>(())
+```
+
+Counter decreases are reported through `counter_resets` rather than becoming
+negative rates. Missing queue gauges produce `NeedsReview`; see
+[`docs/pgbouncer-time-series.md`](../../docs/pgbouncer-time-series.md) for the
+complete capture contract, status table, exporter mapping, CLI workflow, and
+production collection guidance.
+
 ### Downstream Pooler Diagnosis
 
 Compare application-pool pressure with the normalized pooler report without changing the existing evidence API:

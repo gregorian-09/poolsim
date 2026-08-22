@@ -13,6 +13,7 @@ This folder contains user-facing documentation for the current Poolsim capabilit
 - [`pooler-evidence-import.md`](pooler-evidence-import.md): Normalized pooler client/backend evidence import for PgBouncer, Supavisor, RDS Proxy, and similar poolers.
 - [`pgbouncer-show-pools-import.md`](pgbouncer-show-pools-import.md): Direct PgBouncer `SHOW POOLS` CSV/aligned-output import into normalized pooler evidence.
 - [`downstream-pooler-diagnosis.md`](downstream-pooler-diagnosis.md): Compare application-pool pressure with downstream pooler capacity and identify the layer that is constraining requests.
+- [`pgbouncer-time-series.md`](pgbouncer-time-series.md): Compare timestamped PgBouncer `SHOW STATS` counters and queue gauges with reset-safe rates and queue-growth status.
 - [`serverless-concurrency.md`](serverless-concurrency.md): Serverless and edge execution-environment pool footprint planning.
 - [`connection-ownership.md`](connection-ownership.md): Connection ownership graph for app pools, pooler client/backend layers, and database backend capacity.
 - [`terraform-opentofu.md`](terraform-opentofu.md): Terraform/OpenTofu external-data adapter for connection-pool sizing as code.

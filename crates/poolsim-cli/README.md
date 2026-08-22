@@ -114,6 +114,7 @@ Operational commands:
 - `poolsim check session-state`: add client-aware prepared-statement and session-state remediation for popular backend libraries.
 - `poolsim import pooler-evidence`: summarize observed pooler client/backend counters from a JSON snapshot.
 - `poolsim import pgbouncer-pools`: parse captured PgBouncer `SHOW POOLS` output into the same pooler evidence report.
+- `poolsim import pgbouncer-timeseries`: compare two JSON PgBouncer time-series samples with reset-safe counter rates and queue-growth status.
 - `poolsim doctor`: explain whether a current pool is healthy.
 - `poolsim doctor pgbouncer-pools`: compare application-pool counters with downstream PgBouncer client/backend evidence.
 - `poolsim generate-config`: produce framework-specific pool config snippets.
@@ -235,6 +236,24 @@ poolsim --format json doctor pgbouncer-pools \
 ```
 
 The command preserves the nested `PoolerEvidenceReport` and adds a cross-layer status. `downstream-pooler-saturated` means the pooler backend reached its supplied limit; `downstream-pooler-waiting` means clients queued for backend capacity; `application-pool-saturated` means the app pool reached its own limit; and `needs-review` means the comparison lacks required evidence or is close to a limit. See [`docs/downstream-pooler-diagnosis.md`](../../docs/downstream-pooler-diagnosis.md) for all flags, output fields, precedence rules, and library examples.
+
+Compare PgBouncer counters over time:
+
+```bash
+poolsim --format json --warn-exit import pgbouncer-timeseries \
+  --previous previous.json \
+  --current current.json
+```
+
+Each JSON file contains one `PgbouncerTimeSeriesSample` with a Unix timestamp,
+aggregated `total_query_count`, aggregated `total_wait_time_us`, and, for
+complete queue evidence, `maxwait_seconds` and `client_waiting`. The command
+returns `2` when `maxwait` or waiting-client count grows. With `--warn-exit`, a
+present queue, counter reset, or missing gauge returns `3`. It never emits a
+negative counter rate after a PgBouncer restart. See
+[`docs/pgbouncer-time-series.md`](../../docs/pgbouncer-time-series.md) for
+capture formats, exporter mappings, Rust examples, status precedence, and
+troubleshooting.
 
 ## Serverless Concurrency Example
 

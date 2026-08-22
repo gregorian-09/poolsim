@@ -1668,3 +1668,30 @@ fn docs_connection_profile_examples_work_and_keep_explicit_overhead_precedence()
         .expect("explicit output should be JSON");
     assert!(explicit_json["optimal_pool_size"].is_number());
 }
+
+#[test]
+fn docs_pgbouncer_time_series_example_reports_queue_growth() {
+    let output = run_cli(&[
+        "--format",
+        "json",
+        "--warn-exit",
+        "import",
+        "pgbouncer-timeseries",
+        "--previous",
+        &fixture("docs/fixtures/pgbouncer-timeseries-previous.json"),
+        "--current",
+        &fixture("docs/fixtures/pgbouncer-timeseries-current.json"),
+    ]);
+
+    assert_eq!(output.status.code(), Some(2));
+    let report: Value = serde_json::from_str(&stdout_utf8(&output))
+        .expect("PgBouncer time-series output should be JSON");
+    assert_eq!(report["status"], "queue-growing");
+    assert_eq!(report["query_rate_per_second"], 20.0);
+    assert_eq!(report["current_client_waiting"], 4);
+    assert!(report["findings"]
+        .as_array()
+        .is_some_and(|findings| findings.iter().any(|finding| {
+            finding["code"] == "PGBOUNCER_QUEUE_GROWING"
+        })));
+}
