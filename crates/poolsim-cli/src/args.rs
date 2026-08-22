@@ -1921,4 +1921,118 @@ mod tests {
             _ => panic!("expected doctor command"),
         }
     }
+
+    #[test]
+    fn cli_enum_conversions_cover_all_public_value_variants() {
+        for value in [
+            CliEndpointConnectionKind::DirectDatabase,
+            CliEndpointConnectionKind::SessionPooler,
+            CliEndpointConnectionKind::TransactionPooler,
+            CliEndpointConnectionKind::StatementPooler,
+            CliEndpointConnectionKind::DatabaseProxy,
+            CliEndpointConnectionKind::EdgePooler,
+            CliEndpointConnectionKind::HttpDataApi,
+            CliEndpointConnectionKind::Unknown,
+        ] {
+            let _: poolsim_core::pooler::EndpointConnectionKind = value.into();
+        }
+        for value in [
+            CliRiskLevel::Low,
+            CliRiskLevel::Medium,
+            CliRiskLevel::High,
+            CliRiskLevel::Critical,
+        ] {
+            let _: poolsim_core::types::RiskLevel = value.into();
+        }
+        for value in [
+            CliServerlessPlatformKind::AwsLambda,
+            CliServerlessPlatformKind::VercelFunctions,
+            CliServerlessPlatformKind::CloudflareWorkers,
+            CliServerlessPlatformKind::NetlifyFunctions,
+            CliServerlessPlatformKind::AzureFunctions,
+            CliServerlessPlatformKind::GoogleCloudFunctions,
+            CliServerlessPlatformKind::Unknown,
+        ] {
+            let _: poolsim_core::serverless::ServerlessPlatformKind = value.into();
+        }
+        for value in [
+            CliClientLibraryKind::GenericPostgres,
+            CliClientLibraryKind::Prisma,
+            CliClientLibraryKind::NodePostgres,
+            CliClientLibraryKind::Sqlx,
+            CliClientLibraryKind::SqlalchemyAsyncpg,
+            CliClientLibraryKind::Postgrest,
+            CliClientLibraryKind::PgJdbc,
+            CliClientLibraryKind::Unknown,
+        ] {
+            let _: poolsim_core::pooler::ClientLibraryKind = value.into();
+        }
+        for value in [
+            CliEndpointProviderKind::Supabase,
+            CliEndpointProviderKind::Neon,
+            CliEndpointProviderKind::PrismaPostgres,
+            CliEndpointProviderKind::AwsRds,
+            CliEndpointProviderKind::AwsRdsProxy,
+            CliEndpointProviderKind::CloudflareHyperdrive,
+            CliEndpointProviderKind::PgBouncer,
+            CliEndpointProviderKind::Unknown,
+        ] {
+            let _: poolsim_core::pooler::EndpointProviderKind = value.into();
+        }
+        for value in [
+            CliDatabaseWorkflowKind::ApiTraffic,
+            CliDatabaseWorkflowKind::BackgroundWorker,
+            CliDatabaseWorkflowKind::ServerlessFunction,
+            CliDatabaseWorkflowKind::EdgeFunction,
+            CliDatabaseWorkflowKind::Migration,
+            CliDatabaseWorkflowKind::BackupRestore,
+            CliDatabaseWorkflowKind::DatabaseGui,
+            CliDatabaseWorkflowKind::Replication,
+            CliDatabaseWorkflowKind::LongRunningAnalytics,
+            CliDatabaseWorkflowKind::AdminTask,
+            CliDatabaseWorkflowKind::Unknown,
+        ] {
+            let _: poolsim_core::pooler::DatabaseWorkflowKind = value.into();
+        }
+        for value in [
+            CliExternalPoolerKind::PgBouncer,
+            CliExternalPoolerKind::RdsProxy,
+            CliExternalPoolerKind::Supavisor,
+            CliExternalPoolerKind::PrismaPostgresPooler,
+            CliExternalPoolerKind::NeonPooler,
+            CliExternalPoolerKind::CloudflareHyperdrive,
+            CliExternalPoolerKind::Unknown,
+        ] {
+            let _: poolsim_core::pooler::ExternalPoolerKind = value.into();
+        }
+        for value in [
+            CliMultiplexingMode::None,
+            CliMultiplexingMode::Session,
+            CliMultiplexingMode::Transaction,
+            CliMultiplexingMode::Statement,
+            CliMultiplexingMode::ProviderManaged,
+            CliMultiplexingMode::Unknown,
+        ] {
+            let _: poolsim_core::pooler::MultiplexingMode = value.into();
+        }
+        for value in [
+            CliSessionSemanticFeature::SetStatement,
+            CliSessionSemanticFeature::ListenNotifyListener,
+            CliSessionSemanticFeature::NotifyOnly,
+            CliSessionSemanticFeature::PreparedStatements,
+            CliSessionSemanticFeature::ProtocolPreparedStatements,
+            CliSessionSemanticFeature::NamedPreparedStatements,
+            CliSessionSemanticFeature::TemporaryTables,
+            CliSessionSemanticFeature::HoldCursors,
+            CliSessionSemanticFeature::AdvisoryLocks,
+            CliSessionSemanticFeature::SessionVariables,
+            CliSessionSemanticFeature::Migrations,
+            CliSessionSemanticFeature::LongRunningQuery,
+            CliSessionSemanticFeature::InteractiveTransaction,
+            CliSessionSemanticFeature::CopyProtocol,
+            CliSessionSemanticFeature::Unknown,
+        ] {
+            let _: poolsim_core::pooler::SessionSemanticFeature = value.into();
+        }
+    }
 }
