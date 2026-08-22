@@ -27,6 +27,8 @@ pub mod sensitivity;
 pub mod serverless;
 /// Telemetry import and recommendation-diff routines.
 pub mod telemetry;
+/// Telemetry evidence-quality and coordinated-omission checks.
+pub mod telemetry_quality;
 /// Public input/output data models.
 pub mod types;
 
