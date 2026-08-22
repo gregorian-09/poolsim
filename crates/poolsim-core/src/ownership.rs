@@ -780,4 +780,108 @@ mod tests {
         .expect_err("zero limit should fail");
         assert_eq!(limit_err.code(), "INVALID_CONNECTION_LIMIT");
     }
+
+    #[test]
+    fn ownership_edge_paths_cover_unknown_capacity_and_endpoint_layers() {
+        assert_eq!(
+            ConnectionOwnershipInput::default(),
+            ConnectionOwnershipInput::new()
+        );
+
+        let incomplete = build_connection_ownership_graph(
+            &ConnectionOwnershipInput::new()
+                .with_endpoint_kind(EndpointConnectionKind::HttpDataApi)
+                .with_database_backend_limit(100),
+        )
+        .expect("incomplete ownership evidence should produce a report");
+        assert_eq!(incomplete.status, ConnectionOwnershipStatus::NeedsReview);
+        assert_eq!(
+            incomplete.bottleneck_layer.as_deref(),
+            Some("application-pool")
+        );
+        assert!(incomplete
+            .nodes
+            .iter()
+            .any(|node| node.id == "http-data-api"));
+
+        let near_limit = build_connection_ownership_graph(
+            &ConnectionOwnershipInput::new()
+                .with_runtime_units(8)
+                .with_app_pool_size_per_runtime_unit(10)
+                .with_database_backend_limit(100),
+        )
+        .expect("near-limit ownership evidence should produce a report");
+        assert_eq!(near_limit.status, ConnectionOwnershipStatus::NeedsReview);
+        assert!(near_limit
+            .findings
+            .iter()
+            .any(|finding| finding.code == "OWNERSHIP_DATABASE_LIMIT_NEAR"));
+
+        for endpoint_kind in [
+            EndpointConnectionKind::SessionPooler,
+            EndpointConnectionKind::TransactionPooler,
+            EndpointConnectionKind::StatementPooler,
+            EndpointConnectionKind::DatabaseProxy,
+            EndpointConnectionKind::EdgePooler,
+        ] {
+            assert!(endpoint_uses_pooler(endpoint_kind));
+        }
+        assert!(!endpoint_uses_pooler(
+            EndpointConnectionKind::DirectDatabase
+        ));
+
+        for pooler in [
+            ExternalPoolerKind::PgBouncer,
+            ExternalPoolerKind::RdsProxy,
+            ExternalPoolerKind::Supavisor,
+            ExternalPoolerKind::PrismaPostgresPooler,
+            ExternalPoolerKind::NeonPooler,
+            ExternalPoolerKind::CloudflareHyperdrive,
+            ExternalPoolerKind::Unknown,
+        ] {
+            let report = build_connection_ownership_graph(
+                &ConnectionOwnershipInput::new()
+                    .with_runtime_units(2)
+                    .with_app_pool_size_per_runtime_unit(2)
+                    .with_external_pooler(pooler)
+                    .with_pooler_backend_limit(20)
+                    .with_database_backend_limit(50),
+            )
+            .expect("known pooler ownership evidence should produce a report");
+            assert!(report.nodes.iter().any(|node| node.id == "pooler-client"));
+        }
+
+        for (input, expected_code) in [
+            (
+                ConnectionOwnershipInput::new().with_app_pool_size_per_runtime_unit(0),
+                "INVALID_APP_POOL_SIZE_PER_RUNTIME_UNIT",
+            ),
+            (
+                ConnectionOwnershipInput::new().with_pooler_client_limit(0),
+                "INVALID_CONNECTION_LIMIT",
+            ),
+            (
+                ConnectionOwnershipInput::new().with_pooler_backend_limit(0),
+                "INVALID_CONNECTION_LIMIT",
+            ),
+        ] {
+            assert_eq!(
+                build_connection_ownership_graph(&input)
+                    .expect_err("zero ownership capacity should fail")
+                    .code(),
+                expected_code
+            );
+        }
+
+        assert_eq!(status_severity(ConnectionOwnershipStatus::Unsafe), 2);
+        assert_eq!(
+            min_confidence(EvidenceConfidence::High, EvidenceConfidence::High),
+            EvidenceConfidence::High
+        );
+        assert_eq!(pooler_owner(None), "external-pooler");
+        assert_eq!(
+            bottleneck_layer(&ConnectionOwnershipInput::new(), false, None),
+            Some("application-pool".to_string())
+        );
+    }
 }
