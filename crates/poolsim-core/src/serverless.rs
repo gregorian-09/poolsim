@@ -519,4 +519,99 @@ mod tests {
         .expect_err("invalid warm reuse should fail");
         assert_eq!(reuse_err.code(), "INVALID_WARM_REUSE_RATIO");
     }
+
+    #[test]
+    fn serverless_edge_paths_cover_caps_limits_and_unknown_poolers() {
+        let reserved_only = plan_serverless_concurrency(
+            &ServerlessConcurrencyInput::new(ServerlessPlatformKind::AzureFunctions)
+                .with_reserved_concurrency(10)
+                .with_app_pool_size_per_environment(2),
+        )
+        .expect("reserved-only input should assess");
+        assert_eq!(reserved_only.effective_concurrency, Some(10));
+        assert_eq!(reserved_only.status, ServerlessConcurrencyStatus::Warning);
+
+        let max_only = plan_serverless_concurrency(
+            &ServerlessConcurrencyInput::new(ServerlessPlatformKind::NetlifyFunctions)
+                .with_max_concurrent_invocations(10)
+                .with_app_pool_size_per_environment(2)
+                .with_database_backend_limit(20)
+                .with_warm_reuse_ratio(0.50),
+        )
+        .expect("max-only input should assess");
+        assert_eq!(max_only.effective_concurrency, Some(10));
+        assert_eq!(max_only.status, ServerlessConcurrencyStatus::Warning);
+
+        let unknown_pooler = plan_serverless_concurrency(
+            &ServerlessConcurrencyInput::new(ServerlessPlatformKind::GoogleCloudFunctions)
+                .with_max_concurrent_invocations(10)
+                .with_app_pool_size_per_environment(2)
+                .with_external_pooler(ExternalPoolerKind::Unknown)
+                .with_warm_reuse_ratio(0.70),
+        )
+        .expect("unknown pooler input should assess");
+        assert_eq!(unknown_pooler.confidence, EvidenceConfidence::Low);
+        assert!(unknown_pooler
+            .findings
+            .iter()
+            .any(|finding| finding.code == "SERVERLESS_POOLER_KIND_UNKNOWN"));
+
+        let near_limit = plan_serverless_concurrency(
+            &ServerlessConcurrencyInput::new(ServerlessPlatformKind::AwsLambda)
+                .with_max_concurrent_invocations(8)
+                .with_app_pool_size_per_environment(2)
+                .with_database_backend_limit(20)
+                .with_warm_reuse_ratio(0.35),
+        )
+        .expect("near-limit input should assess");
+        assert_eq!(near_limit.status, ServerlessConcurrencyStatus::Warning);
+        assert!(near_limit
+            .findings
+            .iter()
+            .any(|finding| finding.code == "SERVERLESS_CONNECTION_LIMIT_NEAR"));
+
+        for input in [
+            ServerlessConcurrencyInput::new(ServerlessPlatformKind::AwsLambda)
+                .with_max_concurrent_invocations(0),
+            ServerlessConcurrencyInput::new(ServerlessPlatformKind::AwsLambda)
+                .with_reserved_concurrency(0),
+            ServerlessConcurrencyInput::new(ServerlessPlatformKind::AwsLambda)
+                .with_database_backend_limit(0),
+            ServerlessConcurrencyInput::new(ServerlessPlatformKind::AwsLambda)
+                .with_warm_reuse_ratio(f64::NAN),
+        ] {
+            assert_eq!(
+                plan_serverless_concurrency(&input)
+                    .expect_err("invalid serverless input should fail")
+                    .code(),
+                if input.max_concurrent_invocations == Some(0)
+                    || input.reserved_concurrency == Some(0)
+                {
+                    "INVALID_SERVERLESS_CONCURRENCY"
+                } else if input.database_backend_limit == Some(0) {
+                    "INVALID_DATABASE_BACKEND_LIMIT"
+                } else {
+                    "INVALID_WARM_REUSE_RATIO"
+                }
+            );
+        }
+
+        assert_eq!(
+            effective_concurrency(&ServerlessConcurrencyInput::new(
+                ServerlessPlatformKind::AwsLambda
+            )),
+            None
+        );
+        assert_eq!(connection_churn_risk(Some(0.20)), RiskLevel::High);
+        assert_eq!(
+            min_confidence(EvidenceConfidence::High, EvidenceConfidence::High),
+            EvidenceConfidence::High
+        );
+        assert_eq!(status_severity(ServerlessConcurrencyStatus::NeedsReview), 2);
+        assert_eq!(status_severity(ServerlessConcurrencyStatus::Critical), 3);
+        assert_eq!(
+            external_pooler_confidence(Some(ExternalPoolerKind::PgBouncer)),
+            EvidenceConfidence::Medium
+        );
+    }
 }
