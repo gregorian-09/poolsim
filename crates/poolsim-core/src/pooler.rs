@@ -652,6 +652,195 @@ impl PgbouncerShowPoolsSnapshot {
     }
 }
 
+/// One row parsed from PgBouncer `SHOW STATS` output.
+///
+/// PgBouncer reports the query and wait counters as cumulative values since
+/// the process started or since the last reset. Callers should compare two
+/// snapshots with [`diff_pgbouncer_time_series`] rather than interpreting a
+/// single row as a rate.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[non_exhaustive]
+pub struct PgbouncerStatsRow {
+    /// PgBouncer database name for this statistics row, when present.
+    #[serde(default)]
+    pub database: Option<String>,
+    /// Cumulative SQL command count from `total_query_count`.
+    pub total_query_count: u64,
+    /// Cumulative client wait time in microseconds from `total_wait_time`.
+    pub total_wait_time_us: u64,
+    /// PgBouncer's reported average client wait time in microseconds, when present.
+    #[serde(default)]
+    pub avg_wait_time_us: Option<f64>,
+}
+
+impl PgbouncerStatsRow {
+    /// Creates a statistics row from cumulative query and wait counters.
+    pub fn new(total_query_count: u64, total_wait_time_us: u64) -> Self {
+        Self {
+            database: None,
+            total_query_count,
+            total_wait_time_us,
+            avg_wait_time_us: None,
+        }
+    }
+
+    /// Sets the PgBouncer database label for this row.
+    #[must_use]
+    pub fn with_database(mut self, value: impl Into<String>) -> Self {
+        self.database = Some(value.into());
+        self
+    }
+
+    /// Sets PgBouncer's reported average wait time in microseconds.
+    #[must_use]
+    pub fn with_avg_wait_time_us(mut self, value: f64) -> Self {
+        self.avg_wait_time_us = Some(value);
+        self
+    }
+}
+
+/// A timestamped PgBouncer time-series capture.
+///
+/// The rows normally come from [`parse_pgbouncer_show_stats`]. The optional
+/// `maxwait_seconds` and `client_waiting` values can come from the matching
+/// `SHOW POOLS` capture or exporter gauges taken at the same timestamp.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[non_exhaustive]
+pub struct PgbouncerShowStatsSnapshot {
+    /// Capture timestamp in Unix seconds.
+    pub timestamp_seconds: f64,
+    /// Parsed `SHOW STATS` rows.
+    pub rows: Vec<PgbouncerStatsRow>,
+    /// Optional report label such as service, cluster, environment, or capture name.
+    #[serde(default)]
+    pub label: Option<String>,
+    /// Age of the oldest waiting client in seconds from `SHOW POOLS.maxwait`.
+    #[serde(default)]
+    pub maxwait_seconds: Option<f64>,
+    /// Number of clients waiting for a server connection from `SHOW POOLS.cl_waiting`.
+    #[serde(default)]
+    pub client_waiting: Option<u32>,
+}
+
+impl PgbouncerShowStatsSnapshot {
+    /// Creates a timestamped `SHOW STATS` snapshot.
+    pub fn new(timestamp_seconds: f64, rows: Vec<PgbouncerStatsRow>) -> Self {
+        Self {
+            timestamp_seconds,
+            rows,
+            label: None,
+            maxwait_seconds: None,
+            client_waiting: None,
+        }
+    }
+
+    /// Sets a report label.
+    #[must_use]
+    pub fn with_label(mut self, value: impl Into<String>) -> Self {
+        self.label = Some(value.into());
+        self
+    }
+
+    /// Sets the matching `SHOW POOLS.maxwait` gauge in seconds.
+    #[must_use]
+    pub fn with_maxwait_seconds(mut self, value: f64) -> Self {
+        self.maxwait_seconds = Some(value);
+        self
+    }
+
+    /// Sets the matching `SHOW POOLS.cl_waiting` gauge.
+    #[must_use]
+    pub fn with_client_waiting(mut self, value: u32) -> Self {
+        self.client_waiting = Some(value);
+        self
+    }
+}
+
+/// Aggregated cumulative PgBouncer counters at one timestamp.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[non_exhaustive]
+pub struct PgbouncerTimeSeriesSample {
+    /// Capture timestamp in Unix seconds.
+    pub timestamp_seconds: f64,
+    /// Optional report label copied from the source snapshot.
+    #[serde(default)]
+    pub label: Option<String>,
+    /// Aggregated cumulative query count across all statistics rows.
+    pub total_query_count: u64,
+    /// Aggregated cumulative client wait time in microseconds.
+    pub total_wait_time_us: u64,
+    /// Age of the oldest waiting client in seconds, when supplied.
+    #[serde(default)]
+    pub maxwait_seconds: Option<f64>,
+    /// Number of clients waiting for a server connection, when supplied.
+    #[serde(default)]
+    pub client_waiting: Option<u32>,
+}
+
+/// Cumulative counter that decreased between two captures.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum PgbouncerCounterKind {
+    /// `total_query_count` decreased, indicating a reset or source change.
+    TotalQueryCount,
+    /// `total_wait_time` decreased, indicating a reset or source change.
+    TotalWaitTime,
+}
+
+/// Operational interpretation of a PgBouncer time-series delta.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum PgbouncerTimeSeriesStatus {
+    /// No queue was observed and the counters were continuous.
+    Healthy,
+    /// A queue is present at the current capture, but it did not grow during the interval.
+    QueuePresent,
+    /// `maxwait` or the waiting-client gauge increased during the interval.
+    QueueGrowing,
+    /// A cumulative counter reset or source replacement was detected.
+    CounterReset,
+    /// Evidence is incomplete and should not be used for an automatic decision.
+    NeedsReview,
+}
+
+/// Delta report for two timestamped PgBouncer captures.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[non_exhaustive]
+pub struct PgbouncerTimeSeriesDeltaReport {
+    /// Previous capture timestamp in Unix seconds.
+    pub previous_timestamp_seconds: f64,
+    /// Current capture timestamp in Unix seconds.
+    pub current_timestamp_seconds: f64,
+    /// Positive interval between captures in seconds.
+    pub interval_seconds: f64,
+    /// Query throughput derived from the cumulative query counter.
+    pub query_rate_per_second: f64,
+    /// Client wait time accumulated per second, in microseconds per second.
+    pub wait_time_rate_us_per_second: f64,
+    /// Mean client wait per newly completed query, in milliseconds.
+    #[serde(default)]
+    pub average_wait_ms_per_query: Option<f64>,
+    /// Current oldest-client wait age in seconds, when supplied.
+    #[serde(default)]
+    pub current_maxwait_seconds: Option<f64>,
+    /// Change in oldest-client wait age in seconds, when both captures supplied it.
+    #[serde(default)]
+    pub maxwait_delta_seconds: Option<f64>,
+    /// Current waiting-client count, when supplied.
+    #[serde(default)]
+    pub current_client_waiting: Option<u32>,
+    /// Cumulative counters that reset during the interval.
+    pub counter_resets: Vec<PgbouncerCounterKind>,
+    /// Overall time-series interpretation.
+    pub status: PgbouncerTimeSeriesStatus,
+    /// Findings explaining queue pressure, resets, or missing evidence.
+    pub findings: Vec<PoolerFinding>,
+    /// Confidence in this time-series interpretation.
+    pub confidence: EvidenceConfidence,
+}
+
 /// Summary of observed pooler client/backend evidence.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[non_exhaustive]
@@ -1363,6 +1552,290 @@ pub fn summarize_pgbouncer_show_pools(
     Ok(summarize_pooler_evidence(&evidence))
 }
 
+/// Parses PgBouncer `SHOW STATS` output into normalized statistics rows.
+///
+/// The parser accepts default `psql` aligned output and `psql --csv` output.
+/// It requires the cumulative `total_query_count` and `total_wait_time`
+/// columns, while accepting `database` and `avg_wait_time` when present.
+///
+/// # Errors
+///
+/// Returns [`PoolsimError`] when the capture has no usable header, omits a
+/// required counter, contains an invalid counter, or has malformed CSV.
+pub fn parse_pgbouncer_show_stats(text: &str) -> Result<Vec<PgbouncerStatsRow>, PoolsimError> {
+    let (header_line, delimiter) = find_pgbouncer_stats_header(text).ok_or_else(|| {
+        invalid_pgbouncer_show_stats(
+            "PgBouncer SHOW STATS output must include total_query_count and total_wait_time",
+        )
+    })?;
+    let header = split_pgbouncer_record(header_line, delimiter)
+        .map_err(|error| invalid_pgbouncer_show_stats(error.to_string()))?;
+    let required = PgbouncerShowStatsColumns::from_header(&header)?;
+    let mut rows = Vec::new();
+    let mut after_header = false;
+
+    for line in text.lines() {
+        if !after_header {
+            if line == header_line {
+                after_header = true;
+            }
+            continue;
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty()
+            || is_psql_separator(trimmed)
+            || (trimmed.starts_with('(') && trimmed.ends_with("row)"))
+            || (trimmed.starts_with('(') && trimmed.ends_with("rows)"))
+        {
+            continue;
+        }
+
+        let cells = split_pgbouncer_record(trimmed, delimiter)
+            .map_err(|error| invalid_pgbouncer_show_stats(error.to_string()))?;
+        if cells.len() < header.len() {
+            return Err(invalid_pgbouncer_show_stats(format!(
+                "PgBouncer SHOW STATS row has {} columns but the header has {}",
+                cells.len(),
+                header.len()
+            )));
+        }
+        rows.push(required.row_from_cells(&cells)?);
+    }
+
+    if rows.is_empty() {
+        return Err(invalid_pgbouncer_show_stats(
+            "PgBouncer SHOW STATS output did not include any data rows",
+        ));
+    }
+    Ok(rows)
+}
+
+/// Aggregates parsed PgBouncer `SHOW STATS` rows into one time-series sample.
+///
+/// The cumulative counters are summed across database rows with saturating
+/// arithmetic. `avg_wait_time` is intentionally not used for the aggregate:
+/// the delta report derives a window average from counter differences, which
+/// remains correct when databases have different traffic volumes.
+///
+/// # Errors
+///
+/// Returns [`PoolsimError`] if the timestamp is not finite or the snapshot has
+/// no rows.
+pub fn summarize_pgbouncer_show_stats(
+    input: &PgbouncerShowStatsSnapshot,
+) -> Result<PgbouncerTimeSeriesSample, PoolsimError> {
+    if !input.timestamp_seconds.is_finite() {
+        return Err(invalid_pgbouncer_time_series(
+            "PgBouncer SHOW STATS timestamp_seconds must be finite",
+        ));
+    }
+    if input.rows.is_empty() {
+        return Err(invalid_pgbouncer_show_stats(
+            "PgBouncer SHOW STATS snapshot must include at least one row",
+        ));
+    }
+    if input
+        .maxwait_seconds
+        .is_some_and(|value| !value.is_finite() || value < 0.0)
+    {
+        return Err(invalid_pgbouncer_time_series(
+            "PgBouncer maxwait_seconds must be finite and non-negative",
+        ));
+    }
+
+    Ok(PgbouncerTimeSeriesSample {
+        timestamp_seconds: input.timestamp_seconds,
+        label: input.label.clone(),
+        total_query_count: input
+            .rows
+            .iter()
+            .fold(0_u64, |sum, row| sum.saturating_add(row.total_query_count)),
+        total_wait_time_us: input
+            .rows
+            .iter()
+            .fold(0_u64, |sum, row| sum.saturating_add(row.total_wait_time_us)),
+        maxwait_seconds: input.maxwait_seconds,
+        client_waiting: input.client_waiting,
+    })
+}
+
+/// Compares two PgBouncer time-series samples without producing negative rates.
+///
+/// A decreasing cumulative counter is treated as a reset: the current value
+/// is used as post-reset accumulation, and the reset is retained in the report
+/// so callers can avoid treating the interval as a normal steady-state sample.
+/// The timestamps must be finite and strictly increasing.
+///
+/// # Errors
+///
+/// Returns [`PoolsimError`] when either timestamp is non-finite, the current
+/// timestamp is not after the previous timestamp, or a gauge is invalid.
+pub fn diff_pgbouncer_time_series(
+    previous: &PgbouncerTimeSeriesSample,
+    current: &PgbouncerTimeSeriesSample,
+) -> Result<PgbouncerTimeSeriesDeltaReport, PoolsimError> {
+    if !previous.timestamp_seconds.is_finite() || !current.timestamp_seconds.is_finite() {
+        return Err(invalid_pgbouncer_time_series(
+            "PgBouncer time-series timestamps must be finite",
+        ));
+    }
+    let interval_seconds = current.timestamp_seconds - previous.timestamp_seconds;
+    if interval_seconds <= 0.0 {
+        return Err(invalid_pgbouncer_time_series(
+            "current PgBouncer timestamp must be greater than previous timestamp",
+        ));
+    }
+    if previous
+        .maxwait_seconds
+        .is_some_and(|value| !value.is_finite() || value < 0.0)
+        || current
+            .maxwait_seconds
+            .is_some_and(|value| !value.is_finite() || value < 0.0)
+    {
+        return Err(invalid_pgbouncer_time_series(
+            "PgBouncer maxwait_seconds must be finite and non-negative",
+        ));
+    }
+
+    let (query_delta, query_reset) =
+        counter_delta(previous.total_query_count, current.total_query_count);
+    let (wait_delta, wait_reset) =
+        counter_delta(previous.total_wait_time_us, current.total_wait_time_us);
+    let mut counter_resets = Vec::new();
+    if query_reset {
+        counter_resets.push(PgbouncerCounterKind::TotalQueryCount);
+    }
+    if wait_reset {
+        counter_resets.push(PgbouncerCounterKind::TotalWaitTime);
+    }
+
+    let current_maxwait_seconds = current.maxwait_seconds;
+    let maxwait_delta_seconds = previous
+        .maxwait_seconds
+        .zip(current.maxwait_seconds)
+        .map(|(old, new)| new - old);
+    let waiting_grew = previous
+        .client_waiting
+        .zip(current.client_waiting)
+        .is_some_and(|(old, new)| new > old);
+    let maxwait_grew = maxwait_delta_seconds.is_some_and(|delta| delta > 0.0);
+    let queue_present = current_maxwait_seconds.is_some_and(|value| value > 0.0)
+        || current.client_waiting.is_some_and(|value| value > 0);
+    let queue_growing = maxwait_grew || waiting_grew;
+
+    let mut findings = Vec::new();
+    let mut confidence = EvidenceConfidence::High;
+    if queue_growing {
+        findings.push(PoolerFinding::new(
+            "PGBOUNCER_QUEUE_GROWING",
+            RiskLevel::High,
+            "PgBouncer queue pressure increased during the observation interval",
+            "inspect backend service time, pooler capacity, database headroom, and long-running transactions",
+        ));
+    } else if queue_present {
+        findings.push(PoolerFinding::new(
+            "PGBOUNCER_QUEUE_PRESENT",
+            RiskLevel::Medium,
+            "PgBouncer has clients waiting or an oldest-client wait age above zero",
+            "confirm whether the queue is transient and compare it with backend latency and pool limits",
+        ));
+    }
+    if !counter_resets.is_empty() {
+        confidence = confidence_min(confidence, EvidenceConfidence::Medium);
+        findings.push(PoolerFinding::new(
+            "PGBOUNCER_COUNTER_RESET",
+            RiskLevel::Medium,
+            "one or more cumulative PgBouncer counters decreased between captures",
+            "verify exporter continuity and PgBouncer restarts before using this interval for trend decisions",
+        ));
+    }
+    if previous.maxwait_seconds.is_none() || current.maxwait_seconds.is_none() {
+        confidence = confidence_min(confidence, EvidenceConfidence::Medium);
+        findings.push(PoolerFinding::new(
+            "PGBOUNCER_MAXWAIT_MISSING",
+            RiskLevel::Medium,
+            "maxwait was not supplied for both captures, so queue age growth cannot be confirmed",
+            "capture SHOW POOLS.maxwait or the pgbouncer_pools_client_maxwait_seconds gauge with each sample",
+        ));
+    }
+    if previous.client_waiting.is_none() || current.client_waiting.is_none() {
+        confidence = confidence_min(confidence, EvidenceConfidence::Medium);
+        findings.push(PoolerFinding::new(
+            "PGBOUNCER_WAITING_GAUGE_MISSING",
+            RiskLevel::Medium,
+            "cl_waiting was not supplied for both captures, so waiting-client growth cannot be confirmed",
+            "capture SHOW POOLS.cl_waiting or the matching exporter gauge with each sample",
+        ));
+    }
+
+    let status = if queue_growing {
+        PgbouncerTimeSeriesStatus::QueueGrowing
+    } else if queue_present {
+        PgbouncerTimeSeriesStatus::QueuePresent
+    } else if !counter_resets.is_empty() {
+        PgbouncerTimeSeriesStatus::CounterReset
+    } else if previous.maxwait_seconds.is_none()
+        || current.maxwait_seconds.is_none()
+        || previous.client_waiting.is_none()
+        || current.client_waiting.is_none()
+    {
+        PgbouncerTimeSeriesStatus::NeedsReview
+    } else {
+        PgbouncerTimeSeriesStatus::Healthy
+    };
+
+    let average_wait_ms_per_query =
+        (query_delta > 0).then(|| (wait_delta as f64 / query_delta as f64) / 1_000.0);
+
+    Ok(PgbouncerTimeSeriesDeltaReport {
+        previous_timestamp_seconds: previous.timestamp_seconds,
+        current_timestamp_seconds: current.timestamp_seconds,
+        interval_seconds,
+        query_rate_per_second: query_delta as f64 / interval_seconds,
+        wait_time_rate_us_per_second: wait_delta as f64 / interval_seconds,
+        average_wait_ms_per_query,
+        current_maxwait_seconds,
+        maxwait_delta_seconds,
+        current_client_waiting: current.client_waiting,
+        counter_resets,
+        status,
+        findings,
+        confidence,
+    })
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PgbouncerShowStatsColumns {
+    database: Option<usize>,
+    total_query_count: usize,
+    total_wait_time: usize,
+    avg_wait_time: Option<usize>,
+}
+
+impl PgbouncerShowStatsColumns {
+    fn from_header(header: &[String]) -> Result<Self, PoolsimError> {
+        let normalized: Vec<String> = header.iter().map(|cell| normalize_column(cell)).collect();
+        let find = |name: &str| normalized.iter().position(|cell| cell == name);
+        Ok(Self {
+            database: find("database"),
+            total_query_count: required_pgbouncer_stats_column(&normalized, "total_query_count")?,
+            total_wait_time: required_pgbouncer_stats_column(&normalized, "total_wait_time")?,
+            avg_wait_time: find("avg_wait_time"),
+        })
+    }
+
+    fn row_from_cells(&self, cells: &[String]) -> Result<PgbouncerStatsRow, PoolsimError> {
+        let mut row = PgbouncerStatsRow::new(
+            parse_pgbouncer_stats_count(cells, self.total_query_count, "total_query_count")?,
+            parse_pgbouncer_stats_count(cells, self.total_wait_time, "total_wait_time")?,
+        );
+        row.database = optional_pgbouncer_cell(cells, self.database);
+        row.avg_wait_time_us =
+            optional_pgbouncer_float(cells, self.avg_wait_time, "avg_wait_time")?;
+        Ok(row)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 struct PgbouncerShowPoolsColumns {
     database: Option<usize>,
@@ -1412,6 +1885,22 @@ fn find_pgbouncer_header(text: &str) -> Option<(&str, char)> {
         if trimmed.contains('|') && trimmed.contains("cl_active") {
             Some((line, '|'))
         } else if trimmed.contains(',') && trimmed.contains("cl_active") {
+            Some((line, ','))
+        } else {
+            None
+        }
+    })
+}
+
+fn find_pgbouncer_stats_header(text: &str) -> Option<(&str, char)> {
+    text.lines().find_map(|line| {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || is_psql_separator(trimmed) {
+            return None;
+        }
+        if trimmed.contains('|') && trimmed.contains("total_query_count") {
+            Some((line, '|'))
+        } else if trimmed.contains(',') && trimmed.contains("total_query_count") {
             Some((line, ','))
         } else {
             None
@@ -1469,6 +1958,14 @@ fn required_pgbouncer_column(header: &[String], name: &str) -> Result<usize, Poo
     })
 }
 
+fn required_pgbouncer_stats_column(header: &[String], name: &str) -> Result<usize, PoolsimError> {
+    header.iter().position(|cell| cell == name).ok_or_else(|| {
+        invalid_pgbouncer_show_stats(format!(
+            "PgBouncer SHOW STATS output is missing required column {name}"
+        ))
+    })
+}
+
 fn parse_pgbouncer_count(
     cells: &[String],
     index: usize,
@@ -1489,12 +1986,53 @@ fn parse_pgbouncer_count(
         })
 }
 
+fn parse_pgbouncer_stats_count(
+    cells: &[String],
+    index: usize,
+    column: &'static str,
+) -> Result<u64, PoolsimError> {
+    cells
+        .get(index)
+        .ok_or_else(|| {
+            invalid_pgbouncer_show_stats(format!(
+                "PgBouncer SHOW STATS row is missing required column {column}"
+            ))
+        })?
+        .parse::<u64>()
+        .map_err(|_| {
+            invalid_pgbouncer_show_stats(format!(
+                "PgBouncer SHOW STATS column {column} must be an unsigned integer"
+            ))
+        })
+}
+
 fn optional_pgbouncer_cell(cells: &[String], index: Option<usize>) -> Option<String> {
     index
         .and_then(|idx| cells.get(idx))
         .map(|cell| cell.trim())
         .filter(|cell| !cell.is_empty())
         .map(ToOwned::to_owned)
+}
+
+fn optional_pgbouncer_float(
+    cells: &[String],
+    index: Option<usize>,
+    column: &'static str,
+) -> Result<Option<f64>, PoolsimError> {
+    let Some(value) = optional_pgbouncer_cell(cells, index) else {
+        return Ok(None);
+    };
+    let parsed = value.parse::<f64>().map_err(|_| {
+        invalid_pgbouncer_show_stats(format!(
+            "PgBouncer SHOW STATS column {column} must be a number"
+        ))
+    })?;
+    if !parsed.is_finite() || parsed < 0.0 {
+        return Err(invalid_pgbouncer_show_stats(format!(
+            "PgBouncer SHOW STATS column {column} must be finite and non-negative"
+        )));
+    }
+    Ok(Some(parsed))
 }
 
 fn optional_pgbouncer_mode(
@@ -1531,6 +2069,22 @@ fn is_psql_separator(line: &str) -> bool {
 
 fn invalid_pgbouncer_show_pools(message: impl Into<String>) -> PoolsimError {
     PoolsimError::invalid_input("INVALID_PGBOUNCER_SHOW_POOLS", message, None)
+}
+
+fn invalid_pgbouncer_show_stats(message: impl Into<String>) -> PoolsimError {
+    PoolsimError::invalid_input("INVALID_PGBOUNCER_SHOW_STATS", message, None)
+}
+
+fn invalid_pgbouncer_time_series(message: impl Into<String>) -> PoolsimError {
+    PoolsimError::invalid_input("INVALID_PGBOUNCER_TIME_SERIES", message, None)
+}
+
+fn counter_delta(previous: u64, current: u64) -> (u64, bool) {
+    if current >= previous {
+        (current - previous, false)
+    } else {
+        (current, true)
+    }
 }
 
 /// Redacts credentials and secret-like query parameters from an endpoint string.
@@ -2449,6 +3003,216 @@ app,web,42,0,8,transaction
         .expect_err("missing sv_idle should fail");
 
         assert_eq!(err.code(), "INVALID_PGBOUNCER_SHOW_POOLS");
+    }
+
+    #[test]
+    fn pgbouncer_show_stats_parser_accepts_csv_and_aligned_output() {
+        let csv = parse_pgbouncer_show_stats(
+            "database,total_query_count,total_wait_time,avg_wait_time\napp,100,50000,500\n",
+        )
+        .expect("CSV PgBouncer stats should parse");
+        assert_eq!(csv.len(), 1);
+        assert_eq!(csv[0].database.as_deref(), Some("app"));
+        assert_eq!(csv[0].total_query_count, 100);
+        assert_eq!(csv[0].total_wait_time_us, 50_000);
+        assert_eq!(csv[0].avg_wait_time_us, Some(500.0));
+
+        let aligned = parse_pgbouncer_show_stats(
+            r#"
+ database | total_query_count | total_wait_time | avg_wait_time
+----------+--------------------+-----------------+---------------
+ app      |                100 |           50000 |           500
+(1 row)
+"#,
+        )
+        .expect("aligned PgBouncer stats should parse");
+        assert_eq!(aligned, csv);
+    }
+
+    #[test]
+    fn pgbouncer_show_stats_summary_aggregates_counters() {
+        let sample = summarize_pgbouncer_show_stats(
+            &PgbouncerShowStatsSnapshot::new(
+                100.0,
+                vec![
+                    PgbouncerStatsRow::new(100, 50_000),
+                    PgbouncerStatsRow::new(25, 10_000),
+                ],
+            )
+            .with_label("checkout-pgbouncer")
+            .with_maxwait_seconds(0.25)
+            .with_client_waiting(2),
+        )
+        .expect("stats summary should build");
+
+        assert_eq!(sample.total_query_count, 125);
+        assert_eq!(sample.total_wait_time_us, 60_000);
+        assert_eq!(sample.label.as_deref(), Some("checkout-pgbouncer"));
+        assert_eq!(sample.maxwait_seconds, Some(0.25));
+        assert_eq!(sample.client_waiting, Some(2));
+    }
+
+    #[test]
+    fn pgbouncer_time_series_diff_calculates_rates_and_healthy_status() {
+        let previous = PgbouncerTimeSeriesSample {
+            timestamp_seconds: 100.0,
+            label: Some("checkout".to_string()),
+            total_query_count: 1_000,
+            total_wait_time_us: 20_000,
+            maxwait_seconds: Some(0.0),
+            client_waiting: Some(0),
+        };
+        let current = PgbouncerTimeSeriesSample {
+            timestamp_seconds: 110.0,
+            label: Some("checkout".to_string()),
+            total_query_count: 1_200,
+            total_wait_time_us: 70_000,
+            maxwait_seconds: Some(0.0),
+            client_waiting: Some(0),
+        };
+
+        let report = diff_pgbouncer_time_series(&previous, &current)
+            .expect("healthy time-series diff should build");
+
+        assert_eq!(report.status, PgbouncerTimeSeriesStatus::Healthy);
+        assert_eq!(report.interval_seconds, 10.0);
+        assert_eq!(report.query_rate_per_second, 20.0);
+        assert_eq!(report.wait_time_rate_us_per_second, 5_000.0);
+        assert_eq!(report.average_wait_ms_per_query, Some(0.25));
+        assert!(report.counter_resets.is_empty());
+        assert_eq!(report.confidence, EvidenceConfidence::High);
+    }
+
+    #[test]
+    fn pgbouncer_time_series_diff_flags_growing_queue() {
+        let previous = PgbouncerTimeSeriesSample {
+            timestamp_seconds: 100.0,
+            label: None,
+            total_query_count: 100,
+            total_wait_time_us: 10_000,
+            maxwait_seconds: Some(0.1),
+            client_waiting: Some(1),
+        };
+        let current = PgbouncerTimeSeriesSample {
+            timestamp_seconds: 105.0,
+            label: None,
+            total_query_count: 200,
+            total_wait_time_us: 30_000,
+            maxwait_seconds: Some(0.8),
+            client_waiting: Some(4),
+        };
+
+        let report = diff_pgbouncer_time_series(&previous, &current)
+            .expect("queue-growth diff should build");
+
+        assert_eq!(report.status, PgbouncerTimeSeriesStatus::QueueGrowing);
+        assert!((report.maxwait_delta_seconds.expect("maxwait delta") - 0.7).abs() < f64::EPSILON);
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "PGBOUNCER_QUEUE_GROWING"));
+    }
+
+    #[test]
+    fn pgbouncer_time_series_diff_reports_counter_resets_without_negative_rates() {
+        let previous = PgbouncerTimeSeriesSample {
+            timestamp_seconds: 100.0,
+            label: None,
+            total_query_count: 1_000,
+            total_wait_time_us: 50_000,
+            maxwait_seconds: Some(0.0),
+            client_waiting: Some(0),
+        };
+        let current = PgbouncerTimeSeriesSample {
+            timestamp_seconds: 110.0,
+            label: None,
+            total_query_count: 25,
+            total_wait_time_us: 2_000,
+            maxwait_seconds: Some(0.0),
+            client_waiting: Some(0),
+        };
+
+        let report = diff_pgbouncer_time_series(&previous, &current)
+            .expect("counter-reset diff should build");
+
+        assert_eq!(report.status, PgbouncerTimeSeriesStatus::CounterReset);
+        assert_eq!(report.query_rate_per_second, 2.5);
+        assert_eq!(report.wait_time_rate_us_per_second, 200.0);
+        assert_eq!(
+            report.counter_resets,
+            vec![
+                PgbouncerCounterKind::TotalQueryCount,
+                PgbouncerCounterKind::TotalWaitTime
+            ]
+        );
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "PGBOUNCER_COUNTER_RESET"));
+    }
+
+    #[test]
+    fn pgbouncer_time_series_diff_requires_complete_gauges_for_healthy_status() {
+        let previous = PgbouncerTimeSeriesSample {
+            timestamp_seconds: 100.0,
+            label: None,
+            total_query_count: 100,
+            total_wait_time_us: 10_000,
+            maxwait_seconds: None,
+            client_waiting: None,
+        };
+        let current = PgbouncerTimeSeriesSample {
+            timestamp_seconds: 110.0,
+            label: None,
+            total_query_count: 200,
+            total_wait_time_us: 20_000,
+            maxwait_seconds: None,
+            client_waiting: None,
+        };
+
+        let report = diff_pgbouncer_time_series(&previous, &current)
+            .expect("incomplete-gauge diff should build");
+
+        assert_eq!(report.status, PgbouncerTimeSeriesStatus::NeedsReview);
+        assert_eq!(report.confidence, EvidenceConfidence::Medium);
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "PGBOUNCER_MAXWAIT_MISSING"));
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "PGBOUNCER_WAITING_GAUGE_MISSING"));
+    }
+
+    #[test]
+    fn pgbouncer_time_series_rejects_invalid_inputs() {
+        let stats_error = parse_pgbouncer_show_stats("database,total_query_count\napp,100\n")
+            .expect_err("missing total_wait_time should fail");
+        assert_eq!(stats_error.code(), "INVALID_PGBOUNCER_SHOW_STATS");
+
+        let summary_error = summarize_pgbouncer_show_stats(&PgbouncerShowStatsSnapshot::new(
+            f64::NAN,
+            vec![PgbouncerStatsRow::new(1, 1)],
+        ))
+        .expect_err("non-finite timestamp should fail");
+        assert_eq!(summary_error.code(), "INVALID_PGBOUNCER_TIME_SERIES");
+
+        let previous = PgbouncerTimeSeriesSample {
+            timestamp_seconds: 10.0,
+            label: None,
+            total_query_count: 1,
+            total_wait_time_us: 1,
+            maxwait_seconds: Some(0.0),
+            client_waiting: Some(0),
+        };
+        let current = PgbouncerTimeSeriesSample {
+            timestamp_seconds: 10.0,
+            ..previous.clone()
+        };
+        let diff_error = diff_pgbouncer_time_series(&previous, &current)
+            .expect_err("non-increasing timestamps should fail");
+        assert_eq!(diff_error.code(), "INVALID_PGBOUNCER_TIME_SERIES");
     }
 
     #[test]
