@@ -568,13 +568,7 @@ pub fn classify_database_contention(
         | DatabaseContentionCause::SlowDatabase
         | DatabaseContentionCause::Mixed => DatabaseContentionStatus::DatabaseContention,
         DatabaseContentionCause::None => DatabaseContentionStatus::Healthy,
-        DatabaseContentionCause::Unknown => {
-            if evidence_categories > 0 && findings.is_empty() {
-                DatabaseContentionStatus::Healthy
-            } else {
-                DatabaseContentionStatus::NeedsReview
-            }
-        }
+        DatabaseContentionCause::Unknown => DatabaseContentionStatus::NeedsReview,
     };
     if status == DatabaseContentionStatus::Healthy && findings.is_empty() {
         confidence = lower_confidence(confidence, EvidenceConfidence::Medium);
@@ -866,5 +860,132 @@ mod tests {
                 .code(),
             "INVALID_DATABASE_CONTENTION"
         );
+
+        for invalid_input in [
+            DatabaseContentionInput::new().with_pool_wait_p99_ms(f64::NAN),
+            DatabaseContentionInput::new().with_database_latency_p99_ms(-1.0),
+            DatabaseContentionInput::new().with_max_connections(0),
+            DatabaseContentionInput::new().with_database_io_utilization(1.1),
+        ] {
+            assert_eq!(
+                classify_database_contention(&invalid_input)
+                    .expect_err("invalid contention evidence should fail")
+                    .code(),
+                "INVALID_DATABASE_CONTENTION"
+            );
+        }
+
+        let invalid_policy_range = DatabaseContentionInput::new().with_policy(
+            DatabaseContentionPolicy::new().with_connection_utilization_threshold(1.1),
+        );
+        assert_eq!(
+            classify_database_contention(&invalid_policy_range)
+                .expect_err("invalid policy range should fail")
+                .code(),
+            "INVALID_DATABASE_CONTENTION"
+        );
+    }
+
+    #[test]
+    fn policy_builders_replace_each_default_threshold() {
+        assert_eq!(
+            DatabaseContentionInput::default(),
+            DatabaseContentionInput::new()
+        );
+
+        let policy = DatabaseContentionPolicy::new()
+            .with_pool_wait_p99_threshold_ms(1.0)
+            .with_database_latency_p99_threshold_ms(2.0)
+            .with_idle_transaction_threshold_seconds(3.0)
+            .with_deadlocks_per_second_threshold(4.0)
+            .with_database_cpu_utilization_threshold(0.5)
+            .with_database_io_utilization_threshold(0.6)
+            .with_connection_utilization_threshold(0.7);
+
+        assert_eq!(policy.pool_wait_p99_threshold_ms, 1.0);
+        assert_eq!(policy.database_latency_p99_threshold_ms, 2.0);
+        assert_eq!(policy.idle_transaction_threshold_seconds, 3.0);
+        assert_eq!(policy.deadlocks_per_second_threshold, 4.0);
+        assert_eq!(policy.database_cpu_utilization_threshold, 0.5);
+        assert_eq!(policy.database_io_utilization_threshold, 0.6);
+        assert_eq!(policy.connection_utilization_threshold, 0.7);
+        assert_eq!(
+            lower_confidence(EvidenceConfidence::Low, EvidenceConfidence::Medium),
+            EvidenceConfidence::Low
+        );
+        assert_eq!(
+            lower_confidence(EvidenceConfidence::High, EvidenceConfidence::High),
+            EvidenceConfidence::High
+        );
+    }
+
+    #[test]
+    fn reports_missing_duration_capacity_and_resource_evidence() {
+        let report = classify_database_contention(
+            &DatabaseContentionInput::new()
+                .with_idle_in_transaction_sessions(2)
+                .with_lock_waiting_sessions(0)
+                .with_deadlocks_per_second(0.0)
+                .with_database_latency_p99_ms(20.0)
+                .with_active_sessions(40)
+                .with_database_cpu_utilization(0.95)
+                .with_database_io_utilization(0.95),
+        )
+        .expect("incomplete resource evidence should classify");
+
+        assert_eq!(report.status, DatabaseContentionStatus::DatabaseContention);
+        for code in [
+            "IDLE_TRANSACTION_DURATION_MISSING",
+            "CONNECTION_CAPACITY_EVIDENCE_INCOMPLETE",
+            "DATABASE_CPU_NEAR_LIMIT",
+            "DATABASE_IO_NEAR_LIMIT",
+        ] {
+            assert!(report.findings.iter().any(|finding| finding.code == code));
+        }
+    }
+
+    #[test]
+    fn reports_slow_and_mixed_database_causes() {
+        let slow = classify_database_contention(
+            &DatabaseContentionInput::new()
+                .with_database_latency_p99_ms(150.0)
+                .with_lock_waiting_sessions(0)
+                .with_idle_in_transaction_sessions(0)
+                .with_deadlocks_per_second(0.0),
+        )
+        .expect("slow database evidence should classify");
+        assert_eq!(slow.dominant_cause, DatabaseContentionCause::SlowDatabase);
+
+        let mixed = classify_database_contention(
+            &DatabaseContentionInput::new()
+                .with_lock_waiting_sessions(1)
+                .with_idle_in_transaction_sessions(0)
+                .with_deadlocks_per_second(0.1)
+                .with_database_latency_p99_ms(20.0),
+        )
+        .expect("mixed database evidence should classify");
+        assert_eq!(mixed.dominant_cause, DatabaseContentionCause::Mixed);
+    }
+
+    #[test]
+    fn reports_connection_saturation() {
+        let report = classify_database_contention(
+            &DatabaseContentionInput::new()
+                .with_active_sessions(95)
+                .with_max_connections(100)
+                .with_lock_waiting_sessions(0)
+                .with_idle_in_transaction_sessions(0)
+                .with_deadlocks_per_second(0.0)
+                .with_database_latency_p99_ms(20.0),
+        )
+        .expect("connection saturation should classify");
+        assert_eq!(
+            report.dominant_cause,
+            DatabaseContentionCause::DatabaseSaturation
+        );
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "DATABASE_CONNECTIONS_NEAR_LIMIT"));
     }
 }

@@ -620,5 +620,133 @@ mod tests {
                 .code(),
             "INVALID_DATABASE_BUDGET"
         );
+
+        let overflowing_budget = PoolScaleGateInput::new(
+            recommendation(PoolSizeChange::Increase),
+            quality(TelemetryQualityStatus::Valid),
+        )
+        .with_database_budget(u32::MAX, u32::MAX, 1);
+        assert_eq!(
+            check_pool_scale_gate(&overflowing_budget)
+                .expect_err("budget arithmetic overflow should be rejected")
+                .code(),
+            "INVALID_DATABASE_BUDGET"
+        );
+    }
+
+    #[test]
+    fn rejects_connection_projection_overflows() {
+        let mut additional_overflow = recommendation(PoolSizeChange::Increase);
+        additional_overflow.diff.additional_connections_required = u32::MAX;
+        assert_eq!(
+            check_pool_scale_gate(
+                &PoolScaleGateInput::new(
+                    additional_overflow,
+                    quality(TelemetryQualityStatus::Valid)
+                )
+                .with_replica_count(2),
+            )
+            .expect_err("additional projection overflow should be rejected")
+            .code(),
+            "CONNECTION_PROJECTION_OVERFLOW"
+        );
+
+        let mut current_overflow = recommendation(PoolSizeChange::Increase);
+        current_overflow.diff.current_pool_size = u32::MAX;
+        current_overflow.diff.recommended_pool_size = u32::MAX;
+        current_overflow.diff.additional_connections_required = 1;
+        let current_error = check_pool_scale_gate(
+            &PoolScaleGateInput::new(current_overflow, quality(TelemetryQualityStatus::Valid))
+                .with_replica_count(2),
+        )
+        .expect_err("current projection overflow should be rejected");
+        assert_eq!(current_error.code(), "CONNECTION_PROJECTION_OVERFLOW");
+
+        let mut projected_overflow = recommendation(PoolSizeChange::Increase);
+        projected_overflow.diff.additional_connections_required = 1;
+        let projected_error = check_pool_scale_gate(
+            &PoolScaleGateInput::new(projected_overflow, quality(TelemetryQualityStatus::Valid))
+                .with_current_total_connections(u32::MAX),
+        )
+        .expect_err("projected connection overflow should be rejected");
+        assert_eq!(projected_error.code(), "CONNECTION_PROJECTION_OVERFLOW");
+    }
+
+    #[test]
+    fn reviews_needs_review_quality_and_contention_evidence() {
+        let quality_review = check_pool_scale_gate(
+            &PoolScaleGateInput::new(
+                recommendation(PoolSizeChange::Increase),
+                quality(TelemetryQualityStatus::NeedsReview),
+            )
+            .with_database_budget(100, 10, 10)
+            .with_current_total_connections(8),
+        )
+        .expect("quality review should produce a report");
+        assert_eq!(quality_review.status, PoolScaleGateStatus::NeedsReview);
+        assert!(quality_review
+            .findings
+            .iter()
+            .any(|finding| finding.code == "TELEMETRY_QUALITY_NEEDS_REVIEW"));
+
+        let contention = crate::contention::classify_database_contention(
+            &crate::contention::DatabaseContentionInput::new(),
+        )
+        .expect("empty contention evidence should produce review");
+        let contention_review = check_pool_scale_gate(
+            &PoolScaleGateInput::new(
+                recommendation(PoolSizeChange::Increase),
+                quality(TelemetryQualityStatus::Valid),
+            )
+            .with_database_budget(100, 10, 10)
+            .with_current_total_connections(8)
+            .with_database_contention_report(contention),
+        )
+        .expect("contention review should produce a report");
+        assert_eq!(contention_review.status, PoolScaleGateStatus::NeedsReview);
+        assert!(contention_review
+            .findings
+            .iter()
+            .any(|finding| finding.code == "DATABASE_CONTENTION_NEEDS_REVIEW"));
+    }
+
+    #[test]
+    fn lowers_confidence_when_observed_total_is_inferred() {
+        let mut low_quality = quality(TelemetryQualityStatus::Valid);
+        low_quality.confidence = EvidenceConfidence::Low;
+        let report = check_pool_scale_gate(
+            &PoolScaleGateInput::new(recommendation(PoolSizeChange::Increase), low_quality)
+                .with_database_budget(100, 10, 10),
+        )
+        .expect("inferred total should produce a report");
+        assert_eq!(report.status, PoolScaleGateStatus::NeedsReview);
+        assert_eq!(report.confidence, EvidenceConfidence::Low);
+    }
+
+    #[test]
+    fn helper_ordering_preserves_conservative_status_and_confidence() {
+        assert_eq!(
+            max_status(PoolScaleGateStatus::Allowed, PoolScaleGateStatus::Allowed),
+            PoolScaleGateStatus::Allowed
+        );
+        assert_eq!(
+            max_status(
+                PoolScaleGateStatus::NeedsReview,
+                PoolScaleGateStatus::Allowed
+            ),
+            PoolScaleGateStatus::NeedsReview
+        );
+        assert_eq!(
+            max_status(PoolScaleGateStatus::Allowed, PoolScaleGateStatus::Blocked),
+            PoolScaleGateStatus::Blocked
+        );
+        assert_eq!(
+            lower_confidence(EvidenceConfidence::High, EvidenceConfidence::High),
+            EvidenceConfidence::High
+        );
+        assert_eq!(
+            lower_confidence(EvidenceConfidence::Low, EvidenceConfidence::Medium),
+            EvidenceConfidence::Low
+        );
     }
 }
