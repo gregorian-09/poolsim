@@ -2323,7 +2323,7 @@ mod tests {
                         safety_margin_connections: 5,
                         replicas: 3,
                         current_total_connections: Some(6),
-                        contention_config: None,
+                        contention_config: Some(contention_cfg.clone()),
                         source: GateSourceCommands::Telemetry(TelemetryImportArgs {
                             config: increase_telemetry_cfg.clone(),
                             current_pool_size: None,
