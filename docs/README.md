@@ -21,6 +21,7 @@ This folder contains user-facing documentation for the current Poolsim capabilit
 - [`ci-integration.md`](ci-integration.md): GitHub Action, GitLab CI, and GHCR Docker image integration guide for capacity gates and web deployment.
 - [`../integrations/kubernetes/README.md`](../integrations/kubernetes/README.md): Kubernetes sidecar and controller patterns for surfacing sizing recommendations from deployment annotations.
 - [`continuous-recommendations.md`](continuous-recommendations.md): Opt-in worker for repeated recommendation diff events and webhook delivery.
+- [`telemetry-quality.md`](telemetry-quality.md): Validate arrival model, offered rate, failure signals, pool wait, database latency, and coordinated-omission risk before capacity planning.
 - [`../integrations/grafana/README.md`](../integrations/grafana/README.md): Grafana panel package for rendering `poolsim-web` sensitivity rows as a heatmap.
 - [`../benchmarks/README.md`](../benchmarks/README.md): Benchmark result contract and summarizer for comparing Poolsim predictions to real pool runs.
 - [`deployed-pool-survey.md`](deployed-pool-survey.md): Opt-in anonymized survey payload generator for pool configuration statistics.

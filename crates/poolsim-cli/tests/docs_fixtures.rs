@@ -1695,3 +1695,23 @@ fn docs_pgbouncer_time_series_example_reports_queue_growth() {
             .iter()
             .any(|finding| { finding["code"] == "PGBOUNCER_QUEUE_GROWING" })));
 }
+
+#[test]
+fn docs_telemetry_quality_example_accepts_complete_open_loop_evidence() {
+    let output = run_cli(&[
+        "--format",
+        "json",
+        "check",
+        "telemetry-quality",
+        "--config",
+        &fixture("docs/fixtures/telemetry-quality-open-loop.json"),
+    ]);
+
+    assert_success(&output, "telemetry quality docs example");
+    let report: Value = serde_json::from_str(&stdout_utf8(&output))
+        .expect("telemetry quality output should be JSON");
+    assert_eq!(report["status"], "valid");
+    assert_eq!(report["arrival_model"], "open-loop");
+    assert_eq!(report["observed_rate_ratio"], 1.0);
+    assert!(report["findings"].as_array().is_some_and(Vec::is_empty));
+}

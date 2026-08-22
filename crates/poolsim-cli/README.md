@@ -112,6 +112,7 @@ Operational commands:
 - `poolsim classify endpoint`: identify direct, pooled, proxied, edge-managed, or unknown database endpoints and redact secrets.
 - `poolsim check pooler`: detect external-pooler/session-feature compatibility risks.
 - `poolsim check session-state`: add client-aware prepared-statement and session-state remediation for popular backend libraries.
+- `poolsim check telemetry-quality`: validate telemetry evidence and coordinated-omission risk before capacity planning.
 - `poolsim import pooler-evidence`: summarize observed pooler client/backend counters from a JSON snapshot.
 - `poolsim import pgbouncer-pools`: parse captured PgBouncer `SHOW POOLS` output into the same pooler evidence report.
 - `poolsim import pgbouncer-timeseries`: compare two JSON PgBouncer time-series samples with reset-safe counter rates and queue-growth status.
@@ -254,6 +255,20 @@ negative counter rate after a PgBouncer restart. See
 [`docs/pgbouncer-time-series.md`](../../docs/pgbouncer-time-series.md) for
 capture formats, exporter mappings, Rust examples, status precedence, and
 troubleshooting.
+
+Validate telemetry before using it for a recommendation:
+
+```bash
+poolsim --format json --warn-exit check telemetry-quality \
+  --config docs/fixtures/telemetry-quality-open-loop.json
+```
+
+The check rejects uncorrected closed-loop evidence and runs that achieve less
+than 90% of the intended request rate. It reports `needs-review` for missing
+timeouts, errors, pool-wait, database-latency, or arrival-model evidence. See
+[`docs/telemetry-quality.md`](../../docs/telemetry-quality.md) for the complete
+JSON contract, status semantics, finding codes, Rust examples, and Prometheus
+/ OpenTelemetry collection guidance.
 
 ## Serverless Concurrency Example
 

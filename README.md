@@ -71,6 +71,7 @@ Given workload data, pool bounds, and simulation options, `poolsim` can:
 - import captured PgBouncer `SHOW POOLS` output directly into pooler evidence reports
 - diagnose whether application-pool or downstream pooler capacity is limiting requests
 - compare PgBouncer time-series counters and queue gauges to detect sustained downstream queue growth
+- validate telemetry arrival model, achieved rate, timeout/error signals, pool wait, and database latency before sizing
 - plan serverless and edge connection footprint across concurrent execution environments
 - map connection ownership across application pools, external pooler client/backend layers, and database backends
 - run CI capacity gates that fail deployments when telemetry violates pool policy

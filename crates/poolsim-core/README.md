@@ -109,6 +109,37 @@ negative rates. Missing queue gauges produce `NeedsReview`; see
 complete capture contract, status table, exporter mapping, CLI workflow, and
 production collection guidance.
 
+### Telemetry Quality Preflight
+
+Assess whether a telemetry capture is suitable for capacity planning before
+passing a separate `TelemetrySnapshot` to the recommendation API:
+
+```rust
+use poolsim_core::telemetry_quality::{
+    assess_telemetry_quality, TelemetryArrivalModel, TelemetryQualityInput,
+    TelemetryQualityStatus,
+};
+
+let input = TelemetryQualityInput::new(TelemetryArrivalModel::OpenLoop)
+    .with_expected_requests_per_second(1_000.0)
+    .with_observed_requests_per_second(1_000.0)
+    .with_duration_seconds(60.0)
+    .with_sample_count(60_000)
+    .with_timeout_count(2)
+    .with_error_count(5)
+    .with_latency_percentiles(10.0, 30.0, 70.0)
+    .with_pool_wait_p99_ms(4.0)
+    .with_database_latency_p99_ms(18.0);
+let report = assess_telemetry_quality(&input)?;
+assert_eq!(report.status, TelemetryQualityStatus::Valid);
+# Ok::<(), poolsim_core::error::PoolsimError>(())
+```
+
+Closed-loop evidence without documented correction is rejected for automatic
+capacity decisions because it can hide stalls through coordinated omission.
+See [`docs/telemetry-quality.md`](../../docs/telemetry-quality.md) for the
+complete input contract, finding codes, CLI command, and collection guidance.
+
 ### Downstream Pooler Diagnosis
 
 Compare application-pool pressure with the normalized pooler report without changing the existing evidence API:
