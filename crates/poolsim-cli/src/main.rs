@@ -1494,13 +1494,16 @@ mod tests {
 
     use super::*;
     use crate::args::{
-        BatchArgs, BudgetArgs, CheckArgs, CheckCommands, CliConfigFramework, CliDatabaseKind,
-        CommonArgs, CompareArgs, DatabaseContentionCheckArgs, DoctorArgs, DoctorSourceCommands,
+        BatchArgs, BudgetArgs, CheckArgs, CheckCommands, ClassifyArgs, ClassifyCommands,
+        CliConfigFramework, CliDatabaseKind, CommonArgs, CompareArgs, ConnectionOwnershipArgs,
+        DatabaseContentionCheckArgs, DoctorArgs, DoctorSourceCommands, EndpointClassifyArgs,
         EvaluateArgs, GateArgs, GateSourceCommands, GenerateConfigArgs,
-        GenerateConfigSourceCommands, GuardArgs, ImportArgs, ImportCommands, InitArgs,
-        OtlpImportArgs, PgbouncerPoolsDoctorArgs, PgbouncerPoolsImportArgs,
-        PgbouncerTimeseriesImportArgs, PoolScaleGateArgs, PrometheusImportArgs, SimulateArgs,
-        TelemetryImportArgs, TelemetryQualityCheckArgs,
+        GenerateConfigSourceCommands, GraphArgs, GraphCommands, GuardArgs, ImportArgs,
+        ImportCommands, InitArgs, OtlpImportArgs, PgbouncerPoolsDoctorArgs,
+        PgbouncerPoolsImportArgs, PgbouncerTimeseriesImportArgs, PlanArgs, PlanCommands,
+        PoolScaleGateArgs, PoolerCheckArgs, PoolerEvidenceImportArgs, PrometheusImportArgs,
+        ServerlessPlanArgs, SessionStateCheckArgs, SimulateArgs, TelemetryImportArgs,
+        TelemetryQualityCheckArgs,
     };
 
     fn sample_config_json() -> String {
@@ -2132,6 +2135,452 @@ mod tests {
             .expect("table config snippet should render");
         render_config_snippet(&config_report, OutputFormat::Html)
             .expect("html config snippet should render");
+    }
+
+    #[test]
+    fn render_additional_report_wrappers_execute_for_all_formats() {
+        let quality_input = poolsim_core::telemetry_quality::TelemetryQualityInput::new(
+            poolsim_core::telemetry_quality::TelemetryArrivalModel::OpenLoop,
+        )
+        .with_expected_requests_per_second(100.0)
+        .with_observed_requests_per_second(100.0)
+        .with_duration_seconds(60.0)
+        .with_sample_count(6_000)
+        .with_timeout_count(0)
+        .with_error_count(0)
+        .with_latency_percentiles(5.0, 10.0, 20.0)
+        .with_pool_wait_p99_ms(2.0)
+        .with_database_latency_p99_ms(18.0);
+        let quality = assess_telemetry_quality(&quality_input).expect("quality should assess");
+        let serverless = plan_serverless_concurrency(
+            &ServerlessConcurrencyInput::new(
+                poolsim_core::serverless::ServerlessPlatformKind::AwsLambda,
+            )
+            .with_max_concurrent_invocations(10)
+            .with_app_pool_size_per_environment(2)
+            .with_database_backend_limit(100),
+        )
+        .expect("serverless report should build");
+        let ownership = build_connection_ownership_graph(
+            &ConnectionOwnershipInput::new()
+                .with_service_name("checkout-api")
+                .with_runtime_units(2)
+                .with_app_pool_size_per_runtime_unit(2)
+                .with_database_backend_limit(100),
+        )
+        .expect("ownership graph should build");
+        let endpoint = classify_endpoint(&EndpointClassificationInput::new(
+            "postgres://db.example.com/app",
+        ));
+        let pooler = check_pooler_compatibility(&PoolerCompatibilityInput::new(
+            poolsim_core::pooler::ExternalPoolerKind::PgBouncer,
+            poolsim_core::pooler::MultiplexingMode::Session,
+        ));
+        let session = analyze_session_state_compatibility(&SessionStateCompatibilityInput::new(
+            poolsim_core::pooler::ClientLibraryKind::GenericPostgres,
+            poolsim_core::pooler::ExternalPoolerKind::PgBouncer,
+            poolsim_core::pooler::MultiplexingMode::Session,
+        ));
+        let evidence = summarize_pooler_evidence(
+            &PoolerEvidenceSnapshot::new(
+                poolsim_core::pooler::ExternalPoolerKind::PgBouncer,
+                poolsim_core::pooler::MultiplexingMode::Transaction,
+            )
+            .with_client_active(2)
+            .with_client_waiting(0)
+            .with_server_active(2)
+            .with_server_idle(8)
+            .with_pooler_client_limit(20)
+            .with_pooler_backend_limit(20),
+        );
+        let downstream = diagnose_downstream_pooler(&DownstreamPoolerDiagnosisInput::new(
+            ApplicationPoolEvidence::new(2, 10),
+            evidence,
+        ));
+        let previous: PgbouncerTimeSeriesSample = serde_json::from_value(serde_json::json!({
+            "timestamp_seconds": 1.0,
+            "total_query_count": 1,
+            "total_wait_time_us": 1,
+            "maxwait_seconds": 0.0,
+            "client_waiting": 0
+        }))
+        .expect("previous time-series sample should deserialize");
+        let current: PgbouncerTimeSeriesSample = serde_json::from_value(serde_json::json!({
+            "timestamp_seconds": 2.0,
+            "total_query_count": 2,
+            "total_wait_time_us": 2,
+            "maxwait_seconds": 0.0,
+            "client_waiting": 0
+        }))
+        .expect("current time-series sample should deserialize");
+        let timeseries = diff_pgbouncer_time_series(&previous, &current)
+            .expect("time-series report should build");
+
+        for format in [
+            OutputFormat::Table,
+            OutputFormat::Json,
+            OutputFormat::Csv,
+            OutputFormat::Html,
+        ] {
+            render_serverless_concurrency(&serverless, format).expect("serverless should render");
+            render_connection_ownership(&ownership, format).expect("ownership should render");
+            render_endpoint_classification(&endpoint, format).expect("endpoint should render");
+            render_pooler_compatibility(&pooler, format).expect("pooler should render");
+            render_session_state_compatibility(&session, format)
+                .expect("session state should render");
+            render_pooler_evidence(
+                &summarize_pooler_evidence(
+                    &PoolerEvidenceSnapshot::new(
+                        poolsim_core::pooler::ExternalPoolerKind::PgBouncer,
+                        poolsim_core::pooler::MultiplexingMode::Transaction,
+                    )
+                    .with_client_active(2)
+                    .with_client_waiting(0)
+                    .with_server_active(2)
+                    .with_server_idle(8)
+                    .with_pooler_client_limit(20)
+                    .with_pooler_backend_limit(20),
+                ),
+                format,
+            )
+            .expect("pooler evidence should render");
+            render_telemetry_quality(&quality, format).expect("quality should render");
+            render_downstream_pooler_diagnosis(&downstream, format)
+                .expect("downstream diagnosis should render");
+            render_pgbouncer_time_series(&timeseries, format).expect("time-series should render");
+        }
+    }
+
+    #[test]
+    fn run_with_cli_covers_remaining_dispatch_and_exit_helpers() {
+        let config = write_temp_file("main_dispatch_config", "json", &sample_config_json());
+        let quality_config = write_temp_file(
+            "main_dispatch_quality",
+            "json",
+            r#"{
+                "arrival_model": "open-loop",
+                "expected_requests_per_second": 1000.0,
+                "observed_requests_per_second": 1000.0,
+                "duration_seconds": 60.0,
+                "sample_count": 60000,
+                "timeout_count": 2,
+                "error_count": 5,
+                "latency_p50_ms": 10.0,
+                "latency_p95_ms": 30.0,
+                "latency_p99_ms": 70.0,
+                "pool_wait_p99_ms": 4.0,
+                "database_latency_p99_ms": 18.0
+            }"#,
+        );
+        let contention_config = write_temp_file(
+            "main_dispatch_contention",
+            "json",
+            r#"{
+                "pool_wait_p99_ms": 80.0,
+                "database_latency_p99_ms": 120.0,
+                "lock_waiting_sessions": 3,
+                "active_sessions": 70,
+                "max_connections": 100
+            }"#,
+        );
+        let telemetry_config =
+            write_temp_file("main_dispatch_telemetry", "json", &telemetry_config_json());
+        let prometheus_config = write_temp_file(
+            "main_dispatch_prometheus",
+            "json",
+            &prometheus_response_json(),
+        );
+        let otlp_config = write_temp_file("main_dispatch_otlp", "json", &otlp_metrics_json());
+
+        let _ = run_with_cli(Cli {
+            command: Commands::Plan(PlanArgs {
+                command: PlanCommands::Serverless(ServerlessPlanArgs {
+                    platform: crate::args::CliServerlessPlatformKind::AwsLambda,
+                    max_concurrent_invocations: Some(10),
+                    reserved_concurrency: None,
+                    app_pool_size_per_environment: Some(2),
+                    uses_external_pooler: false,
+                    external_pooler: None,
+                    database_backend_limit: Some(100),
+                    warm_reuse_ratio: Some(0.8),
+                }),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: true,
+        })
+        .expect("serverless plan should execute");
+
+        let _ = run_with_cli(Cli {
+            command: Commands::Graph(GraphArgs {
+                command: GraphCommands::Ownership(ConnectionOwnershipArgs {
+                    service_name: Some("checkout-api".to_string()),
+                    runtime_units: Some(2),
+                    app_pool_size_per_runtime_unit: Some(2),
+                    endpoint_kind: None,
+                    external_pooler: None,
+                    pooler_client_limit: None,
+                    pooler_backend_limit: None,
+                    database_backend_limit: Some(100),
+                    session_pinning_risk: None,
+                }),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: true,
+        })
+        .expect("ownership graph should execute");
+
+        let _ = run_with_cli(Cli {
+            command: Commands::Classify(ClassifyArgs {
+                command: ClassifyCommands::Endpoint(EndpointClassifyArgs {
+                    endpoint: "postgres://db.example.com/app".to_string(),
+                    provider: Some(crate::args::CliEndpointProviderKind::AwsRds),
+                    workflow: Some(crate::args::CliDatabaseWorkflowKind::ApiTraffic),
+                }),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: true,
+        })
+        .expect("endpoint classification should execute");
+
+        let _ = run_with_cli(Cli {
+            command: Commands::Check(CheckArgs {
+                command: CheckCommands::Pooler(PoolerCheckArgs {
+                    pooler: crate::args::CliExternalPoolerKind::PgBouncer,
+                    mode: crate::args::CliMultiplexingMode::Transaction,
+                    features_used: vec![crate::args::CliSessionSemanticFeature::PreparedStatements],
+                    workflow: Some(crate::args::CliDatabaseWorkflowKind::ApiTraffic),
+                    max_prepared_statements: Some(10),
+                    resets_session_state: Some(true),
+                }),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: true,
+        })
+        .expect("pooler check should execute");
+
+        let pool_scale_args = |source| PoolScaleGateArgs {
+            quality_config: quality_config.clone(),
+            database_max_connections: Some(100),
+            reserved_connections: 10,
+            safety_margin_connections: 5,
+            replicas: 2,
+            current_total_connections: Some(4),
+            contention_config: Some(contention_config.clone()),
+            source,
+        };
+        let _ = run_with_cli(Cli {
+            command: Commands::Check(CheckArgs {
+                command: CheckCommands::PoolScale(pool_scale_args(GateSourceCommands::Prometheus(
+                    PrometheusImportArgs {
+                        endpoint: None,
+                        response_file: Some(prometheus_config.clone()),
+                        rps_query: None,
+                        p50_query: None,
+                        p95_query: None,
+                        p99_query: None,
+                        header: Vec::new(),
+                        service_name: Some("checkout-api".to_string()),
+                        window: Some("5m".to_string()),
+                        observed_at: None,
+                        current_pool_size: 9,
+                        max_server_connections: 100,
+                        connection_overhead_ms: 2.0,
+                        idle_timeout_ms: None,
+                        min: 2,
+                        max: 20,
+                        iterations: Some(1_200),
+                        seed: Some(7),
+                        distribution: None,
+                        queue_model: None,
+                        target_wait_p99_ms: None,
+                        max_acceptable_rho: None,
+                    },
+                ))),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: true,
+        })
+        .expect("Prometheus pool scale check should execute");
+        let _ = run_with_cli(Cli {
+            command: Commands::Check(CheckArgs {
+                command: CheckCommands::PoolScale(pool_scale_args(GateSourceCommands::Otlp(
+                    otlp_args(&otlp_config),
+                ))),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: true,
+        })
+        .expect("OTLP pool scale check should execute");
+
+        let _ = run_with_cli(Cli {
+            command: Commands::Check(CheckArgs {
+                command: CheckCommands::SessionState(SessionStateCheckArgs {
+                    client: crate::args::CliClientLibraryKind::Sqlx,
+                    pooler: crate::args::CliExternalPoolerKind::PgBouncer,
+                    mode: crate::args::CliMultiplexingMode::Transaction,
+                    features_used: vec![crate::args::CliSessionSemanticFeature::PreparedStatements],
+                    workflow: Some(crate::args::CliDatabaseWorkflowKind::ApiTraffic),
+                    max_prepared_statements: Some(10),
+                    resets_session_state: Some(true),
+                }),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: true,
+        })
+        .expect("session state check should execute");
+
+        let evidence = serde_json::to_string(
+            &PoolerEvidenceSnapshot::new(
+                crate::args::CliExternalPoolerKind::PgBouncer.into(),
+                crate::args::CliMultiplexingMode::Transaction.into(),
+            )
+            .with_client_active(2)
+            .with_client_waiting(0)
+            .with_server_active(2)
+            .with_server_idle(8)
+            .with_pooler_client_limit(20)
+            .with_pooler_backend_limit(20),
+        )
+        .expect("pooler evidence should serialize");
+        let evidence_config = write_temp_file("main_dispatch_evidence", "json", &evidence);
+        let _ = run_with_cli(Cli {
+            command: Commands::Import(ImportArgs {
+                command: ImportCommands::PoolerEvidence(PoolerEvidenceImportArgs {
+                    config: evidence_config.clone(),
+                }),
+            }),
+            format: OutputFormat::Json,
+            warn_exit: true,
+        })
+        .expect("pooler evidence import should execute");
+
+        for (status, warn_exit) in [
+            (ServerlessConcurrencyStatus::Pass, false),
+            (ServerlessConcurrencyStatus::Warning, true),
+            (ServerlessConcurrencyStatus::NeedsReview, true),
+            (ServerlessConcurrencyStatus::Critical, false),
+        ] {
+            let _ = exit_code_for_serverless_status(status, warn_exit);
+        }
+        for status in [
+            ConnectionOwnershipStatus::Complete,
+            ConnectionOwnershipStatus::NeedsReview,
+            ConnectionOwnershipStatus::Unsafe,
+        ] {
+            let _ = exit_code_for_connection_ownership_status(status, true);
+        }
+        for status in [
+            DownstreamPoolerDiagnosisStatus::Healthy,
+            DownstreamPoolerDiagnosisStatus::DownstreamPoolerWaiting,
+            DownstreamPoolerDiagnosisStatus::NeedsReview,
+            DownstreamPoolerDiagnosisStatus::ApplicationPoolSaturated,
+        ] {
+            let _ = status;
+        }
+        let quality = assess_telemetry_quality(
+            &poolsim_core::telemetry_quality::TelemetryQualityInput::new(
+                poolsim_core::telemetry_quality::TelemetryArrivalModel::OpenLoop,
+            )
+            .with_expected_requests_per_second(100.0)
+            .with_observed_requests_per_second(100.0)
+            .with_duration_seconds(60.0)
+            .with_sample_count(6_000)
+            .with_timeout_count(0)
+            .with_error_count(0)
+            .with_latency_percentiles(5.0, 10.0, 20.0)
+            .with_pool_wait_p99_ms(2.0)
+            .with_database_latency_p99_ms(18.0),
+        )
+        .expect("quality should assess");
+        let scale_gate = check_pool_scale_gate(
+            &PoolScaleGateInput::new(sample_recommendation(), quality.clone())
+                .with_replica_count(1),
+        )
+        .expect("scale gate should build");
+        let contention =
+            classify_database_contention(&poolsim_core::contention::DatabaseContentionInput::new())
+                .expect("contention should classify");
+        let endpoint = classify_endpoint(&EndpointClassificationInput::new("db"));
+        let pooler = check_pooler_compatibility(&PoolerCompatibilityInput::new(
+            crate::args::CliExternalPoolerKind::PgBouncer.into(),
+            crate::args::CliMultiplexingMode::Session.into(),
+        ));
+        let session = analyze_session_state_compatibility(&SessionStateCompatibilityInput::new(
+            crate::args::CliClientLibraryKind::GenericPostgres.into(),
+            crate::args::CliExternalPoolerKind::PgBouncer.into(),
+            crate::args::CliMultiplexingMode::Session.into(),
+        ));
+        let evidence_report = summarize_pooler_evidence(
+            &PoolerEvidenceSnapshot::new(
+                crate::args::CliExternalPoolerKind::PgBouncer.into(),
+                crate::args::CliMultiplexingMode::Transaction.into(),
+            )
+            .with_client_active(2)
+            .with_client_waiting(0)
+            .with_server_active(2)
+            .with_server_idle(8)
+            .with_pooler_client_limit(20)
+            .with_pooler_backend_limit(20),
+        );
+        let downstream = diagnose_downstream_pooler(&DownstreamPoolerDiagnosisInput::new(
+            ApplicationPoolEvidence::new(2, 10),
+            evidence_report,
+        ));
+        let previous: PgbouncerTimeSeriesSample = serde_json::from_value(serde_json::json!({
+            "timestamp_seconds": 1.0,
+            "total_query_count": 1,
+            "total_wait_time_us": 1,
+            "maxwait_seconds": 0.0,
+            "client_waiting": 0
+        }))
+        .expect("previous sample should deserialize");
+        let current: PgbouncerTimeSeriesSample = serde_json::from_value(serde_json::json!({
+            "timestamp_seconds": 2.0,
+            "total_query_count": 2,
+            "total_wait_time_us": 2,
+            "maxwait_seconds": 0.0,
+            "client_waiting": 0
+        }))
+        .expect("current sample should deserialize");
+        let timeseries =
+            diff_pgbouncer_time_series(&previous, &current).expect("time-series should build");
+        let _ = exit_code_for_pooler_compatibility(&pooler, true);
+        let _ = exit_code_for_session_state_compatibility(&session, true);
+        let _ = exit_code_for_pooler_evidence(
+            &summarize_pooler_evidence(
+                &PoolerEvidenceSnapshot::new(
+                    crate::args::CliExternalPoolerKind::PgBouncer.into(),
+                    crate::args::CliMultiplexingMode::Transaction.into(),
+                )
+                .with_client_active(2)
+                .with_client_waiting(0)
+                .with_server_active(2)
+                .with_server_idle(8)
+                .with_pooler_client_limit(20)
+                .with_pooler_backend_limit(20),
+            ),
+            true,
+        );
+        let _ = exit_code_for_downstream_pooler(&downstream, true);
+        let _ = exit_code_for_telemetry_quality(&quality, true);
+        let _ = exit_code_for_pool_scale_gate(&scale_gate, true);
+        let _ = exit_code_for_database_contention(&contention, true);
+        let _ = exit_code_for_pgbouncer_time_series(&timeseries, true);
+        let _ = exit_code_for_endpoint_classification(&endpoint, true);
+        let _ = pooler_config_from_args(None, None);
+        let _ = pooler_config_from_args(Some(10), Some(true));
+
+        for path in [
+            config,
+            quality_config,
+            contention_config,
+            telemetry_config,
+            prometheus_config,
+            otlp_config,
+            evidence_config,
+        ] {
+            remove_if_exists(&path);
+        }
     }
 
     #[test]
