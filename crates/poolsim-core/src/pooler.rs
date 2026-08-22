@@ -226,6 +226,23 @@ pub enum PoolerEvidenceStatus {
     NeedsReview,
 }
 
+/// Diagnosis status for an application pool and its downstream pooler.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
+pub enum DownstreamPoolerDiagnosisStatus {
+    /// Both layers have healthy observed headroom.
+    Healthy,
+    /// The downstream pooler has queued clients waiting for backend capacity.
+    DownstreamPoolerWaiting,
+    /// The downstream pooler's observed backend connections reached its limit.
+    DownstreamPoolerSaturated,
+    /// The application pool reached its configured connection limit.
+    ApplicationPoolSaturated,
+    /// Evidence is incomplete or one or more layers are close to a limit.
+    NeedsReview,
+}
+
 /// A compatibility or endpoint-classification finding.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[non_exhaustive]
@@ -663,6 +680,91 @@ pub struct PoolerEvidenceReport {
     pub confidence: EvidenceConfidence,
 }
 
+/// Observed application-pool counters used to diagnose downstream capacity.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct ApplicationPoolEvidence {
+    /// Application connections currently in use.
+    #[serde(default)]
+    pub active: Option<u32>,
+    /// Application requests waiting for a connection, when the client exposes it.
+    #[serde(default)]
+    pub waiting: Option<u32>,
+    /// Configured maximum application connections per runtime unit or service.
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+impl ApplicationPoolEvidence {
+    /// Creates application-pool evidence with active connections and a limit.
+    pub fn new(active: u32, limit: u32) -> Self {
+        Self {
+            active: Some(active),
+            waiting: None,
+            limit: Some(limit),
+        }
+    }
+
+    /// Sets the number of application requests waiting for a connection.
+    #[must_use]
+    pub fn with_waiting(mut self, value: u32) -> Self {
+        self.waiting = Some(value);
+        self
+    }
+
+    /// Sets or clears the observed active application connection count.
+    #[must_use]
+    pub fn with_active(mut self, value: Option<u32>) -> Self {
+        self.active = value;
+        self
+    }
+
+    /// Sets or clears the configured application connection limit.
+    #[must_use]
+    pub fn with_limit(mut self, value: Option<u32>) -> Self {
+        self.limit = value;
+        self
+    }
+}
+
+/// Inputs for comparing application-pool pressure with downstream pooler evidence.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[non_exhaustive]
+pub struct DownstreamPoolerDiagnosisInput {
+    /// Application-side pool counters.
+    pub application: ApplicationPoolEvidence,
+    /// Normalized downstream pooler evidence.
+    pub pooler: PoolerEvidenceReport,
+}
+
+impl DownstreamPoolerDiagnosisInput {
+    /// Creates a diagnosis input from application and normalized pooler evidence.
+    pub fn new(application: ApplicationPoolEvidence, pooler: PoolerEvidenceReport) -> Self {
+        Self {
+            application,
+            pooler,
+        }
+    }
+}
+
+/// Comparison of application-pool pressure and downstream pooler capacity.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[non_exhaustive]
+pub struct DownstreamPoolerDiagnosisReport {
+    /// Highest-priority diagnosis for the observed layers.
+    pub status: DownstreamPoolerDiagnosisStatus,
+    /// Application active connections divided by its configured limit, when known.
+    pub application_utilization: Option<f64>,
+    /// Observed application requests waiting for a connection.
+    pub application_waiting: Option<u32>,
+    /// Existing normalized pooler evidence report.
+    pub pooler: PoolerEvidenceReport,
+    /// Findings explaining which layer is limiting capacity.
+    pub findings: Vec<PoolerFinding>,
+    /// Confidence in the cross-layer diagnosis.
+    pub confidence: EvidenceConfidence,
+}
+
 /// Input for client-aware session-state compatibility analysis.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[non_exhaustive]
@@ -1045,6 +1147,105 @@ pub fn summarize_pooler_evidence(input: &PoolerEvidenceSnapshot) -> PoolerEviden
         client_waiting: input.client_waiting,
         backend_utilization,
         client_utilization,
+        findings,
+        confidence,
+    }
+}
+
+/// Compares application-pool counters with normalized downstream pooler evidence.
+///
+/// The downstream status takes precedence when pooler clients are waiting or
+/// backend connections are saturated. This preserves the operational signal
+/// that an application pool can have spare capacity while its pooler cannot
+/// obtain another database connection. Application findings remain in the
+/// report when both layers are constrained.
+pub fn diagnose_downstream_pooler(
+    input: &DownstreamPoolerDiagnosisInput,
+) -> DownstreamPoolerDiagnosisReport {
+    let application_utilization = utilization(input.application.active, input.application.limit);
+    let application_missing =
+        input.application.active.is_none() || input.application.limit.is_none();
+    let application_saturated = application_utilization.is_some_and(|rho| rho >= 1.0);
+    let application_near_limit = application_utilization.is_some_and(|rho| rho >= 0.8);
+    let downstream_saturated = input.pooler.status == PoolerEvidenceStatus::BackendSaturated;
+    let downstream_waiting = input.pooler.status == PoolerEvidenceStatus::ClientWaiting
+        || input
+            .pooler
+            .client_waiting
+            .is_some_and(|waiting| waiting > 0);
+
+    let status = if downstream_saturated {
+        DownstreamPoolerDiagnosisStatus::DownstreamPoolerSaturated
+    } else if downstream_waiting {
+        DownstreamPoolerDiagnosisStatus::DownstreamPoolerWaiting
+    } else if application_saturated {
+        DownstreamPoolerDiagnosisStatus::ApplicationPoolSaturated
+    } else if application_missing
+        || application_near_limit
+        || input.pooler.status == PoolerEvidenceStatus::NeedsReview
+    {
+        DownstreamPoolerDiagnosisStatus::NeedsReview
+    } else {
+        DownstreamPoolerDiagnosisStatus::Healthy
+    };
+
+    let mut confidence = input.pooler.confidence;
+    let mut findings = Vec::new();
+    if application_missing {
+        confidence = confidence_min(confidence, EvidenceConfidence::Medium);
+        findings.push(PoolerFinding::new(
+            "APPLICATION_POOL_EVIDENCE_INCOMPLETE",
+            RiskLevel::Medium,
+            "application active connections or its configured limit is unknown",
+            "provide both application pool active connections and the configured maximum before comparing layers",
+        ));
+    }
+    if application_utilization.is_some_and(|rho| rho >= 1.0) {
+        findings.push(PoolerFinding::new(
+            "APPLICATION_POOL_SATURATED",
+            RiskLevel::Critical,
+            "the application pool is at or above its configured connection limit",
+            "reduce application concurrency or increase the application pool only after checking downstream and database budgets",
+        ));
+    } else if application_near_limit {
+        confidence = confidence_min(confidence, EvidenceConfidence::Medium);
+        findings.push(PoolerFinding::new(
+            "APPLICATION_POOL_NEAR_LIMIT",
+            RiskLevel::High,
+            "the application pool is using at least 80% of its configured connection limit",
+            "leave burst headroom and compare application demand with downstream pooler and database limits",
+        ));
+    }
+    if input.application.waiting.is_some_and(|waiting| waiting > 0) {
+        findings.push(PoolerFinding::new(
+            "APPLICATION_REQUESTS_WAITING",
+            RiskLevel::High,
+            "application requests are waiting for an application-pool connection",
+            "inspect application pool timeout, request concurrency, and downstream wait evidence before changing pool size",
+        ));
+    }
+    if downstream_saturated {
+        findings.push(PoolerFinding::new(
+            "DOWNSTREAM_POOLER_BACKEND_SATURATED",
+            RiskLevel::Critical,
+            "the downstream pooler's backend/server connections reached the supplied limit",
+            "increase downstream capacity only within the database connection budget, or reduce and split workload pressure",
+        ));
+    }
+    if downstream_waiting {
+        findings.push(PoolerFinding::new(
+            "DOWNSTREAM_POOLER_CLIENTS_WAITING",
+            RiskLevel::High,
+            "clients are waiting in the downstream pooler for a backend/server connection",
+            "inspect backend latency, long transactions, pooler limits, and database headroom before increasing the application pool",
+        ));
+    }
+
+    DownstreamPoolerDiagnosisReport {
+        status,
+        application_utilization,
+        application_waiting: input.application.waiting,
+        pooler: input.pooler.clone(),
         findings,
         confidence,
     }
@@ -2048,6 +2249,129 @@ mod tests {
             .findings
             .iter()
             .any(|finding| finding.code == "POOLER_EVIDENCE_COUNTS_INCOMPLETE"));
+    }
+
+    #[test]
+    fn downstream_diagnosis_identifies_pooler_bottleneck_with_app_headroom() {
+        let pooler = summarize_pooler_evidence(
+            &PoolerEvidenceSnapshot::new(
+                ExternalPoolerKind::PgBouncer,
+                MultiplexingMode::Transaction,
+            )
+            .with_client_active(180)
+            .with_client_waiting(4)
+            .with_server_active(30)
+            .with_server_idle(0)
+            .with_pooler_backend_limit(30),
+        );
+        let report = diagnose_downstream_pooler(&DownstreamPoolerDiagnosisInput::new(
+            ApplicationPoolEvidence::new(4, 16),
+            pooler,
+        ));
+
+        assert_eq!(
+            report.status,
+            DownstreamPoolerDiagnosisStatus::DownstreamPoolerSaturated
+        );
+        assert_eq!(report.application_utilization, Some(0.25));
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "DOWNSTREAM_POOLER_BACKEND_SATURATED"));
+        assert!(!report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "APPLICATION_POOL_SATURATED"));
+    }
+
+    #[test]
+    fn downstream_diagnosis_preserves_application_and_pooler_findings() {
+        let pooler = summarize_pooler_evidence(
+            &PoolerEvidenceSnapshot::new(
+                ExternalPoolerKind::PgBouncer,
+                MultiplexingMode::Transaction,
+            )
+            .with_client_active(16)
+            .with_client_waiting(2)
+            .with_server_active(16)
+            .with_server_idle(0)
+            .with_pooler_backend_limit(16),
+        );
+        let report = diagnose_downstream_pooler(&DownstreamPoolerDiagnosisInput::new(
+            ApplicationPoolEvidence::new(16, 16).with_waiting(3),
+            pooler,
+        ));
+
+        assert_eq!(
+            report.status,
+            DownstreamPoolerDiagnosisStatus::DownstreamPoolerSaturated
+        );
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "APPLICATION_POOL_SATURATED"));
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "APPLICATION_REQUESTS_WAITING"));
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "DOWNSTREAM_POOLER_CLIENTS_WAITING"));
+    }
+
+    #[test]
+    fn downstream_diagnosis_reports_waiting_pooler_before_app_near_limit() {
+        let pooler = summarize_pooler_evidence(
+            &PoolerEvidenceSnapshot::new(
+                ExternalPoolerKind::PgBouncer,
+                MultiplexingMode::Transaction,
+            )
+            .with_client_active(80)
+            .with_client_waiting(1)
+            .with_server_active(10)
+            .with_server_idle(0)
+            .with_pooler_backend_limit(20),
+        );
+        let report = diagnose_downstream_pooler(&DownstreamPoolerDiagnosisInput::new(
+            ApplicationPoolEvidence::new(8, 10),
+            pooler,
+        ));
+
+        assert_eq!(
+            report.status,
+            DownstreamPoolerDiagnosisStatus::DownstreamPoolerWaiting
+        );
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "APPLICATION_POOL_NEAR_LIMIT"));
+    }
+
+    #[test]
+    fn downstream_diagnosis_requires_review_for_missing_app_capacity() {
+        let pooler = summarize_pooler_evidence(
+            &PoolerEvidenceSnapshot::new(
+                ExternalPoolerKind::PgBouncer,
+                MultiplexingMode::Transaction,
+            )
+            .with_client_active(8)
+            .with_client_waiting(0)
+            .with_server_active(4)
+            .with_server_idle(4)
+            .with_pooler_backend_limit(16),
+        );
+        let report = diagnose_downstream_pooler(&DownstreamPoolerDiagnosisInput::new(
+            ApplicationPoolEvidence::default(),
+            pooler,
+        ));
+
+        assert_eq!(report.status, DownstreamPoolerDiagnosisStatus::NeedsReview);
+        assert_eq!(report.confidence, EvidenceConfidence::Medium);
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.code == "APPLICATION_POOL_EVIDENCE_INCOMPLETE"));
     }
 
     #[test]
