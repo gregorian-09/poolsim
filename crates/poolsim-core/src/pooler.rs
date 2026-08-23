@@ -3574,12 +3574,18 @@ app,web,42,0,8,transaction
             assert!(optional_pgbouncer_mode(&[mode.to_string()], Some(0)).is_ok());
         }
         assert!(optional_pgbouncer_mode(&["invalid".to_string()], Some(0)).is_err());
-        assert_eq!(optional_pgbouncer_mode(&[], None).unwrap(), None);
+        assert_eq!(
+            optional_pgbouncer_mode(&[], None).expect("missing mode should be optional"),
+            None
+        );
         assert_eq!(optional_pgbouncer_cell(&[" ".to_string()], Some(0)), None);
         assert_eq!(optional_pgbouncer_cell(&[], Some(0)), None);
         assert!(optional_pgbouncer_float(&["bad".to_string()], Some(0), "avg").is_err());
         assert!(optional_pgbouncer_float(&["-1".to_string()], Some(0), "avg").is_err());
-        assert_eq!(optional_pgbouncer_float(&[], None, "avg").unwrap(), None);
+        assert_eq!(
+            optional_pgbouncer_float(&[], None, "avg").expect("missing float should be optional"),
+            None
+        );
         assert!(parse_pgbouncer_count(&[], 0, "cl_active").is_err());
         assert!(parse_pgbouncer_stats_count(&[], 0, "total_query_count").is_err());
 
