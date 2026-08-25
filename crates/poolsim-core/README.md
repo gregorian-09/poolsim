@@ -105,7 +105,7 @@ assert_eq!(report.status, PgbouncerTimeSeriesStatus::QueueGrowing);
 
 Counter decreases are reported through `counter_resets` rather than becoming
 negative rates. Missing queue gauges produce `NeedsReview`; see
-[`docs/pgbouncer-time-series.md`](../../docs/pgbouncer-time-series.md) for the
+[`docs/pgbouncer-time-series.md`](https://github.com/gregorian-09/poolsim/blob/main/docs/pgbouncer-time-series.md) for the
 complete capture contract, status table, exporter mapping, CLI workflow, and
 production collection guidance.
 
@@ -137,7 +137,7 @@ assert_eq!(report.status, TelemetryQualityStatus::Valid);
 
 Closed-loop evidence without documented correction is rejected for automatic
 capacity decisions because it can hide stalls through coordinated omission.
-See [`docs/telemetry-quality.md`](../../docs/telemetry-quality.md) for the
+See [`docs/telemetry-quality.md`](https://github.com/gregorian-09/poolsim/blob/main/docs/telemetry-quality.md) for the
 complete input contract, finding codes, CLI command, and collection guidance.
 
 ### Pool Scale Safety Gate
@@ -222,7 +222,7 @@ connections exceed the budget. The `PoolScaleGateReport` retains the complete
 `PoolScaleGateFinding` values. Invalid budgets, zero replicas, and arithmetic
 overflow return `PoolsimError` rather than wrapping.
 
-See [`docs/pool-scale-safety.md`](../../docs/pool-scale-safety.md) for the full
+See [`docs/pool-scale-safety.md`](https://github.com/gregorian-09/poolsim/blob/main/docs/pool-scale-safety.md) for the full
 API inventory, JSON/CSV/HTML output, stable finding codes, CI command, database
 headroom assumptions, and operational limitations.
 
@@ -258,7 +258,7 @@ customized with `DatabaseContentionPolicy` and `DatabaseContentionInput::with_po
 The report exposes `suppress_pool_increase` so higher-level automation can
 avoid the unsafe "just add connections" response.
 
-See [`docs/db-contention.md`](../../docs/db-contention.md) for PostgreSQL and
+See [`docs/db-contention.md`](https://github.com/gregorian-09/poolsim/blob/main/docs/db-contention.md) for PostgreSQL and
 MySQL collection mappings, threshold defaults, JSON/CLI output, all public
 builders, finding codes, and limitations.
 
@@ -295,7 +295,7 @@ assert_eq!(
 );
 ```
 
-Use this when an application reports connection waits but a downstream PgBouncer or managed pooler may be the real bottleneck. The report retains the complete `PoolerEvidenceReport`, computes application utilization when active and maximum counts are known, and emits independent findings when both layers are constrained. See [`docs/downstream-pooler-diagnosis.md`](../../docs/downstream-pooler-diagnosis.md) for the full API and operational guidance.
+Use this when an application reports connection waits but a downstream PgBouncer or managed pooler may be the real bottleneck. The report retains the complete `PoolerEvidenceReport`, computes application utilization when active and maximum counts are known, and emits independent findings when both layers are constrained. See [`docs/downstream-pooler-diagnosis.md`](https://github.com/gregorian-09/poolsim/blob/main/docs/downstream-pooler-diagnosis.md) for the full API and operational guidance.
 
 ### Better Foundation For Non-Rust Integrations
 

@@ -238,7 +238,7 @@ poolsim --format json doctor pgbouncer-pools \
   --application-waiting 0
 ```
 
-The command preserves the nested `PoolerEvidenceReport` and adds a cross-layer status. `downstream-pooler-saturated` means the pooler backend reached its supplied limit; `downstream-pooler-waiting` means clients queued for backend capacity; `application-pool-saturated` means the app pool reached its own limit; and `needs-review` means the comparison lacks required evidence or is close to a limit. See [`docs/downstream-pooler-diagnosis.md`](../../docs/downstream-pooler-diagnosis.md) for all flags, output fields, precedence rules, and library examples.
+The command preserves the nested `PoolerEvidenceReport` and adds a cross-layer status. `downstream-pooler-saturated` means the pooler backend reached its supplied limit; `downstream-pooler-waiting` means clients queued for backend capacity; `application-pool-saturated` means the app pool reached its own limit; and `needs-review` means the comparison lacks required evidence or is close to a limit. See [`docs/downstream-pooler-diagnosis.md`](https://github.com/gregorian-09/poolsim/blob/main/docs/downstream-pooler-diagnosis.md) for all flags, output fields, precedence rules, and library examples.
 
 Compare PgBouncer counters over time:
 
@@ -254,7 +254,7 @@ complete queue evidence, `maxwait_seconds` and `client_waiting`. The command
 returns `2` when `maxwait` or waiting-client count grows. With `--warn-exit`, a
 present queue, counter reset, or missing gauge returns `3`. It never emits a
 negative counter rate after a PgBouncer restart. See
-[`docs/pgbouncer-time-series.md`](../../docs/pgbouncer-time-series.md) for
+[`docs/pgbouncer-time-series.md`](https://github.com/gregorian-09/poolsim/blob/main/docs/pgbouncer-time-series.md) for
 capture formats, exporter mappings, Rust examples, status precedence, and
 troubleshooting.
 
@@ -268,7 +268,7 @@ poolsim --format json --warn-exit check telemetry-quality \
 The check rejects uncorrected closed-loop evidence and runs that achieve less
 than 90% of the intended request rate. It reports `needs-review` for missing
 timeouts, errors, pool-wait, database-latency, or arrival-model evidence. See
-[`docs/telemetry-quality.md`](../../docs/telemetry-quality.md) for the complete
+[`docs/telemetry-quality.md`](https://github.com/gregorian-09/poolsim/blob/main/docs/telemetry-quality.md) for the complete
 JSON contract, status semantics, finding codes, Rust examples, and Prometheus
 / OpenTelemetry collection guidance.
 
@@ -290,7 +290,7 @@ poolsim --format json --warn-exit check pool-scale \
 This command is deliberately separate from `gate` and `guard`. It blocks only
 unsafe scale-up recommendations, multiplies the per-replica delta by replica
 count, and requires review when database budget or directly observed connection
-totals are missing. See [`docs/pool-scale-safety.md`](../../docs/pool-scale-safety.md)
+totals are missing. See [`docs/pool-scale-safety.md`](https://github.com/gregorian-09/poolsim/blob/main/docs/pool-scale-safety.md)
 for the full decision math, JSON contract, stable finding codes, Rust API,
 Prometheus/OTLP examples, and CI integration.
 
@@ -305,7 +305,7 @@ The classifier consumes normalized evidence from PostgreSQL, MySQL, managed
 database, or pooler adapters. It returns `database-contention` and exit `2`
 for material lock waits, idle transactions, deadlocks, near-limit resources,
 or unexplained backend latency; `needs-review` is used when the evidence is
-incomplete. See [`docs/db-contention.md`](../../docs/db-contention.md) for
+incomplete. See [`docs/db-contention.md`](https://github.com/gregorian-09/poolsim/blob/main/docs/db-contention.md) for
 collection mappings, thresholds, stable finding codes, complete Rust API
 examples, and operational limitations.
 
