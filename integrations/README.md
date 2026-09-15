@@ -9,7 +9,7 @@ The integrations do not change the sizing model and do not mutate production con
 The dedicated `gregorian-09/poolsim-capacity-gate` repository is the reusable GitHub Action entrypoint for CI users. It lets another repository run Poolsim as a capacity gate with a short workflow step:
 
 ```yaml
-- uses: gregorian-09/poolsim-capacity-gate@v0.3.0
+- uses: gregorian-09/poolsim-capacity-gate@v0.4.0
   with:
     policy: capacity-policy.toml
     source: telemetry

@@ -11,11 +11,11 @@ It builds and installs:
 - `poolsim` from `crates/poolsim-cli`
 - `poolsim-web` from `crates/poolsim-web`
 
-The formula must point to an immutable GitHub release tarball and matching SHA-256. During release preparation, keep the formula on the last published tag until the new tag exists. After creating the `v0.3.0` tag, compute the checksum and update `packaging/homebrew/poolsim.rb` before publishing the tap formula:
+The formula must point to an immutable GitHub release tarball and matching SHA-256. During release preparation, keep the formula on the last published tag until the new tag exists. After creating the `v0.4.0` tag, compute the checksum and update `packaging/homebrew/poolsim.rb` before publishing the tap formula:
 
 ```bash
-curl -L https://github.com/gregorian-09/poolsim/archive/refs/tags/v0.3.0.tar.gz -o poolsim-v0.3.0.tar.gz
-sha256sum poolsim-v0.3.0.tar.gz
+curl -L https://github.com/gregorian-09/poolsim/archive/refs/tags/v0.4.0.tar.gz -o poolsim-v0.4.0.tar.gz
+sha256sum poolsim-v0.4.0.tar.gz
 ```
 
 Homebrew's formula cookbook documents formula creation, installation, and debugging through `brew create`, `brew install --debug --verbose`, and tap repositories.

@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: gregorian-09/poolsim-capacity-gate@v0.3.0
+      - uses: gregorian-09/poolsim-capacity-gate@v0.4.0
         with:
           policy: docs/fixtures/gate-policy.toml
           source: telemetry
@@ -29,7 +29,7 @@ jobs:
 Prometheus response-file example:
 
 ```yaml
-- uses: gregorian-09/poolsim-capacity-gate@v0.3.0
+- uses: gregorian-09/poolsim-capacity-gate@v0.4.0
   with:
     source: prometheus
     policy: docs/fixtures/gate-policy.toml

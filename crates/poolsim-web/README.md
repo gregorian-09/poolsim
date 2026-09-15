@@ -12,9 +12,9 @@
 
 Use it when you want to expose the sizing calculator to dashboards, internal developer platforms, remote CI jobs, or non-Rust services over HTTP.
 
-## What Is New In `0.3.0`
+## What Is New In `0.4.0`
 
-`0.3.0` is an additive web-service release for teams that want Poolsim available over HTTP, WebSocket, dashboards, and internal developer platforms. Existing REST routes, WebSocket behavior, JSON response fields, and embedding APIs remain available.
+`0.4.0` is an additive web-service release for teams that want Poolsim available over HTTP, WebSocket, dashboards, and internal developer platforms. Existing REST routes, WebSocket behavior, JSON response fields, and embedding APIs remain available.
 
 ### Direct OTLP Recommendation Endpoint
 
@@ -52,7 +52,7 @@ Use these when you want to mount the Poolsim router inside a larger Axum service
 
 ### Operations And Packaging
 
-`0.3.0` updates the Docker/GHCR documentation and Dockerfile toolchain so `poolsim-web` can be built as a container image in CI. The Docker workflow is intentionally not triggered on every push; it is designed for manual runs and version tags.
+`0.4.0` updates the Docker/GHCR documentation and Dockerfile toolchain so `poolsim-web` can be built as a container image in CI. The Docker workflow is intentionally not triggered on every push; it is designed for manual runs and version tags.
 
 Recommended operating posture:
 
@@ -68,7 +68,7 @@ This release is intended to be backward-compatible with `0.2.x` web consumers. I
 
 ### When To Upgrade
 
-Upgrade to `0.3.0` if you want the OTLP recommendation endpoint, updated web API documentation, dashboard integration guidance, Docker/GHCR release metadata, and current package versions. Existing `/v1/simulate`, `/v1/evaluate`, `/v1/sensitivity`, `/v1/batch`, `/v1/telemetry/recommend`, and `/v1/live` clients should continue to work.
+Upgrade to `0.4.0` if you want the OTLP recommendation endpoint, updated web API documentation, dashboard integration guidance, Docker/GHCR release metadata, and current package versions. Existing `/v1/simulate`, `/v1/evaluate`, `/v1/sensitivity`, `/v1/batch`, `/v1/telemetry/recommend`, and `/v1/live` clients should continue to work.
 
 ## Install Or Run
 
@@ -130,7 +130,7 @@ Example response:
 ```json
 {
   "status": "ok",
-  "version": "0.3.0"
+  "version": "0.4.0"
 }
 ```
 

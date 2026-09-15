@@ -12,9 +12,9 @@
 
 It is built for backend engineers, platform teams, SREs, and CI pipelines that need repeatable, machine-readable pool-sizing recommendations without embedding Rust code directly.
 
-## What Is New In `0.3.0`
+## What Is New In `0.4.0`
 
-`0.3.0` is an additive CLI release that turns Poolsim from a local sizing calculator into a broader backend capacity-planning toolkit. Existing `simulate`, `evaluate`, `sweep`, `batch`, output formats, config-file behavior, and exit-code contracts remain available. The release adds and documents workflows for telemetry ingestion, CI safety gates, framework config generation, platform integrations, and release packaging.
+`0.4.0` is an additive CLI release that turns Poolsim from a local sizing calculator into a broader backend capacity-planning toolkit. Existing `simulate`, `evaluate`, `sweep`, `batch`, output formats, config-file behavior, and exit-code contracts remain available. The release adds and documents workflows for telemetry ingestion, CI safety gates, framework config generation, platform integrations, and release packaging.
 
 ### Telemetry And Observability Workflows
 
@@ -28,7 +28,7 @@ These commands are useful when teams want recommendations based on observed traf
 
 ### CI And Deployment Safety Workflows
 
-`0.3.0` documents and validates the CI-facing commands around the same sizing model:
+`0.4.0` documents and validates the CI-facing commands around the same sizing model:
 
 - `poolsim gate`: evaluates telemetry against a TOML policy and returns failure when thresholds are unsafe.
 - `poolsim guard`: produces deployment-friendly fields such as `deployment_safe`, `exit_code`, and `reason` for CI/CD systems.
@@ -77,7 +77,7 @@ This release is intended to be backward-compatible with `0.2.x` command usage. I
 
 ### When To Upgrade
 
-Upgrade to `0.3.0` if you want CI gates, telemetry imports, OTLP ingestion, config generation, doctor diagnostics, HTML/explainable reporting, platform integration docs, updated package metadata, and the current release automation. Existing basic sizing scripts should continue to work.
+Upgrade to `0.4.0` if you want CI gates, telemetry imports, OTLP ingestion, config generation, doctor diagnostics, HTML/explainable reporting, platform integration docs, updated package metadata, and the current release automation. Existing basic sizing scripts should continue to work.
 
 ## Install
 

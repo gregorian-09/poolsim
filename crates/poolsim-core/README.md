@@ -12,9 +12,9 @@
 
 Use it when you want to embed Poolsim directly inside Rust code instead of shelling out to `poolsim-cli` or running `poolsim-web`.
 
-## What Is New In `0.3.0`
+## What Is New In `0.4.0`
 
-`0.3.0` is an additive minor release for the core sizing engine. Existing library entry points such as `simulate`, `evaluate`, `sweep`, `sweep_with_options`, telemetry recommendation types, and public report structures remain available. The release focuses on making the same sizing model easier to trust, automate, and integrate across production telemetry workflows.
+`0.4.0` is an additive minor release for the core sizing engine. Existing library entry points such as `simulate`, `evaluate`, `sweep`, `sweep_with_options`, telemetry recommendation types, and public report structures remain available. The release focuses on making the same sizing model easier to trust, automate, and integrate across production telemetry workflows.
 
 ### OpenTelemetry-Native Recommendation Inputs
 
@@ -299,7 +299,7 @@ Use this when an application reports connection waits but a downstream PgBouncer
 
 ### Better Foundation For Non-Rust Integrations
 
-The core crate is still pure sizing logic, but `0.3.0` makes it easier for other surfaces to build on top of it. The release now has documented adoption paths for:
+The core crate is still pure sizing logic, but `0.4.0` makes it easier for other surfaces to build on top of it. The release now has documented adoption paths for:
 
 - Python bindings that shell out to the stable CLI JSON contract.
 - TypeScript bindings for Node.js automation and dashboards.
@@ -327,20 +327,20 @@ This release is intended to be backward-compatible with `0.2.x` at the public AP
 
 ### When To Upgrade
 
-Upgrade to `0.3.0` if you want the latest telemetry and integration documentation, OTLP helper APIs, stronger package/readme guidance, and the current release metadata used by the CLI, web service, bindings, and CI integrations. If you only use `simulate` or `evaluate`, your code should continue to compile with the same API shape.
+Upgrade to `0.4.0` if you want the latest telemetry and integration documentation, OTLP helper APIs, stronger package/readme guidance, and the current release metadata used by the CLI, web service, bindings, and CI integrations. If you only use `simulate` or `evaluate`, your code should continue to compile with the same API shape.
 
 ## Install
 
 ```toml
 [dependencies]
-poolsim-core = "0.3.0"
+poolsim-core = "0.4.0"
 ```
 
 Optional default feature:
 
 ```toml
 [dependencies]
-poolsim-core = { version = "0.3.0", default-features = false }
+poolsim-core = { version = "0.4.0", default-features = false }
 ```
 
 Default features enable parallel simulation support. Disable default features when you need a smaller dependency surface or a `wasm32-unknown-unknown` build.

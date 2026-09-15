@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and this project uses Semantic Versioni
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-15
+
 ### Added
 
 - Endpoint classification through `poolsim classify endpoint`, `POST /v1/classify/endpoint`, and `poolsim_core::pooler::classify_endpoint`.
@@ -31,6 +33,18 @@ The format is based on Keep a Changelog, and this project uses Semantic Versioni
 ### Compatibility
 
 - Added the new functionality without removing or narrowing existing Rust APIs, CLI commands, REST routes, config fields, output fields, or documented exit-code behavior.
+
+### Quality
+
+- Verified `100%` workspace line coverage (`5492/5492`) and `100%` `poolsim-core/src` coverage (`2221/2221`).
+- Verified `100%` coverage for every checked-in Rust example file.
+- Re-ran formatting, Clippy, workspace tests, doctests, rustdoc warnings, missing-documentation checks, semver checks, docs validation, executable docs fixtures, benchmark compilation, and the WASM compatibility check.
+- Validated Python and TypeScript binding tests and package dry-runs without publishing artifacts.
+
+### Packaging
+
+- Prepared the manual Rust, Python, Go, and npm publishing workflows for `0.4.0`.
+- No registry publication or remote tag push is included in this source release preparation.
 
 ## [0.3.0] - 2026-07-05
 
