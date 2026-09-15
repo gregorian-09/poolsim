@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "poolsim"
-version = "0.3.0"
+version = "0.4.0"
 description = "Python bindings for the Poolsim connection pool sizing CLI"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -13,6 +13,9 @@ authors = [{ name = "Gregorian Rayne", email = "gregorianrayne09@gmail.com" }]
 keywords = ["connection-pool", "capacity-planning", "sizing", "queueing"]
 classifiers = [
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Operating System :: OS Independent",
+  "Topic :: Database",
   "Topic :: Software Development :: Quality Assurance"
 ]
 
@@ -21,6 +24,7 @@ Homepage = "https://github.com/gregorian-09/poolsim"
 Repository = "https://github.com/gregorian-09/poolsim"
 Documentation = "https://github.com/gregorian-09/poolsim/tree/main/docs"
 Issues = "https://github.com/gregorian-09/poolsim/issues"
+Changelog = "https://github.com/gregorian-09/poolsim/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["."]

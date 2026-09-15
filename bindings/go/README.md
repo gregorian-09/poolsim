@@ -32,6 +32,21 @@ The returned value is decoded into `map[string]any` or `[]map[string]any`. The w
 
 This is a compatibility choice: existing methods stay stable, while the Rust CLI remains the single source of truth for simulation behavior.
 
+## Module Metadata And Versioning
+
+The module path is `github.com/gregorian-09/poolsim/bindings/go`. Go does not
+read a package version from `go.mod`; the published version is the Git tag
+`bindings/go/v0.4.0`. Install that release explicitly when reproducibility is
+required:
+
+```bash
+go get github.com/gregorian-09/poolsim/bindings/go@bindings/go/v0.4.0
+```
+
+The repository is maintained by Gregorian Rayne
+(`gregorianrayne09@gmail.com`) and is licensed under MIT. Repository,
+documentation, issue, and changelog links are listed in the Support section.
+
 ## Install
 
 Add the Go module:
@@ -60,6 +75,30 @@ client := poolsim.NewClient("/opt/tools/poolsim")
 - Config, telemetry, scenario, or policy files that match the documented Poolsim CLI schemas.
 
 The Go module has no third-party runtime dependencies.
+
+The binding is a synchronous subprocess client, not a native Go implementation
+of the sizing model. The Go module does not install the Rust executable. Install
+`poolsim-cli` separately or pass an absolute executable path to `NewClient`.
+
+## Exact Execution Contract
+
+Every public method invokes the executable without a shell using this shape:
+
+```text
+poolsim --format json <method-specific arguments>
+```
+
+- Config, policy, and telemetry arguments are filesystem paths. Relative paths
+  resolve from the Go process working directory.
+- The method blocks until the child process exits. Run calls in a worker or
+  job goroutine when a request handler must remain responsive.
+- JSON objects decode to `map[string]any`; array-returning methods decode to
+  `[]map[string]any`; JSON numbers are normally `float64` values.
+- Process-start, non-zero-exit, and JSON-decoding failures are returned as
+  `error` values. The current implementation uses `exec.Cmd.Output`, so
+  callers needing detailed CLI stderr should invoke the CLI with their own
+  `exec.Cmd` and capture `Stderr` explicitly.
+- There is no hidden retry, timeout, shell expansion, or environment mutation.
 
 ## Quick Start
 
@@ -363,6 +402,28 @@ Supported framework names follow the CLI:
 
 Use `GenerateConfig` after `Simulate` when you want a copy-pasteable starting point for a real runtime pool.
 
+## Public API Matrix
+
+| Go API | CLI workflow | Return value | Error behavior |
+| --- | --- | --- | --- |
+| `NewClient(executable)` | Selects the executable | `Client` | Never returns an error |
+| `Client.Executable` | Public executable-path field | `string` | N/A |
+| `Client.Simulate(config)` | `simulate --config` | `map[string]any` | Returns process/JSON errors |
+| `Client.Evaluate(config, poolSize)` | `evaluate --config --pool-size` | `map[string]any` | Returns process/JSON errors |
+| `Client.Sweep(config)` | `sweep --config` | `[]map[string]any` | Returns process/JSON errors |
+| `Client.Batch(config)` | `batch --config` | `[]map[string]any` | Returns process/JSON errors |
+| `Client.Compare(config)` | `compare --config` | `map[string]any` | Returns process/JSON errors |
+| `Client.Budget(config)` | `budget --config` | `map[string]any` | Returns process/JSON errors |
+| `Client.TelemetryRecommend(config)` | `import telemetry --config` | `map[string]any` | Returns process/JSON errors |
+| `Client.Doctor(config)` | `doctor telemetry --config` | `map[string]any` | Returns process/JSON errors |
+| `Client.GenerateConfig(framework, config)` | `generate-config --framework ... simulate --config` | `map[string]any` | Returns process/JSON errors |
+
+The Go wrapper intentionally does not expose a `Gate` method or every CLI
+subcommand. Pool-scale checks, database-contention checks, OTLP imports,
+Prometheus imports, pooler evidence imports, serverless planning, and capacity
+gates must currently be invoked through the CLI or REST API. This keeps the
+published Go surface small and additive.
+
 ## CI Gate From Go Projects
 
 The current Go wrapper does not expose a `Gate` helper. Use the CLI directly in CI:
@@ -457,6 +518,8 @@ poolsim --format json gate --policy docs/fixtures/gate-policy.toml telemetry --c
 
 ## Support
 
+- Go package: <https://pkg.go.dev/github.com/gregorian-09/poolsim/bindings/go/poolsim>
 - Documentation: <https://github.com/gregorian-09/poolsim/tree/main/docs>
 - Issues: <https://github.com/gregorian-09/poolsim/issues>
 - Repository: <https://github.com/gregorian-09/poolsim>
+- Changelog: <https://github.com/gregorian-09/poolsim/blob/main/CHANGELOG.md>

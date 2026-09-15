@@ -31,6 +31,15 @@ The returned Python value is decoded from the CLI JSON output. The wrapper delib
 
 This is a compatibility choice: existing methods stay stable, while the Rust CLI remains the single source of truth for simulation behavior.
 
+## Package Metadata
+
+The published distribution is named `poolsim` and is maintained by Gregorian
+Rayne (`gregorianrayne09@gmail.com`). Release `0.4.0` declares the MIT SPDX
+license expression, Python `>=3.9` support, the repository, documentation,
+issue tracker, and changelog in `pyproject.toml`. PyPI receives these values
+from the PEP 621 `[project]` table; the package does not infer version or
+author information at runtime.
+
 ## Install
 
 Install the Python package:
@@ -61,6 +70,36 @@ client = PoolsimClient(executable="/opt/tools/poolsim")
 - Config, telemetry, scenario, or policy files that match the documented Poolsim CLI schemas.
 
 The Python package has no runtime third-party dependencies.
+
+The binding is a subprocess client, not a native extension. Installing the
+wheel alone does not install the Rust executable. `cargo install poolsim-cli`
+or an equivalent binary installation is required before calling a client
+method.
+
+## Exact Execution Contract
+
+Every public method invokes the executable without a shell using this shape:
+
+```text
+poolsim --format json <method-specific arguments>
+```
+
+- `config`, `policy`, and telemetry arguments are filesystem paths accepted as
+  either `str` or `pathlib.Path` where the method signature allows both.
+- The child process inherits the caller's working directory and environment.
+  Relative paths therefore resolve relative to the Python process, not the
+  package installation directory.
+- Standard output must contain one complete JSON value. JSON objects become
+  dictionaries and JSON arrays become lists.
+- Standard error is not returned on success. When a command fails, its
+  trimmed standard error is included in `PoolsimError` when available.
+- The wrapper never interprets or transforms model fields. New JSON fields are
+  preserved automatically in the returned dictionaries.
+- `gate` accepts exit codes `0` and `2` because `2` is the stable policy-failed
+  result. Other non-zero exit codes raise `PoolsimError`.
+
+The client is synchronous. Each method waits for the CLI process to finish;
+call it in a worker thread or job queue when using it from an async service.
 
 ## Quick Start
 
@@ -350,6 +389,29 @@ poolsim --format json gate --policy docs/fixtures/gate-policy.toml telemetry --c
 
 `gate` treats CLI exit codes `0` and `2` as valid machine-readable outcomes. Exit code `2` means the capacity gate failed, not that the Python wrapper failed. Other non-zero exit codes raise `PoolsimError`.
 
+## Public API Matrix
+
+| Python API | CLI workflow | Return value | Non-zero exit behavior |
+| --- | --- | --- | --- |
+| `PoolsimClient(executable="poolsim")` | Selects the executable | Client instance | N/A |
+| `PoolsimError` | Wrapper error type | `RuntimeError` subclass | N/A |
+| `simulate(config)` | `simulate --config` | Recommendation dictionary | Raises |
+| `evaluate(config, pool_size)` | `evaluate --config --pool-size` | Fixed-pool evaluation dictionary | Raises |
+| `sweep(config)` | `sweep --config` | List of sensitivity dictionaries | Raises |
+| `batch(config)` | `batch --config` | List of simulation dictionaries | Raises |
+| `compare(config)` | `compare --config` | Scenario comparison dictionary | Raises |
+| `budget(config)` | `budget --config` | Connection-budget dictionary | Raises |
+| `telemetry_recommend(config)` | `import telemetry --config` | Recommendation-diff dictionary | Raises |
+| `doctor(config)` | `doctor telemetry --config` | Diagnostic dictionary | Raises |
+| `generate_config(framework, config)` | `generate-config --framework ... simulate --config` | Framework-snippet dictionary | Raises |
+| `gate(policy, telemetry_config)` | `gate --policy ... telemetry --config` | Gate dictionary | Accepts `0`, `2`; raises otherwise |
+
+The binding intentionally does not expose every CLI subcommand as a Python
+method. Pool-scale checks, database-contention checks, OTLP imports, Prometheus
+imports, pooler evidence imports, and serverless planning must currently be
+invoked through the CLI or REST API. This is an explicit compatibility
+boundary, not an indication that those workflows have another Python name.
+
 ## CI Usage
 
 A minimal GitHub Actions step can install both packages and fail the job when your policy says the deployment is unsafe:
@@ -446,6 +508,8 @@ That is expected behavior when capacity assumptions are unsafe. Inspect `status`
 
 ## Support
 
+- PyPI: <https://pypi.org/project/poolsim/>
 - Documentation: <https://github.com/gregorian-09/poolsim/tree/main/docs>
 - Issues: <https://github.com/gregorian-09/poolsim/issues>
 - Repository: <https://github.com/gregorian-09/poolsim>
+- Changelog: <https://github.com/gregorian-09/poolsim/blob/main/CHANGELOG.md>

@@ -31,6 +31,14 @@ The returned value is decoded from the CLI JSON output. The wrapper deliberately
 
 This is a compatibility choice: existing methods stay stable, while the Rust CLI remains the single source of truth for simulation behavior.
 
+## Package Metadata
+
+The npm package is `@gregorian09/poolsim`, release `0.4.0`, authored by
+Gregorian Rayne (`gregorianrayne09@gmail.com`) and licensed under MIT. The
+package metadata identifies the GitHub repository, binding directory, issue
+tracker, and README homepage. These values are declared in `package.json` and
+are included in npm's package metadata; they are not runtime configuration.
+
 ## Install
 
 Install the Node package:
@@ -61,6 +69,32 @@ const client = new PoolsimClient('/opt/tools/poolsim');
 - Poolsim config, telemetry, scenario, or policy files that match the documented CLI schemas.
 
 This package has no runtime npm dependencies. `typescript` and `@types/node` are development dependencies used to build the published `dist` files.
+
+The package is a synchronous subprocess client, not a native Node addon. The
+published package contains the compiled `dist` files and README, but it does
+not contain the Rust `poolsim` executable. Install `poolsim-cli` separately or
+provide an absolute executable path.
+
+## Exact Execution Contract
+
+Every public method invokes the executable with `child_process.spawnSync`,
+without a shell, using this shape:
+
+```text
+poolsim --format json <method-specific arguments>
+```
+
+- Config, policy, and telemetry arguments are path strings. Relative paths are
+  resolved by the child process from the Node.js process working directory.
+- The method blocks the Node.js thread until the CLI exits. Put calls behind a
+  worker, job queue, or other isolation mechanism when they could run for a
+  long time in an event-loop-sensitive service.
+- Standard output must contain one complete JSON value. Objects and arrays are
+  returned as generic `JsonValue` data so newly added CLI fields are preserved.
+- A startup error, unexpected exit code, or invalid JSON response throws
+  `PoolsimError`.
+- `gate` accepts exit codes `0` and `2`; exit code `2` is a structured policy
+  failure, not a wrapper crash. Other non-zero codes throw `PoolsimError`.
 
 ## Importing
 
@@ -381,6 +415,29 @@ poolsim --format json gate --policy docs/fixtures/gate-policy.toml telemetry --c
 
 `gate` treats CLI exit codes `0` and `2` as valid machine-readable outcomes. Exit code `2` means the capacity gate failed, not that the TypeScript wrapper failed. Other non-zero exit codes throw `PoolsimError`.
 
+## Public API Matrix
+
+| TypeScript API | CLI workflow | Return value | Accepted exit codes |
+| --- | --- | --- | --- |
+| `new PoolsimClient(executable = "poolsim")` | Selects the executable | Client instance | N/A |
+| `simulate(config)` | `simulate --config` | `Record<string, JsonValue>` | `0` |
+| `evaluate(config, poolSize)` | `evaluate --config --pool-size` | `Record<string, JsonValue>` | `0` |
+| `sweep(config)` | `sweep --config` | `JsonValue[]` | `0` |
+| `batch(config)` | `batch --config` | `JsonValue[]` | `0` |
+| `compare(config)` | `compare --config` | `Record<string, JsonValue>` | `0` |
+| `budget(config)` | `budget --config` | `Record<string, JsonValue>` | `0` |
+| `telemetryRecommend(config)` | `import telemetry --config` | `Record<string, JsonValue>` | `0` |
+| `doctor(config)` | `doctor telemetry --config` | `Record<string, JsonValue>` | `0` |
+| `generateConfig(framework, config)` | `generate-config --framework ... simulate --config` | `Record<string, JsonValue>` | `0` |
+| `gate(policy, telemetryConfig)` | `gate --policy ... telemetry --config` | `Record<string, JsonValue>` | `0`, `2` |
+| `PoolsimError` | Wrapper error type | `Error` subclass | N/A |
+
+The binding intentionally does not expose every CLI subcommand as a method.
+Pool-scale checks, database-contention checks, OTLP imports, Prometheus
+imports, pooler evidence imports, and serverless planning must currently be
+invoked through the CLI or REST API. This boundary keeps the published API
+small and additive.
+
 ## CI Usage
 
 A minimal GitHub Actions step can install both packages and fail the job when your policy says the deployment is unsafe:
@@ -482,6 +539,8 @@ That is expected behavior when capacity assumptions are unsafe. Inspect `status`
 
 ## Support
 
+- npm: <https://www.npmjs.com/package/@gregorian09/poolsim>
 - Documentation: <https://github.com/gregorian-09/poolsim/tree/main/docs>
 - Issues: <https://github.com/gregorian-09/poolsim/issues>
 - Repository: <https://github.com/gregorian-09/poolsim>
+- Changelog: <https://github.com/gregorian-09/poolsim/blob/main/CHANGELOG.md>
